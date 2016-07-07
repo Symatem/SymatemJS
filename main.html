@@ -1,0 +1,63 @@
+<input id="fileInput" type="file" />
+<script>
+    var module, superPageByteAddress = 0;
+
+    function errorHandler(error) {
+        alert(error);
+    }
+
+    function loadModule() {
+        if(typeof Wasm !== "object") {
+            errorHandler("Your browser doesn't support WebAssembly or it is disabled.");
+            return;
+        }
+        var xhr = new XMLHttpRequest();
+        xhr.open("GET", "build/test1.wasm", true);
+        xhr.responseType = "arraybuffer";
+        xhr.onload = function(event) {
+            module = Wasm.instantiateModule(new Uint8Array(xhr.response));
+            console.log(module.exports.getMemorySize());
+            console.log(module.exports.growMemory(1));
+            console.log(module.exports.getMemorySize());
+        };
+        xhr.onerror = errorHandler;
+        xhr.send(null);
+    }
+
+    function saveImage() {
+        var a = document.createElement("a");
+        var file = new Blob([module.exports.memory.slice(superPageByteAddress)]);
+        a.href = URL.createObjectURL(file);
+        a.download = "Image";
+        a.click();
+    }
+
+    function loadImage(event) {
+        event.stopPropagation();
+        event.preventDefault();
+        var input = event.dataTransfer || event.target;
+        if(!input || !input.files || input.files.length != 1)
+            return;
+        var file = input.files[0], reader = new FileReader();
+        reader.onload = function(event) {
+            var oldMemory = new Int8Array(module.exports.memory.slice(0, superPageByteAddress)),
+                toInsert = new Int8Array(reader.result),
+                newMemory = new Int8Array(superPageByteAddress+reader.result.byteLength);
+            newMemory.set(oldMemory);
+            newMemory.set(toInsert, oldMemory.length);
+            module.exports.memory = newMemory.buffer;
+        };
+        reader.onerror = errorHandler;
+        reader.readAsArrayBuffer(file);
+    }
+
+    document.getElementById("fileInput").addEventListener("change", loadImage, false);
+    document.addEventListener("dragover", function(event) {
+        event.stopPropagation();
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "copy";
+    }, false);
+    document.addEventListener("drop", loadImage, false);
+
+    loadModule();
+</script>
