@@ -1,63 +1,86 @@
-<input id="fileInput" type="file" />
-<script>
-    var module, superPageByteAddress = 0;
+<html>
+    <body>
+        <input id="fileInput" type="file" />
+        <script>
 
-    function errorHandler(error) {
-        alert(error);
-    }
+            var module, instance, superPageByteAddress = 0, imports = {
+                "env": {
+                    "consoleLog": function(basePtr, length) {
+                        bufferSlice = instance.exports.memory.buffer.slice(basePtr, basePtr+length);
+                        string = String.fromCharCode.apply(null, new Uint8Array(bufferSlice));
+                        console.log(string);
+                    }
+                }
+            };
 
-    function loadModule() {
-        if(typeof Wasm !== "object") {
-            errorHandler("Your browser doesn't support WebAssembly or it is disabled.");
-            return;
-        }
-        var xhr = new XMLHttpRequest();
-        xhr.open("GET", "build/test1.wasm", true);
-        xhr.responseType = "arraybuffer";
-        xhr.onload = function(event) {
-            module = Wasm.instantiateModule(new Uint8Array(xhr.response));
-            console.log(module.exports.getMemorySize());
-            console.log(module.exports.growMemory(1));
-            console.log(module.exports.getMemorySize());
-        };
-        xhr.onerror = errorHandler;
-        xhr.send(null);
-    }
+            function errorHandler(error) {
+                alert('Error: '+error);
+            }
 
-    function saveImage() {
-        var a = document.createElement("a");
-        var file = new Blob([module.exports.memory.slice(superPageByteAddress)]);
-        a.href = URL.createObjectURL(file);
-        a.download = "Image";
-        a.click();
-    }
+            function loadModule() {
+                if(typeof WebAssembly !== "object") {
+                    errorHandler("Your browser doesn't support WebAssembly or it is disabled.");
+                    return;
+                }
+                console.log(WebAssembly);
+                var xhr = new XMLHttpRequest();
+                xhr.open("GET", "build/Symatem.wasm", true);
+                xhr.responseType = "arraybuffer";
+                xhr.onload = function(event) {
+                    var a = WebAssembly.compile(new Uint8Array(xhr.response)).then(function(result) {
+                        module = result;
+                        instance = new WebAssembly.Instance(module, imports);
+                        superPageByteAddress = instance.exports.memory.buffer.byteLength;
+                        try {
+                            instance.exports["_GLOBAL__sub_I_WASM.cpp"]();
+                        } catch(error) {
+                            console.log(error);
+                        }
+                        console.log(instance, instance.exports.getStackPointer(), instance.exports.tripleExists(0, 28, 32));
+                    }, function(error) {
+                        console.log(error);
+                    });
+                };
+                xhr.onerror = errorHandler;
+                xhr.send(null);
+            }
 
-    function loadImage(event) {
-        event.stopPropagation();
-        event.preventDefault();
-        var input = event.dataTransfer || event.target;
-        if(!input || !input.files || input.files.length != 1)
-            return;
-        var file = input.files[0], reader = new FileReader();
-        reader.onload = function(event) {
-            var oldMemory = new Int8Array(module.exports.memory.slice(0, superPageByteAddress)),
-                toInsert = new Int8Array(reader.result),
-                newMemory = new Int8Array(superPageByteAddress+reader.result.byteLength);
-            newMemory.set(oldMemory);
-            newMemory.set(toInsert, oldMemory.length);
-            module.exports.memory = newMemory.buffer;
-        };
-        reader.onerror = errorHandler;
-        reader.readAsArrayBuffer(file);
-    }
+            function saveImage() {
+                var a = document.createElement("a");
+                var file = new Blob([instance.exports.memory.buffer.slice(superPageByteAddress)]);
+                a.href = URL.createObjectURL(file);
+                a.download = "Image";
+                a.click();
+            }
 
-    document.getElementById("fileInput").addEventListener("change", loadImage, false);
-    document.addEventListener("dragover", function(event) {
-        event.stopPropagation();
-        event.preventDefault();
-        event.dataTransfer.dropEffect = "copy";
-    }, false);
-    document.addEventListener("drop", loadImage, false);
+            function loadImage(event) {
+                event.stopPropagation();
+                event.preventDefault();
+                var input = event.dataTransfer || event.target;
+                if(!input || !input.files || input.files.length != 1)
+                    return;
+                var file = input.files[0], reader = new FileReader();
+                reader.onload = function(event) {
+                    var oldMemory = new Int8Array(instance.exports.memory.buffer.slice(0, superPageByteAddress)),
+                        toInsert = new Int8Array(reader.result),
+                        newMemory = new Int8Array(superPageByteAddress+reader.result.byteLength);
+                    newMemory.set(oldMemory);
+                    newMemory.set(toInsert, oldMemory.length);
+                    instance.exports.memory.buffer = newMemory.buffer;
+                };
+                reader.onerror = errorHandler;
+                reader.readAsArrayBuffer(file);
+            }
 
-    loadModule();
-</script>
+            document.getElementById("fileInput").addEventListener("change", loadImage, false);
+            document.addEventListener("dragover", function(event) {
+                event.stopPropagation();
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "copy";
+            }, false);
+            document.addEventListener("drop", loadImage, false);
+
+            loadModule();
+        </script>
+    </body>
+</html>
