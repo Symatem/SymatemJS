@@ -1,0 +1,9 @@
+{
+  "name": "SymatemWasm",
+  "version": "0.0.0",
+  "authors": [
+    "Alexander Meißner"
+  ],
+  "description": "Symatem WebAssembly API",
+  "main": "SymatemWasm.js"
+}
