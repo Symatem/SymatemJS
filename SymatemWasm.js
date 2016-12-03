@@ -75,7 +75,8 @@ module.exports.prototype.call = function(name, ...params) {
 };
 
 module.exports.prototype.readSymbolBlob = function(symbol) {
-    return new Uint32Array(this.readBlob(symbol).buffer);
+    const buffer = this.readBlob(symbol).buffer;
+    return Array.prototype.slice.call(new Uint32Array(buffer));
 }
 
 module.exports.prototype.readBlob = function(symbol, offset, length) {
