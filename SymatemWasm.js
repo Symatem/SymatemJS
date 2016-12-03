@@ -2,7 +2,7 @@
 
 function stringToUint8Array(string) {
     const array = [];
-    for(var i = 0; i < string.length; ++i)
+    for(let i = 0; i < string.length; ++i)
         array.push(string[i].charCodeAt(0));
     return new Uint8Array(array);
 }
