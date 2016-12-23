@@ -1,12 +1,5 @@
 'use strict';
 
-function stringToUint8Array(string) {
-    const array = [];
-    for(let i = 0; i < string.length; ++i)
-        array.push(string[i].charCodeAt(0));
-    return new Uint8Array(array);
-}
-
 function uint8ArrayToString(array) {
     return String.fromCharCode.apply(null, array);
 }
@@ -14,9 +7,11 @@ function uint8ArrayToString(array) {
 module.exports = function(code) {
     return WebAssembly.compile(code).then(function(result) {
         this.wasmModule = result;
+        for(let key in this.env)
+            this.env[key] = this.env[key].bind(this);
         this.wasmInstance = new WebAssembly.Instance(this.wasmModule, { 'env': this.env });
         this.superPageByteAddress = this.wasmInstance.exports.memory.buffer.byteLength;
-        this.call(this.initializerFunction+'WASM.cpp');
+        this.wasmInstance.exports.memory.grow(1);
         return this;
     }.bind(this), function(error) {
         console.log(error);
@@ -62,15 +57,20 @@ module.exports.prototype.loadImage = function(image) {
     const currentSize = this.wasmInstance.exports.memory.buffer.byteLength,
           newSize = this.superPageByteAddress+image.byteLength;
     if(currentSize < newSize)
-        this.wasmInstance.exports.memory.grow(math.ceil((newSize-currentSize)/this.chunkSize));
+        this.wasmInstance.exports.memory.grow(Math.ceil((newSize-currentSize)/this.chunkSize));
     this.setMemorySlice(this.superPageByteAddress, image);
+};
+
+module.exports.prototype.resetImage = function() {
+    this.setMemorySlice(this.superPageByteAddress, new Uint8Array(this.chunkSize));
+    this.call(this.initializerFunction+'WASM.cpp');
 };
 
 module.exports.prototype.call = function(name, ...params) {
     try {
         return this.wasmInstance.exports[name](...params);
     } catch(error) {
-        console.log(name, error);
+        console.log(name, ...params, error);
     }
 };
 
@@ -92,7 +92,7 @@ module.exports.prototype.readBlob = function(symbol, offset, length) {
     while(length > 0) {
         const sliceLength = Math.min(length, this.blobBufferSize*8);
         this.call('readBlob', symbol, offset+sliceOffset*8, sliceLength);
-        const bufferSlice = this.getMemorySlice(bufferByteAddress+sliceOffset, Math.ceil(sliceLength/8));
+        const bufferSlice = this.getMemorySlice(bufferByteAddress, Math.ceil(sliceLength/8));
         data.set(bufferSlice, sliceOffset);
         length -= sliceLength;
         sliceOffset += Math.ceil(sliceLength/8);
@@ -101,27 +101,6 @@ module.exports.prototype.readBlob = function(symbol, offset, length) {
 };
 
 module.exports.prototype.writeBlob = function(symbol, data, offset) {
-    let type = 0;
-    switch(typeof data) {
-        case 'string':
-            data = stringToUint8Array(data);
-            type = this.symbolByName.UTF8;
-            break;
-        case 'number':
-            let buffer = new Uint8Array(4), view = new DataView(buffer.buffer);
-            if(!Number.isInteger(data)) {
-                view.setFloat32(0, data, true);
-                type = this.symbolByName.Float;
-            } else if(data < 0) {
-                view.setInt32(0, data, true);
-                type = this.symbolByName.Integer;
-            } else {
-                view.setUint32(0, data, true);
-                type = this.symbolByName.Natural;
-            }
-            data = buffer;
-            break;
-    }
     const bufferByteAddress = this.call('getStackPointer')-this.blobBufferSize,
           oldLength = this.call('getBlobSize', symbol);
     let newLength = (data == undefined) ? 0 : data.length*8, sliceOffset = 0;
@@ -129,25 +108,30 @@ module.exports.prototype.writeBlob = function(symbol, data, offset) {
         offset = 0;
         this.call('setBlobSize', symbol, newLength);
     } else if(newLength+offset > oldLength)
-        return;
+        return false;
     while(newLength > 0) {
         const sliceLength = Math.min(newLength, this.blobBufferSize*8),
               bufferSlice = new Uint8Array(data.slice(sliceOffset, sliceOffset+Math.ceil(sliceLength/8)));
-        this.setMemorySlice(bufferByteAddress+sliceOffset, bufferSlice);
+        this.setMemorySlice(bufferByteAddress, bufferSlice);
         this.call('writeBlob', symbol, offset+sliceOffset*8, sliceLength);
         newLength -= sliceLength;
         sliceOffset += Math.ceil(sliceLength/8);
     }
-    this.call('setSolitary', symbol, this.symbolByName.BlobType, type);
+    return true;
 };
 
-module.exports.prototype.serializeBlob = function(symbol) {
-    const type = this.query(this.queryMask.MMV, symbol, this.symbolByName.BlobType, 0);
-    if(type.length != 1)
+module.exports.prototype.getBlobType = function(symbol) {
+    const result = this.query(this.queryMask.MMV, symbol, this.symbolByName.BlobType, 0);
+    return (result.length == 1) ? result[0] : 0;
+};
+
+module.exports.prototype.getBlob = function(symbol) {
+    const type = this.getBlobType(symbol);
+    if(type == 0)
         return;
     const blob = this.readBlob(symbol),
           dataView = new DataView(blob.buffer);
-    switch(type[0]) {
+    switch(type) {
         case this.symbolByName.Natural:
             return dataView.getUint32(0, true);
         case this.symbolByName.Integer:
@@ -159,9 +143,40 @@ module.exports.prototype.serializeBlob = function(symbol) {
     }
 };
 
+module.exports.prototype.setBlob = function(symbol, data) {
+    let type = 0, buffer = undefined;
+    switch(typeof data) {
+        case 'string':
+            buffer = [];
+            for(let i = 0; i < data.length; ++i)
+                buffer.push(data[i].charCodeAt(0));
+            buffer = new Uint8Array(buffer);
+            type = this.symbolByName.UTF8;
+            break;
+        case 'number':
+            buffer = new Uint8Array(4);
+            const view = new DataView(buffer.buffer);
+            if(!Number.isInteger(data)) {
+                view.setFloat32(0, data, true);
+                type = this.symbolByName.Float;
+            } else if(data < 0) {
+                view.setInt32(0, data, true);
+                type = this.symbolByName.Integer;
+            } else {
+                view.setUint32(0, data, true);
+                type = this.symbolByName.Natural;
+            }
+            break;
+    }
+    if(!this.writeBlob(symbol, buffer))
+        return false;
+    this.call('setSolitary', symbol, this.symbolByName.BlobType, type);
+    return true;
+};
+
 module.exports.prototype.deserializeBlob = function(inputString, packageSymbol = 0) {
     const inputSymbol = this.call('createSymbol'), outputSymbol = this.call('createSymbol');
-    this.writeBlob(inputSymbol, inputString);
+    this.setBlob(inputSymbol, inputString);
     const exception = this.call('deserializeBlob', inputSymbol, outputSymbol, packageSymbol);
     const result = this.readSymbolBlob(outputSymbol);
     this.call('releaseSymbol', inputSymbol);
