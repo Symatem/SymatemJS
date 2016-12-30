@@ -33,11 +33,11 @@ module.exports.prototype.env = {
     'consoleLogString': function(basePtr, length) {
         console.log(uint8ArrayToString(this.getMemorySlice(basePtr, length)));
     },
-    'consoleLogInteger': function(basePtr) {
-        console.log(new DataView(this.wasmInstance.exports.memory.buffer).getInt32(basePtr, true));
+    'consoleLogInteger': function(value) {
+        console.log(value);
     },
-    'consoleLogFloat': function(basePtr) {
-        console.log(new DataView(this.wasmInstance.exports.memory.buffer).getFloat64(basePtr, true));
+    'consoleLogFloat': function(value) {
+        console.log(value);
     }
 };
 
@@ -50,6 +50,7 @@ module.exports.prototype.setMemorySlice = function(begin, slice) {
 };
 
 module.exports.prototype.saveImage = function() {
+    this.call('saveImage');
     return this.wasmInstance.exports.memory.buffer.slice(this.superPageByteAddress);
 };
 
@@ -127,10 +128,10 @@ module.exports.prototype.getBlobType = function(symbol) {
 
 module.exports.prototype.getBlob = function(symbol) {
     const type = this.getBlobType(symbol);
-    if(type == 0)
-        return;
     const blob = this.readBlob(symbol),
           dataView = new DataView(blob.buffer);
+    if(blob.length == 0)
+        return;
     switch(type) {
         case this.symbolByName.Natural:
             return dataView.getUint32(0, true);
@@ -141,16 +142,16 @@ module.exports.prototype.getBlob = function(symbol) {
         case this.symbolByName.UTF8:
             return uint8ArrayToString(blob);
     }
+    return blob;
 };
 
 module.exports.prototype.setBlob = function(symbol, data) {
-    let type = 0, buffer = undefined;
+    let type = 0, buffer = data;
     switch(typeof data) {
         case 'string':
-            buffer = [];
+            buffer = new Uint8Array(data.length);
             for(let i = 0; i < data.length; ++i)
-                buffer.push(data[i].charCodeAt(0));
-            buffer = new Uint8Array(buffer);
+                buffer[i] = data[i].charCodeAt(0);
             type = this.symbolByName.UTF8;
             break;
         case 'number':
@@ -174,14 +175,42 @@ module.exports.prototype.setBlob = function(symbol, data) {
     return true;
 };
 
-module.exports.prototype.deserializeBlob = function(inputString, packageSymbol = 0) {
+module.exports.prototype.deserializeHRL = function(inputString, packageSymbol = 0) {
     const inputSymbol = this.call('createSymbol'), outputSymbol = this.call('createSymbol');
     this.setBlob(inputSymbol, inputString);
-    const exception = this.call('deserializeBlob', inputSymbol, outputSymbol, packageSymbol);
+    const exception = this.call('deserializeHRL', inputSymbol, outputSymbol, packageSymbol);
     const result = this.readSymbolBlob(outputSymbol);
     this.call('releaseSymbol', inputSymbol);
     this.call('releaseSymbol', outputSymbol);
     return (exception) ? exception : result;
+};
+
+module.exports.prototype.deserializeBlob = function(string) {
+    if(string.length > 2 && string[0] == '"' && string[string.length-1] == '"')
+        return string.substr(1, string.length-2);
+    else if(string.length > 4 && string.substr(0, 4) == "hex:") {
+        let blob = new Uint8Array(Math.floor((string.length-4)/2));
+        for(let i = 0; i < blob.length; ++i)
+            blob[i] = parseInt(string.substr(i*2+4, 2), 16);
+        return blob;
+    } else if(!Number.isNaN(parseFloat(string)))
+        return parseFloat(string);
+    else if(!Number.isNaN(parseInt(string)))
+        return parseInt(string);
+};
+
+module.exports.prototype.serializeBlob = function(symbol) {
+    const blob = this.getBlob(symbol);
+    switch(typeof blob) {
+        case 'undefined':
+            return '#'+symbol;
+        case 'string':
+            return '"'+blob+'"';
+        case 'object':
+            return 'hex:'+Buffer.from(blob).toString('hex').toUpperCase();
+        default:
+            return ''+blob;
+    }
 };
 
 module.exports.prototype.queryMode = ['M', 'V', 'I'];
