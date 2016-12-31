@@ -171,8 +171,15 @@ module.exports.prototype.setBlob = function(symbol, data) {
     }
     if(!this.writeBlob(symbol, buffer))
         return false;
-    this.call('setSolitary', symbol, this.symbolByName.BlobType, type);
+    this.setSolitary(symbol, this.symbolByName.BlobType, type);
     return true;
+};
+
+module.exports.prototype.setSolitary = function(entity, attribute, newValue) {
+    const result = this.query(this.queryMask.MMV, entity, attribute, 0);
+    for(const oldValue of result)
+        this.call('unlink', entity, attribute, oldValue);
+    this.call('link', entity, attribute, newValue);
 };
 
 module.exports.prototype.deserializeHRL = function(inputString, packageSymbol = 0) {
