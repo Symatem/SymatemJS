@@ -1,3 +1,5 @@
+/* jslint node: true, esnext: true */
+/* global WebAssembly */
 'use strict';
 
 function uint8ArrayToString(array) {
@@ -78,7 +80,7 @@ module.exports.prototype.call = function(name, ...params) {
 module.exports.prototype.readSymbolBlob = function(symbol) {
     const buffer = this.readBlob(symbol).buffer;
     return Array.prototype.slice.call(new Uint32Array(buffer));
-}
+};
 
 module.exports.prototype.readBlob = function(symbol, offset, length) {
     if(!offset)
@@ -104,7 +106,7 @@ module.exports.prototype.readBlob = function(symbol, offset, length) {
 module.exports.prototype.writeBlob = function(symbol, data, offset) {
     const bufferByteAddress = this.call('getStackPointer')-this.blobBufferSize,
           oldLength = this.call('getBlobSize', symbol);
-    let newLength = (data == undefined) ? 0 : data.length*8, sliceOffset = 0;
+    let newLength = (data === undefined) ? 0 : data.length*8, sliceOffset = 0;
     if(!offset) {
         offset = 0;
         this.call('setBlobSize', symbol, newLength);
@@ -123,14 +125,14 @@ module.exports.prototype.writeBlob = function(symbol, data, offset) {
 
 module.exports.prototype.getBlobType = function(symbol) {
     const result = this.query(this.queryMask.MMV, symbol, this.symbolByName.BlobType, 0);
-    return (result.length == 1) ? result[0] : 0;
+    return (result.length === 1) ? result[0] : 0;
 };
 
 module.exports.prototype.getBlob = function(symbol) {
     const type = this.getBlobType(symbol);
     const blob = this.readBlob(symbol),
           dataView = new DataView(blob.buffer);
-    if(blob.length == 0)
+    if(blob.length === 0)
         return;
     switch(type) {
         case this.symbolByName.Natural:
