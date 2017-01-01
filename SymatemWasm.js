@@ -9,7 +9,7 @@ function uint8ArrayToString(array) {
 module.exports = function(code) {
     return WebAssembly.compile(code).then(function(result) {
         this.wasmModule = result;
-        for(let key in this.env)
+        for(const key in this.env)
             this.env[key] = this.env[key].bind(this);
         this.wasmInstance = new WebAssembly.Instance(this.wasmModule, { 'env': this.env });
         this.superPageByteAddress = this.wasmInstance.exports.memory.buffer.byteLength;
