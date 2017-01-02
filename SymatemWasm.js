@@ -197,10 +197,10 @@ module.exports.prototype.deserializeHRL = function(inputString, packageSymbol = 
 module.exports.prototype.deserializeBlob = function(string) {
     if(string.length > 2 && string[0] == '"' && string[string.length-1] == '"')
         return string.substr(1, string.length-2);
-    else if(string.length > 4 && string.substr(0, 4) == "hex:") {
+    else if(string.length > 4 && string.substr(0, 4) == 'hex:') {
         let blob = new Uint8Array(Math.floor((string.length-4)/2));
         for(let i = 0; i < blob.length; ++i)
-            blob[i] = parseInt(string.substr(i*2+4, 2), 16);
+            blob[i] = parseInt(string[i*2+4], 16)|(parseInt(string[i*2+5], 16)<<4);
         return blob;
     } else if(!Number.isNaN(parseFloat(string)))
         return parseFloat(string);
@@ -216,7 +216,12 @@ module.exports.prototype.serializeBlob = function(symbol) {
         case 'string':
             return '"'+blob+'"';
         case 'object':
-            return 'hex:'+Buffer.from(blob).toString('hex').toUpperCase();
+            let string = '';
+            for(let i = 0; i < blob.length; ++i) {
+                const byte = blob[i];
+                string += (byte&0xF).toString(16)+(byte>>4).toString(16);
+            }
+            return 'hex:'+string.toUpperCase();
         default:
             return ''+blob;
     }
