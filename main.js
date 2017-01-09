@@ -124,7 +124,7 @@ module.exports.prototype.writeBlob = function(symbol, data, offset) {
 };
 
 module.exports.prototype.getBlobType = function(symbol) {
-    const result = this.query(this.queryMask.MMV, symbol, this.symbolByName.BlobType, 0);
+    const result = this.queryArray(this.queryMask.MMV, symbol, this.symbolByName.BlobType, 0);
     return (result.length === 1) ? result[0] : 0;
 };
 
@@ -178,7 +178,7 @@ module.exports.prototype.setBlob = function(symbol, data) {
 };
 
 module.exports.prototype.setSolitary = function(entity, attribute, newValue) {
-    const result = this.query(this.queryMask.MMV, entity, attribute, 0);
+    const result = this.queryArray(this.queryMask.MMV, entity, attribute, 0);
     for(const oldValue of result)
         this.call('unlink', entity, attribute, oldValue);
     this.call('link', entity, attribute, newValue);
@@ -232,12 +232,14 @@ module.exports.prototype.queryMask = {};
 for(let i = 0; i < 27; ++i)
     module.exports.prototype.queryMask[module.exports.prototype.queryMode[i%3] + module.exports.prototype.queryMode[Math.floor(i/3)%3] + module.exports.prototype.queryMode[Math.floor(i/9)%3]] = i;
 
-module.exports.prototype.query = function(mask, entity, attribute, value, countOnly) {
-    const resultSymbol = (countOnly) ? 0 : this.call('createSymbol');
-    let result = this.call('query', mask, entity, attribute, value, resultSymbol);
-    if(!countOnly) {
-        result = this.readSymbolBlob(resultSymbol);
-        this.call('releaseSymbol', resultSymbol);
-    }
+module.exports.prototype.queryArray = function(mask, entity, attribute, value) {
+    const resultSymbol = this.call('createSymbol');
+    this.call('query', mask, entity, attribute, value, resultSymbol);
+    const result = this.readSymbolBlob(resultSymbol);
+    this.call('releaseSymbol', resultSymbol);
     return result;
+};
+
+module.exports.prototype.queryCount = function(mask, entity, attribute, value) {
+    return this.call('query', mask, entity, attribute, value, 0);
 };

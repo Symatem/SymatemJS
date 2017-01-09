@@ -5,5 +5,5 @@
     "Alexander Meißner"
   ],
   "description": "Symatem WebAssembly API",
-  "main": "SymatemWasm.js"
+  "main": "main.js"
 }
