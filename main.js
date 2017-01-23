@@ -51,6 +51,14 @@ module.exports.prototype.setMemorySlice = function(begin, slice) {
     new Uint8Array(this.wasmInstance.exports.memory.buffer).set(slice, begin);
 };
 
+module.exports.prototype.call = function(name, ...params) {
+    try {
+        return this.wasmInstance.exports[name](...params);
+    } catch(error) {
+        console.log(name, ...params, error);
+    }
+};
+
 module.exports.prototype.saveImage = function() {
     this.call('saveImage');
     return this.wasmInstance.exports.memory.buffer.slice(this.superPageByteAddress);
@@ -69,14 +77,6 @@ module.exports.prototype.resetImage = function() {
     this.call(this.initializerFunction+'WASM.cpp');
 };
 
-module.exports.prototype.call = function(name, ...params) {
-    try {
-        return this.wasmInstance.exports[name](...params);
-    } catch(error) {
-        console.log(name, ...params, error);
-    }
-};
-
 module.exports.prototype.readSymbolBlob = function(symbol) {
     const buffer = this.readBlob(symbol).buffer;
     return Array.prototype.slice.call(new Uint32Array(buffer));
@@ -86,7 +86,7 @@ module.exports.prototype.readBlob = function(symbol, offset, length) {
     if(!offset)
         offset = 0;
     if(!length)
-        length = this.call('getBlobSize', symbol)-offset;
+        length = this.getBlobSize(symbol)-offset;
     if(length < 0)
         return;
     let sliceOffset = 0;
@@ -105,11 +105,11 @@ module.exports.prototype.readBlob = function(symbol, offset, length) {
 
 module.exports.prototype.writeBlob = function(symbol, data, offset) {
     const bufferByteAddress = this.call('getStackPointer')-this.blobBufferSize,
-          oldLength = this.call('getBlobSize', symbol);
+          oldLength = this.getBlobSize(symbol);
     let newLength = (data === undefined) ? 0 : data.length*8, sliceOffset = 0;
     if(!offset) {
         offset = 0;
-        this.call('setBlobSize', symbol, newLength);
+        this.setBlobSize(symbol, newLength);
     } else if(newLength+offset > oldLength)
         return false;
     while(newLength > 0) {
@@ -121,6 +121,14 @@ module.exports.prototype.writeBlob = function(symbol, data, offset) {
         sliceOffset += Math.ceil(sliceLength/8);
     }
     return true;
+};
+
+module.exports.prototype.getBlobSize = function(symbol) {
+    return this.call('getBlobSize', symbol);
+};
+
+module.exports.prototype.setBlobSize = function(symbol, size) {
+    this.call('setBlobSize', symbol, size);
 };
 
 module.exports.prototype.getBlobType = function(symbol) {
@@ -177,20 +185,13 @@ module.exports.prototype.setBlob = function(symbol, data) {
     return true;
 };
 
-module.exports.prototype.setSolitary = function(entity, attribute, newValue) {
-    const result = this.queryArray(this.queryMask.MMV, entity, attribute, 0);
-    for(const oldValue of result)
-        this.call('unlink', entity, attribute, oldValue);
-    this.call('link', entity, attribute, newValue);
-};
-
 module.exports.prototype.deserializeHRL = function(inputString, packageSymbol = 0) {
-    const inputSymbol = this.call('createSymbol'), outputSymbol = this.call('createSymbol');
+    const inputSymbol = this.createSymbol(), outputSymbol = this.createSymbol();
     this.setBlob(inputSymbol, inputString);
     const exception = this.call('deserializeHRL', inputSymbol, outputSymbol, packageSymbol);
     const result = this.readSymbolBlob(outputSymbol);
-    this.call('releaseSymbol', inputSymbol);
-    this.call('releaseSymbol', outputSymbol);
+    this.unlinkSymbol(inputSymbol);
+    this.unlinkSymbol(outputSymbol);
     return (exception) ? exception : result;
 };
 
@@ -227,16 +228,69 @@ module.exports.prototype.serializeBlob = function(symbol) {
     }
 };
 
+module.exports.prototype.linkTriple = function(entity, attribute, value) {
+    this.call('link', entity, attribute, value);
+    if(this.linkedTriple)
+        this.linkedTriple(entity, attribute, value);
+};
+
+module.exports.prototype.unlinkTriple = function(entity, attribute, value) {
+    this.call('unlink', entity, attribute, value);
+    const referenceCount =
+        this.queryCount(this.queryMask.MVV, entity, 0, 0)+
+        this.queryCount(this.queryMask.VMV, 0, entity, 0)+
+        this.queryCount(this.queryMask.VVM, 0, 0, entity);
+    if(referenceCount == 0)
+        this.releaseSymbol(entity);
+    if(this.unlinkedTriple)
+        this.unlinkedTriple(entity, attribute, value);
+};
+
+module.exports.prototype.setSolitary = function(entity, attribute, newValue) {
+    const result = this.queryArray(this.queryMask.MMV, entity, attribute, 0);
+    let needsToBeLinked = true;
+    for(const oldValue of result)
+        if(oldValue == newValue)
+            needsToBeLinked = false;
+        else
+            this.unlinkTriple(entity, attribute, oldValue);
+    if(needsToBeLinked)
+        this.linkTriple(entity, attribute, newValue);
+};
+
+module.exports.prototype.createSymbol = function() {
+    return this.call('_createSymbol');
+};
+
+module.exports.prototype.releaseSymbol = function(symbol) {
+    this.call('_releaseSymbol', symbol);
+    if(this.releasedSymbol)
+        this.releasedSymbol(symbol);
+};
+
+module.exports.prototype.unlinkSymbol = function(symbol) {
+    let pairs = this.queryArray(this.queryMask.MVV, symbol, 0, 0);
+    for(let i = 0; i < pairs.length; i += 2)
+        this.unlinkTriple(symbol, pairs[i], pairs[i+1]);
+    pairs = this.queryArray(this.queryMask.VMV, 0, symbol, 0);
+    for(let i = 0; i < pairs.length; i += 2)
+        this.unlinkTriple(pairs[i], symbol, pairs[i+1]);
+    pairs = this.queryArray(this.queryMask.VVM, 0, 0, symbol);
+    for(let i = 0; i < pairs.length; i += 2)
+        this.unlinkTriple(pairs[i], pairs[i+1], symbol);
+    this.releaseSymbol(symbol);
+};
+
 module.exports.prototype.queryMode = ['M', 'V', 'I'];
 module.exports.prototype.queryMask = {};
 for(let i = 0; i < 27; ++i)
     module.exports.prototype.queryMask[module.exports.prototype.queryMode[i%3] + module.exports.prototype.queryMode[Math.floor(i/3)%3] + module.exports.prototype.queryMode[Math.floor(i/9)%3]] = i;
 
 module.exports.prototype.queryArray = function(mask, entity, attribute, value) {
-    const resultSymbol = this.call('createSymbol');
+    const resultSymbol = this.createSymbol();
     this.call('query', mask, entity, attribute, value, resultSymbol);
     const result = this.readSymbolBlob(resultSymbol);
-    this.call('releaseSymbol', resultSymbol);
+    this.releaseSymbol(resultSymbol);
     return result;
 };
 
