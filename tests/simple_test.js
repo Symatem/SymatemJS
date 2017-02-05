@@ -10,11 +10,7 @@ const chai = require('chai'),
   fs = require('fs'),
   { nametoBeFound } = require('../dist/main');
 
-describe('wasm', () => {
-  it('init', () => {
     const aFile = path.join(__dirname, '..','Symatem.wasm');
 
-    nametoBeFound(fs.readFileSync(aFile));
-    //return scheme.get('file://' + aFile).then(s => assert.isDefined(s));
-  });
-});
+
+    nametoBeFound(new Uint8Array(fs.readFileSync(aFile)));
