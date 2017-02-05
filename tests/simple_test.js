@@ -12,5 +12,8 @@ const chai = require('chai'),
 
     const aFile = path.join(__dirname, '..','Symatem.wasm');
 
+const a = new Uint8Array(fs.readFileSync(aFile));
 
-    nametoBeFound(new Uint8Array(fs.readFileSync(aFile)));
+console.log(a.length);
+
+    nametoBeFound(a);
