@@ -28,7 +28,8 @@ module.exports.prototype.symbolByName = {
     Natural: 14,
     Integer: 15,
     Float: 16,
-    UTF8: 17
+    UTF8: 17,
+    BinaryCodec: 20
 };
 
 module.exports.prototype.env = {
@@ -60,7 +61,6 @@ module.exports.prototype.call = function(name, ...params) {
 };
 
 module.exports.prototype.saveImage = function() {
-    this.call('saveImage');
     return this.wasmInstance.exports.memory.buffer.slice(this.superPageByteAddress);
 };
 
@@ -193,6 +193,19 @@ module.exports.prototype.deserializeHRL = function(inputString, packageSymbol = 
     this.unlinkSymbol(inputSymbol);
     this.unlinkSymbol(outputSymbol);
     return (exception) ? exception : result;
+};
+
+module.exports.prototype.encodeBinary = function() {
+    this.call('encodeBinary');
+    const data = this.getBlob(this.symbolByName.BinaryCodec);
+    this.setBlobSize(this.symbolByName.BinaryCodec, 0);
+    return data;
+};
+
+module.exports.prototype.decodeBinary = function(data) {
+    this.setBlob(this.symbolByName.BinaryCodec, data);
+    this.call('decodeBinary');
+    this.setBlobSize(this.symbolByName.BinaryCodec, 0);
 };
 
 module.exports.prototype.deserializeBlob = function(string) {
