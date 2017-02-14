@@ -29,7 +29,7 @@ module.exports.prototype.symbolByName = {
     Integer: 15,
     Float: 16,
     UTF8: 17,
-    BinaryCodec: 20
+    BinaryOntologyCodec: 20
 };
 
 module.exports.prototype.env = {
@@ -195,17 +195,17 @@ module.exports.prototype.deserializeHRL = function(inputString, packageSymbol = 
     return (exception) ? exception : result;
 };
 
-module.exports.prototype.encodeBinary = function() {
-    this.call('encodeBinary');
-    const data = this.getBlob(this.symbolByName.BinaryCodec);
-    this.setBlobSize(this.symbolByName.BinaryCodec, 0);
+module.exports.prototype.encodeOntologyBinary = function() {
+    this.call('encodeOntologyBinary');
+    const data = this.getBlob(this.symbolByName.BinaryOntologyCodec);
+    this.setBlobSize(this.symbolByName.BinaryOntologyCodec, 0);
     return data;
 };
 
-module.exports.prototype.decodeBinary = function(data) {
-    this.setBlob(this.symbolByName.BinaryCodec, data);
-    this.call('decodeBinary');
-    this.setBlobSize(this.symbolByName.BinaryCodec, 0);
+module.exports.prototype.decodeOntologyBinary = function(data) {
+    this.setBlob(this.symbolByName.BinaryOntologyCodec, data);
+    this.call('decodeOntologyBinary');
+    this.setBlobSize(this.symbolByName.BinaryOntologyCodec, 0);
 };
 
 module.exports.prototype.deserializeBlob = function(string) {
