@@ -7,11 +7,11 @@ function uint8ArrayToString(array) {
 }
 
 module.exports = function(code) {
-    return WebAssembly.compile(code).then(function(result) {
-        this.wasmModule = result;
-        for(const key in this.env)
-            this.env[key] = this.env[key].bind(this);
-        this.wasmInstance = new WebAssembly.Instance(this.wasmModule, { 'env': this.env });
+    for(const key in this.env)
+        this.env[key] = this.env[key].bind(this);
+    return WebAssembly.instantiate(code, { 'env': this.env }).then(function(result) {
+        this.wasmModule = result.module;
+        this.wasmInstance = result.instance;
         this.superPageByteAddress = this.wasmInstance.exports.memory.buffer.byteLength;
         this.wasmInstance.exports.memory.grow(1);
         return this;
@@ -91,12 +91,26 @@ module.exports.prototype.writeBlob = function(data, symbol, offset = 0, padding 
     while(length > 0) {
         const sliceLength = Math.min(length, this.blobBufferSize*8),
               bufferSlice = new Uint8Array(data.slice(sliceOffset, sliceOffset+Math.ceil(sliceLength/8)));
-        this.setMemorySlice(bufferByteAddress, bufferSlice);
+        this.setMemorySlice(bufferSlice, bufferByteAddress);
         this.call('writeBlob', symbol, offset+sliceOffset*8, sliceLength);
         length -= sliceLength;
         sliceOffset += Math.ceil(sliceLength/8);
     }
     return true;
+};
+
+module.exports.prototype.cryptBlob = function(symbol, key, nonce) {
+    const blockSymbol = this.createSymbol(),
+          block = new Uint8Array(64),
+          view = DataView(block.buffer),
+          str = "expand 32-byte k";
+    for(let i = 0; i < str.length; ++i)
+        block[i] = str.charCodeAt(i);
+    block.set(key, 16);
+    block.set(nonce, 48);
+    this.setBlob(block, blockSymbol);
+    this.call('chaCha20', symbol, blockSymbol);
+    this.releaseSymbol(blockSymbol);
 };
 
 module.exports.prototype.getBlobType = function(symbol) {
@@ -188,13 +202,16 @@ module.exports.prototype.deserializeBlob = function(string) {
 };
 
 module.exports.prototype.linkTriple = function(entity, attribute, value) {
-    this.call('link', entity, attribute, value);
+    if(!this.call('link', entity, attribute, value))
+        return false;
     if(this.linkedTriple)
         this.linkedTriple(entity, attribute, value);
+    return true;
 };
 
 module.exports.prototype.unlinkTriple = function(entity, attribute, value) {
-    this.call('unlink', entity, attribute, value);
+    if(!this.call('unlink', entity, attribute, value))
+        return false;
     const referenceCount =
         this.queryCount(this.queryMask.MVV, entity, 0, 0)+
         this.queryCount(this.queryMask.VMV, 0, entity, 0)+
@@ -203,6 +220,7 @@ module.exports.prototype.unlinkTriple = function(entity, attribute, value) {
         this.releaseSymbol(entity);
     if(this.unlinkedTriple)
         this.unlinkedTriple(entity, attribute, value);
+    return true;
 };
 
 module.exports.prototype.queryArray = function(mask, entity, attribute, value) {
@@ -251,11 +269,11 @@ module.exports.prototype.loadImage = function(image) {
           newSize = this.superPageByteAddress+image.byteLength;
     if(currentSize < newSize)
         this.wasmInstance.exports.memory.grow(Math.ceil((newSize-currentSize)/this.chunkSize));
-    this.setMemorySlice(this.superPageByteAddress, image);
+    this.setMemorySlice(image, this.superPageByteAddress);
 };
 
 module.exports.prototype.resetImage = function() {
-    this.setMemorySlice(this.superPageByteAddress, new Uint8Array(this.chunkSize));
+    this.setMemorySlice(new Uint8Array(this.chunkSize), this.superPageByteAddress);
     this.call(this.initializerFunction+'WASM.cpp');
 };
 
@@ -274,6 +292,7 @@ module.exports.prototype.initializerFunction = '_GLOBAL__sub_I_';
 module.exports.prototype.chunkSize = 65536;
 module.exports.prototype.blobBufferSize = 4096;
 module.exports.prototype.symbolByName = {
+    Void: 0,
     BlobType: 13,
     Natural: 14,
     Integer: 15,
@@ -290,7 +309,7 @@ module.exports.prototype.getMemorySlice = function(begin, length) {
     return new Uint8Array(this.wasmInstance.exports.memory.buffer.slice(begin, begin+length));
 };
 
-module.exports.prototype.setMemorySlice = function(begin, slice) {
+module.exports.prototype.setMemorySlice = function(slice, begin) {
     new Uint8Array(this.wasmInstance.exports.memory.buffer).set(slice, begin);
 };
 
@@ -311,10 +330,7 @@ module.exports.prototype.deserializeHRL = function(inputString, packageSymbol = 
 
 module.exports.prototype.call = function(name, ...params) {
     try {
-        const begin = window.performance.now();
         const result = this.wasmInstance.exports[name](...params);
-        const end = window.performance.now();
-        console.log(name, Math.round((end-begin)*1000)+' ns');
         return result;
     } catch(error) {
         console.log(name, ...params, error);
