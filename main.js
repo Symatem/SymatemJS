@@ -161,8 +161,9 @@ module.exports.prototype.setBlob = function(data, symbol) {
             }
             break;
     }
-    this.setBlobSize(symbol, data.length*8);
-    if(!this.writeBlob(buffer, symbol))
+    const size = (buffer) ? buffer.length*8 : 0;
+    this.setBlobSize(symbol, size);
+    if(size > 0 && !this.writeBlob(buffer, symbol))
         return false;
     this.setSolitary(symbol, this.symbolByName.BlobType, type);
     return true;
@@ -293,12 +294,14 @@ module.exports.prototype.chunkSize = 65536;
 module.exports.prototype.blobBufferSize = 4096;
 module.exports.prototype.symbolByName = {
     Void: 0,
-    BlobType: 13,
-    Natural: 14,
-    Integer: 15,
-    Float: 16,
-    UTF8: 17,
-    BinaryOntologyCodec: 20
+    PosX: 13,
+    PosY: 14,
+    BlobType: 15,
+    Natural: 16,
+    Integer: 17,
+    Float: 18,
+    UTF8: 19,
+    BinaryOntologyCodec: 22
 };
 module.exports.prototype.queryMode = ['M', 'V', 'I'];
 module.exports.prototype.queryMask = {};
@@ -330,8 +333,7 @@ module.exports.prototype.deserializeHRL = function(inputString, packageSymbol = 
 
 module.exports.prototype.call = function(name, ...params) {
     try {
-        const result = this.wasmInstance.exports[name](...params);
-        return result;
+        return this.wasmInstance.exports[name](...params);
     } catch(error) {
         console.log(name, ...params, error);
     }
