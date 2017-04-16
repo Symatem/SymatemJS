@@ -2,8 +2,23 @@
 /* global WebAssembly */
 'use strict';
 
-function uint8ArrayToString(array) {
-    return String.fromCharCode.apply(null, array);
+function utf8ArrayToString(array) {
+    let data = '';
+    for(let i = 0; i < array.length; ++i)
+        data += '%'+array[i].toString(16);
+    return decodeURIComponent(data);
+}
+
+function stringToUtf8Array(string) {
+    const data = encodeURI(string), array = [];
+    for(let i = 0; i < data.length; ++i) {
+        if(data[i] == '%') {
+            array.push(parseInt(data.substr(i+1, 2), 16));
+            i += 2;
+        } else
+            array.push(data.charCodeAt(i));
+    }
+    return new Uint8Array(array);
 }
 
 module.exports = function(code) {
@@ -132,7 +147,7 @@ module.exports.prototype.getBlob = function(symbol) {
         case this.symbolByName.Float:
             return dataView.getFloat32(0, true);
         case this.symbolByName.UTF8:
-            return uint8ArrayToString(blob);
+            return utf8ArrayToString(blob);
     }
     return blob;
 };
@@ -141,9 +156,7 @@ module.exports.prototype.setBlob = function(data, symbol) {
     let type = 0, buffer = data;
     switch(typeof data) {
         case 'string':
-            buffer = new Uint8Array(data.length);
-            for(let i = 0; i < data.length; ++i)
-                buffer[i] = data[i].charCodeAt(0);
+            buffer = stringToUtf8Array(data);
             type = this.symbolByName.UTF8;
             break;
         case 'number':
@@ -280,7 +293,7 @@ module.exports.prototype.resetImage = function() {
 
 module.exports.prototype.env = {
     'consoleLogString': function(basePtr, length) {
-        console.log(uint8ArrayToString(this.getMemorySlice(basePtr, length)));
+        console.log(utf8ArrayToString(this.getMemorySlice(basePtr, length)));
     },
     'consoleLogInteger': function(value) {
         console.log(value);
