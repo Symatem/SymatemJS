@@ -205,7 +205,7 @@ module.exports.prototype.deserializeBlob = function(string) {
     if(string.length > 2 && string[0] == '"' && string[string.length-1] == '"')
         return string.substr(1, string.length-2);
     else if(string.length > 4 && string.substr(0, 4) == 'hex:') {
-        let blob = new Uint8Array(Math.floor((string.length-4)/2));
+        const blob = new Uint8Array(Math.floor((string.length-4)/2));
         for(let i = 0; i < blob.length; ++i)
             blob[i] = parseInt(string[i*2+4], 16)|(parseInt(string[i*2+5], 16)<<4);
         return blob;
@@ -292,13 +292,13 @@ module.exports.prototype.resetImage = function() {
 };
 
 module.exports.prototype.env = {
-    'consoleLogString': function(basePtr, length) {
+    consoleLogString(basePtr, length) {
         console.log(utf8ArrayToString(this.getMemorySlice(basePtr, length)));
     },
-    'consoleLogInteger': function(value) {
+    consoleLogInteger(value) {
         console.log(value);
     },
-    'consoleLogFloat': function(value) {
+    consoleLogFloat(value) {
         console.log(value);
     }
 };
