@@ -8,12 +8,15 @@ const chai = require('chai'),
   should = chai.should(),
   path = require('path'),
   fs = require('fs'),
-  { nametoBeFound } = require('../dist/main');
+  {
+    nametoBeFound, Symatem
+  } = require('../dist/main');
 
-    const aFile = path.join(__dirname, '..','Symatem.wasm');
+const aFile = path.join(__dirname, '..', 'Symatem.wasm');
+
+console.log(aFile);
 
 const a = new Uint8Array(fs.readFileSync(aFile));
 
-console.log(a.length);
-
-    nametoBeFound(a);
+new Symatem(a);
+//nametoBeFound(a);
