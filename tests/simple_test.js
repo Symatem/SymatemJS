@@ -9,7 +9,7 @@ const chai = require('chai'),
   path = require('path'),
   fs = require('fs'),
   {
-    nametoBeFound, Symatem
+    Symatem
   } = require('../dist/main');
 
 const aFile = path.join(__dirname, '..', 'Symatem.wasm');
