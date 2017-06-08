@@ -2,10 +2,11 @@
   "name": "SymatemWasm",
   "version": "0.0.0-semantic-release",
   "authors": [
-    "Alexander Meißner"
+    "Alexander Meißner",
+    "Markus Felten"
   ],
   "engines": {
-    "node": ">=8.0"
+    "node": ">=8.1"
   },
   "description": "Symatem WebAssembly API",
   "main": "dist/main.js",
