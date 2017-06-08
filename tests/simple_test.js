@@ -18,5 +18,6 @@ console.log(aFile);
 
 const a = new Uint8Array(fs.readFileSync(aFile));
 
-new Symatem(a);
-//nametoBeFound(a);
+const sym = new Symatem(a);
+
+sym.initialize(a);

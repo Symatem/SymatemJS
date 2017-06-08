@@ -27,6 +27,8 @@ export class Symatem {
   }
 
   async initialize(code) {
+    if (this.wasmModule) return;
+
     this.wasmModule = await WebAssembly.compile(code);
     this.wasmInstance = new WebAssembly.Instance(this.wasmModule, {
       env: {
@@ -71,12 +73,12 @@ export class Symatem {
     const currentSize = this.wasmInstance.exports.memory.buffer.byteLength,
       newSize = this.superPageByteAddress + image.byteLength;
     if (currentSize < newSize)
-      this.wasmInstance.exports.memory.grow(Math.ceil((newSize - currentSize) / this.chunkSize));
+      this.wasmInstance.exports.memory.grow(Math.ceil((newSize - currentSize) / chunkSize));
     this.setMemorySlice(this.superPageByteAddress, image);
   }
 
   resetImage() {
-    this.setMemorySlice(this.superPageByteAddress, new Uint8Array(this.chunkSize));
+    this.setMemorySlice(this.superPageByteAddress, new Uint8Array(chunkSize));
     this.call(initializerFunction + 'WASM.cpp');
   }
 
@@ -87,18 +89,20 @@ export class Symatem {
 
   getBlob(symbol) {
     const type = this.getBlobType(symbol);
-    const blob = this.readBlob(symbol),
-      dataView = new DataView(blob.buffer);
+    const blob = this.readBlob(symbol);
     if (blob.length === 0)
       return;
+
+    const dataView = new DataView(blob.buffer);
+
     switch (type) {
-      case this.symbolByName.Natural:
+      case symbolByName.Natural:
         return dataView.getUint32(0, true);
-      case this.symbolByName.Integer:
+      case symbolByName.Integer:
         return dataView.getInt32(0, true);
-      case this.symbolByName.Float:
+      case symbolByName.Float:
         return dataView.getFloat32(0, true);
-      case this.symbolByName.UTF8:
+      case symbolByName.UTF8:
         return uint8ArrayToString(blob);
     }
     return blob;
@@ -112,10 +116,10 @@ export class Symatem {
     if (length < 0)
       return;
     let sliceOffset = 0;
-    const bufferByteAddress = this.call('getStackPointer') - this.blobBufferSize,
+    const bufferByteAddress = this.call('getStackPointer') - blobBufferSize,
       data = new Uint8Array(Math.ceil(length / 8));
     while (length > 0) {
-      const sliceLength = Math.min(length, this.blobBufferSize * 8);
+      const sliceLength = Math.min(length, blobBufferSize * 8);
       this.call('readBlob', symbol, offset + sliceOffset * 8, sliceLength);
       const bufferSlice = this.getMemorySlice(bufferByteAddress, Math.ceil(sliceLength / 8));
       data.set(bufferSlice, sliceOffset);
@@ -126,7 +130,7 @@ export class Symatem {
   }
 
   writeBlob(symbol, data, offset) {
-    const bufferByteAddress = this.call('getStackPointer') - this.blobBufferSize,
+    const bufferByteAddress = this.call('getStackPointer') - blobBufferSize,
       oldLength = this.getBlobSize(symbol);
     let newLength = (data === undefined) ? 0 : data.length * 8,
       sliceOffset = 0;
@@ -136,7 +140,7 @@ export class Symatem {
     } else if (newLength + offset > oldLength)
       return false;
     while (newLength > 0) {
-      const sliceLength = Math.min(newLength, this.blobBufferSize * 8),
+      const sliceLength = Math.min(newLength, blobBufferSize * 8),
         bufferSlice = new Uint8Array(data.slice(sliceOffset, sliceOffset + Math.ceil(sliceLength / 8)));
       this.setMemorySlice(bufferByteAddress, bufferSlice);
       this.call('writeBlob', symbol, offset + sliceOffset * 8, sliceLength);
@@ -155,7 +159,7 @@ export class Symatem {
   }
 
   getBlobType(symbol) {
-    const result = this.queryArray(this.queryMask.MMV, symbol, this.symbolByName.BlobType, 0);
+    const result = this.queryArray(this.queryMask.MMV, symbol, symbolByName.BlobType, 0);
     return (result.length === 1) ? result[0] : 0;
   }
 
@@ -167,26 +171,26 @@ export class Symatem {
         buffer = new Uint8Array(data.length);
         for (let i = 0; i < data.length; ++i)
           buffer[i] = data[i].charCodeAt(0);
-        type = this.symbolByName.UTF8;
+        type = symbolByName.UTF8;
         break;
       case 'number':
         buffer = new Uint8Array(4);
         const view = new DataView(buffer.buffer);
         if (!Number.isInteger(data)) {
           view.setFloat32(0, data, true);
-          type = this.symbolByName.Float;
+          type = symbolByName.Float;
         } else if (data < 0) {
           view.setInt32(0, data, true);
-          type = this.symbolByName.Integer;
+          type = symbolByName.Integer;
         } else {
           view.setUint32(0, data, true);
-          type = this.symbolByName.Natural;
+          type = symbolByName.Natural;
         }
         break;
     }
     if (!this.writeBlob(symbol, buffer))
       return false;
-    this.setSolitary(symbol, this.symbolByName.BlobType, type);
+    this.setSolitary(symbol, symbolByName.BlobType, type);
     return true;
   }
 
