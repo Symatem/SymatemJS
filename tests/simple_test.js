@@ -1,23 +1,19 @@
-/* global describe, it, xit, before, after */
-/* jslint node: true, esnext: true */
-'use strict';
+import test from 'ava';
+import {
+  Symatem
+}
+from '../src/main';
 
-const chai = require('chai'),
-  assert = chai.assert,
-  expect = chai.expect,
-  should = chai.should(),
-  path = require('path'),
-  fs = require('fs'),
-  {
-    Symatem
-  } = require('../dist/main');
+const path = require('path');
+const fs = require('fs');
 
-const sym = new Symatem();
+test('init', async t => {
+  const sym = new Symatem();
 
-const aFile = path.join(__dirname, '..', 'Symatem.wasm');
+  const aFile = path.join(__dirname, '..', 'Symatem.wasm');
 
-console.log(aFile);
+  await sym.initialize(new Uint8Array(fs.readFileSync(aFile)));
 
-const a = new Uint8Array(fs.readFileSync(aFile));
-
-sym.initialize(a);
+  t.is(sym.superPageByteAddress, 131072);
+  t.is(sym.createSymbol(), 16);
+});

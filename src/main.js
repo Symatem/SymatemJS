@@ -42,7 +42,6 @@ export class Symatem {
       }
     });
 
-    console.log(this.wasmInstance);
     this.superPageByteAddress = this.wasmInstance.exports.memory.buffer.byteLength;
     this.wasmInstance.exports.memory.grow(1);
   }
