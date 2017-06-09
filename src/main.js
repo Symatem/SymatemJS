@@ -22,18 +22,16 @@ const symbolByName = {
 };
 
 export class Symatem {
-  constructor(code) {
-    this.initialize(code);
-  }
-
   async initialize(code) {
     if (this.wasmModule) return;
 
     this.wasmModule = await WebAssembly.compile(code);
+
+    const self = this;
     this.wasmInstance = new WebAssembly.Instance(this.wasmModule, {
       env: {
         consoleLogString(basePtr, length) {
-            console.log(uint8ArrayToString(this.getMemorySlice(basePtr, length)));
+            console.log(uint8ArrayToString(self.getMemorySlice(basePtr, length)));
           },
           consoleLogInteger(value) {
             console.log(value);
@@ -44,6 +42,7 @@ export class Symatem {
       }
     });
 
+    console.log(this.wasmInstance);
     this.superPageByteAddress = this.wasmInstance.exports.memory.buffer.byteLength;
     this.wasmInstance.exports.memory.grow(1);
   }

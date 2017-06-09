@@ -12,12 +12,12 @@ const chai = require('chai'),
     Symatem
   } = require('../dist/main');
 
+const sym = new Symatem();
+
 const aFile = path.join(__dirname, '..', 'Symatem.wasm');
 
 console.log(aFile);
 
 const a = new Uint8Array(fs.readFileSync(aFile));
-
-const sym = new Symatem(a);
 
 sym.initialize(a);
