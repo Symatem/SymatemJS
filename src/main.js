@@ -86,12 +86,12 @@ export class Symatem {
   }
 
   getBlob(symbol) {
-    const type = this.getBlobType(symbol);
     const blob = this.readBlob(symbol);
     if (blob.length === 0)
       return;
 
     const dataView = new DataView(blob.buffer);
+    const type = this.getBlobType(symbol);
 
     switch (type) {
       case symbolByName.Natural:
