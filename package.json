@@ -31,7 +31,7 @@
     "semantic-release": "semantic-release pre && npm publish && semantic-release post",
     "prepublish": "rollup --output=dist/main.js -c -- src/main.js",
     "pretest": "rollup -c tests/rollup.config.js",
-    "precover": "npm run prepublish"
+    "precover": "rollup -c tests/rollup.config.js"
   },
   "ava": {
     "files": [
