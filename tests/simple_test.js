@@ -4,15 +4,9 @@ import {
 }
 from '../src/main';
 
-const path = require('path');
-const fs = require('fs');
-
-const wasm = path.join(__dirname, '..', 'Symatem.wasm');
-
 test('init', async t => {
   const sym = new Symatem();
-
-  await sym.initialize(new Uint8Array(fs.readFileSync(wasm)));
+  await sym.initialize();
 
   t.is(sym.superPageByteAddress, 131072);
   t.is(sym.createSymbol(), 16);
@@ -20,8 +14,7 @@ test('init', async t => {
 
 test('blobs', async t => {
   const sym = new Symatem();
-
-  await sym.initialize(new Uint8Array(fs.readFileSync(wasm)));
+  await sym.initialize();
 
   const s1 = sym.createSymbol();
   sym.setBlob(s1, 'a text');
