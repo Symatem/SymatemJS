@@ -211,9 +211,9 @@ export class Symatem {
   }
 
   deserializeBlob(string) {
-    if (string.length > 2 && string[0] == '"' && string[string.length - 1] == '"')
+    if (string.length > 2 && string[0] === '"' && string[string.length - 1] === '"')
       return string.substr(1, string.length - 2);
-    else if (string.length > 4 && string.substr(0, 4) == 'hex:') {
+    else if (string.length > 4 && string.substr(0, 4) === 'hex:') {
       let blob = new Uint8Array(Math.floor((string.length - 4) / 2));
       for (let i = 0; i < blob.length; ++i)
         blob[i] = parseInt(string[i * 2 + 4], 16) | (parseInt(string[i * 2 + 5], 16) << 4);
@@ -255,7 +255,7 @@ export class Symatem {
       this.queryCount(this.queryMask.MVV, entity, 0, 0) +
       this.queryCount(this.queryMask.VMV, 0, entity, 0) +
       this.queryCount(this.queryMask.VVM, 0, 0, entity);
-    if (referenceCount == 0)
+    if (referenceCount === 0)
       this.releaseSymbol(entity);
     if (this.unlinkedTriple)
       this.unlinkedTriple(entity, attribute, value);
@@ -265,7 +265,7 @@ export class Symatem {
     const result = this.queryArray(this.queryMask.MMV, entity, attribute, 0);
     let needsToBeLinked = true;
     for (const oldValue of result)
-      if (oldValue == newValue)
+      if (oldValue === newValue)
         needsToBeLinked = false;
       else
         this.unlinkTriple(entity, attribute, oldValue);
