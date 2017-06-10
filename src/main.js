@@ -51,6 +51,8 @@ export class Symatem {
 
     this.superPageByteAddress = this.wasmInstance.exports.memory.buffer.byteLength;
     this.wasmInstance.exports.memory.grow(1);
+
+    this.resetImage();
   }
 
   getMemorySlice(begin, length) {
@@ -164,7 +166,7 @@ export class Symatem {
   }
 
   getBlobType(symbol) {
-    const result = this.queryArray(this.queryMask.MMV, symbol, symbolByName.BlobType, 0);
+    const result = this.queryArray(queryMask.MMV, symbol, symbolByName.BlobType, 0);
     return (result.length === 1) ? result[0] : 0;
   }
 
@@ -252,9 +254,9 @@ export class Symatem {
   unlinkTriple(entity, attribute, value) {
     this.call('unlink', entity, attribute, value);
     const referenceCount =
-      this.queryCount(this.queryMask.MVV, entity, 0, 0) +
-      this.queryCount(this.queryMask.VMV, 0, entity, 0) +
-      this.queryCount(this.queryMask.VVM, 0, 0, entity);
+      this.queryCount(queryMask.MVV, entity, 0, 0) +
+      this.queryCount(queryMask.VMV, 0, entity, 0) +
+      this.queryCount(queryMask.VVM, 0, 0, entity);
     if (referenceCount === 0)
       this.releaseSymbol(entity);
     if (this.unlinkedTriple)
@@ -262,7 +264,7 @@ export class Symatem {
   }
 
   setSolitary(entity, attribute, newValue) {
-    const result = this.queryArray(this.queryMask.MMV, entity, attribute, 0);
+    const result = this.queryArray(queryMask.MMV, entity, attribute, 0);
     let needsToBeLinked = true;
     for (const oldValue of result)
       if (oldValue === newValue)
@@ -284,13 +286,13 @@ export class Symatem {
   }
 
   unlinkSymbol(symbol) {
-    let pairs = this.queryArray(this.queryMask.MVV, symbol, 0, 0);
+    let pairs = this.queryArray(queryMask.MVV, symbol, 0, 0);
     for (let i = 0; i < pairs.length; i += 2)
       this.unlinkTriple(symbol, pairs[i], pairs[i + 1]);
-    pairs = this.queryArray(this.queryMask.VMV, 0, symbol, 0);
+    pairs = this.queryArray(queryMask.VMV, 0, symbol, 0);
     for (let i = 0; i < pairs.length; i += 2)
       this.unlinkTriple(pairs[i], symbol, pairs[i + 1]);
-    pairs = this.queryArray(this.queryMask.VVM, 0, 0, symbol);
+    pairs = this.queryArray(queryMask.VVM, 0, 0, symbol);
     for (let i = 0; i < pairs.length; i += 2)
       this.unlinkTriple(pairs[i], pairs[i + 1], symbol);
     this.releaseSymbol(symbol);
