@@ -4,11 +4,18 @@ import {
 }
 from '../src/main';
 
-test('init', async t => {
+test('initialize', async t => {
   const sym = new Symatem();
   await sym.initialize();
 
   t.is(sym.superPageByteAddress, 131072);
+  t.is(sym.createSymbol(), 152);
+});
+
+test('double initialize', async t => {
+  const sym = new Symatem();
+  await sym.initialize();
+  await sym.initialize();
   t.is(sym.createSymbol(), 152);
 });
 
