@@ -43,7 +43,7 @@
   },
   "nyc": {
     "include": [
-      "dist/**/*.js"
+      "build/**/*.js"
     ],
     "reporter": [
       "lcov"
