@@ -247,8 +247,6 @@ export class Symatem {
 
   linkTriple(entity, attribute, value) {
     this.call('link', entity, attribute, value);
-    if (this.linkedTriple)
-      this.linkedTriple(entity, attribute, value);
   };
 
   unlinkTriple(entity, attribute, value) {
@@ -259,8 +257,6 @@ export class Symatem {
       this.queryCount(queryMask.VVM, 0, 0, entity);
     if (referenceCount === 0)
       this.releaseSymbol(entity);
-    if (this.unlinkedTriple)
-      this.unlinkedTriple(entity, attribute, value);
   }
 
   setSolitary(entity, attribute, newValue) {
@@ -281,8 +277,6 @@ export class Symatem {
 
   releaseSymbol(symbol) {
     this.call('_releaseSymbol', symbol);
-    if (this.releasedSymbol)
-      this.releasedSymbol(symbol);
   }
 
   unlinkSymbol(symbol) {
