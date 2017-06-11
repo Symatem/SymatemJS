@@ -16,10 +16,10 @@ test('double initialize', async t => {
   const sym = new Symatem();
   await sym.initialize();
   await sym.initialize();
-  t.is(sym.createSymbol(), 152);
+  t.is(sym.superPageByteAddress, 131072);
 });
 
-test('blobs', async t => {
+test('string blobs', async t => {
   const sym = new Symatem();
   await sym.initialize();
 
@@ -30,4 +30,15 @@ test('blobs', async t => {
 
   const b = sym.getBlob(s1);
   t.is(b, 'a text');
+});
+
+test('number blobs', async t => {
+  const sym = new Symatem();
+  await sym.initialize();
+
+  const s1 = sym.createSymbol();
+  sym.setBlob(s1, 1000);
+
+  const b = sym.getBlob(s1);
+  t.is(b, 1000);
 });
