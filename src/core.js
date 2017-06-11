@@ -6,9 +6,10 @@ function uint8ArrayToString(array) {
 
 const queryMode = ['M', 'V', 'I'];
 const queryMask = {};
-for (let i = 0; i < 27; ++i)
+for (let i = 0; i < 27; ++i) {
   queryMask[queryMode[i % 3] + queryMode[Math.floor(
     i / 3) % 3] + queryMode[Math.floor(i / 9) % 3]] = i;
+}
 
 const initializerFunction = '_GLOBAL__sub_I_';
 const chunkSize = 65536;
@@ -23,7 +24,9 @@ const symbolByName = {
 
 export class SymatemCore {
   async initialize(wasmBlob) {
-    if (this.wasmModule) return;
+    if (this.wasmModule) {
+      return;
+    }
 
     this.wasmModule = await WebAssembly.compile(wasmBlob);
 
@@ -68,8 +71,9 @@ export class SymatemCore {
   loadImage(image) {
     const currentSize = this.wasmInstance.exports.memory.buffer.byteLength,
       newSize = this.superPageByteAddress + image.byteLength;
-    if (currentSize < newSize)
+    if (currentSize < newSize) {
       this.wasmInstance.exports.memory.grow(Math.ceil((newSize - currentSize) / chunkSize));
+    }
     this.setMemorySlice(this.superPageByteAddress, image);
   }
 
@@ -85,8 +89,9 @@ export class SymatemCore {
 
   getBlob(symbol) {
     const blob = this.readBlob(symbol);
-    if (blob.length === 0)
+    if (blob.length === 0) {
       return;
+    }
 
     const dataView = new DataView(blob.buffer);
     const type = this.getBlobType(symbol);
@@ -105,12 +110,15 @@ export class SymatemCore {
   }
 
   readBlob(symbol, offset, length) {
-    if (!offset)
+    if (!offset) {
       offset = 0;
-    if (!length)
+    }
+    if (!length) {
       length = this.getBlobSize(symbol) - offset;
-    if (length < 0)
+    }
+    if (length < 0) {
       return;
+    }
     let sliceOffset = 0;
     const bufferByteAddress = this.call('getStackPointer') - blobBufferSize,
       data = new Uint8Array(Math.ceil(length / 8));
@@ -133,8 +141,9 @@ export class SymatemCore {
     if (!offset) {
       offset = 0;
       this.setBlobSize(symbol, newLength);
-    } else if (newLength + offset > oldLength)
+    } else if (newLength + offset > oldLength) {
       return false;
+    }
     while (newLength > 0) {
       const sliceLength = Math.min(newLength, blobBufferSize * 8),
         bufferSlice = new Uint8Array(data.slice(sliceOffset, sliceOffset + Math.ceil(sliceLength / 8)));
@@ -165,8 +174,9 @@ export class SymatemCore {
     switch (typeof data) {
       case 'string':
         buffer = new Uint8Array(data.length);
-        for (let i = 0; i < data.length; ++i)
+        for (let i = 0; i < data.length; ++i) {
           buffer[i] = data[i].charCodeAt(0);
+        }
         type = symbolByName.UTF8;
         break;
       case 'number':
@@ -184,8 +194,9 @@ export class SymatemCore {
         }
         break;
     }
-    if (!this.writeBlob(symbol, buffer))
+    if (!this.writeBlob(symbol, buffer)) {
       return false;
+    }
     this.setSolitary(symbol, symbolByName.BlobType, type);
     return true;
   }
@@ -202,17 +213,19 @@ export class SymatemCore {
   }
 
   deserializeBlob(string) {
-    if (string.length > 2 && string[0] === '"' && string[string.length - 1] === '"')
+    if (string.length > 2 && string[0] === '"' && string[string.length - 1] === '"') {
       return string.substr(1, string.length - 2);
-    else if (string.length > 4 && string.substr(0, 4) === 'hex:') {
-      let blob = new Uint8Array(Math.floor((string.length - 4) / 2));
-      for (let i = 0; i < blob.length; ++i)
+    } else if (string.length > 4 && string.substr(0, 4) === 'hex:') {
+      const blob = new Uint8Array(Math.floor((string.length - 4) / 2));
+      for (let i = 0; i < blob.length; ++i) {
         blob[i] = parseInt(string[i * 2 + 4], 16) | (parseInt(string[i * 2 + 5], 16) << 4);
+      }
       return blob;
-    } else if (!Number.isNaN(parseFloat(string)))
+    } else if (!Number.isNaN(parseFloat(string))) {
       return parseFloat(string);
-    else if (!Number.isNaN(parseInt(string)))
-      return parseInt(string);
+    } else if (!Number.isNaN(parseInt(string, 10))) {
+      return parseInt(string, 10);
+    }
   };
 
   serializeBlob(symbol) {
@@ -230,13 +243,13 @@ export class SymatemCore {
         }
         return 'hex:' + string.toUpperCase();
       default:
-        return '' + blob;
+        return String(blob);
     }
   }
 
   linkTriple(entity, attribute, value) {
     this.call('link', entity, attribute, value);
-  };
+  }
 
   unlinkTriple(entity, attribute, value) {
     this.call('unlink', entity, attribute, value);
@@ -244,20 +257,24 @@ export class SymatemCore {
       this.queryCount(queryMask.MVV, entity, 0, 0) +
       this.queryCount(queryMask.VMV, 0, entity, 0) +
       this.queryCount(queryMask.VVM, 0, 0, entity);
-    if (referenceCount === 0)
+    if (referenceCount === 0) {
       this.releaseSymbol(entity);
+    }
   }
 
   setSolitary(entity, attribute, newValue) {
     const result = this.queryArray(queryMask.MMV, entity, attribute, 0);
     let needsToBeLinked = true;
-    for (const oldValue of result)
-      if (oldValue === newValue)
+    for (const oldValue of result) {
+      if (oldValue === newValue) {
         needsToBeLinked = false;
-      else
+      } else {
         this.unlinkTriple(entity, attribute, oldValue);
-    if (needsToBeLinked)
+      }
+    }
+    if (needsToBeLinked) {
       this.linkTriple(entity, attribute, newValue);
+    }
   }
 
   createSymbol() {
@@ -270,14 +287,17 @@ export class SymatemCore {
 
   unlinkSymbol(symbol) {
     let pairs = this.queryArray(queryMask.MVV, symbol, 0, 0);
-    for (let i = 0; i < pairs.length; i += 2)
+    for (let i = 0; i < pairs.length; i += 2) {
       this.unlinkTriple(symbol, pairs[i], pairs[i + 1]);
+    }
     pairs = this.queryArray(queryMask.VMV, 0, symbol, 0);
-    for (let i = 0; i < pairs.length; i += 2)
+    for (let i = 0; i < pairs.length; i += 2) {
       this.unlinkTriple(pairs[i], symbol, pairs[i + 1]);
+    }
     pairs = this.queryArray(queryMask.VVM, 0, 0, symbol);
-    for (let i = 0; i < pairs.length; i += 2)
+    for (let i = 0; i < pairs.length; i += 2) {
       this.unlinkTriple(pairs[i], pairs[i + 1], symbol);
+    }
     this.releaseSymbol(symbol);
   }
 
