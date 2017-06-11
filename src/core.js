@@ -57,11 +57,7 @@ export class SymatemCore {
   }
 
   call(name, ...params) {
-    try {
-      return this.wasmInstance.exports[name](...params);
-    } catch (error) {
-      console.log(name, ...params, error);
-    }
+    return this.wasmInstance.exports[name](...params);
   }
 
   saveImage() {
