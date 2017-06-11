@@ -13,8 +13,8 @@
     "node": ">=8.1"
   },
   "description": "Symatem WebAssembly API",
-  "main": "dist/main.js",
-  "module": "src/main.js",
+  "main": "dist/node-interface.js",
+  "module": "src/node-interface.js",
   "dependencies": {},
   "devDependencies": {
     "ava": "^0.19.1",
@@ -29,7 +29,7 @@
     "cover": "nyc ava",
     "test": "ava",
     "semantic-release": "semantic-release pre && npm publish && semantic-release post",
-    "prepublish": "rollup --output=dist/main.js -c -- src/main.js",
+    "prepublish": "rollup --output=dist/node-interface.js -c -- src/node-interface.js",
     "pretest": "rollup -c tests/rollup.config.js",
     "precover": "rollup -c tests/rollup.config.js"
   },

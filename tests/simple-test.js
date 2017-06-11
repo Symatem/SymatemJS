@@ -2,7 +2,7 @@ import test from 'ava';
 import {
   Symatem
 }
-from '../src/main';
+from '../src/node-interface';
 
 test('initialize', async t => {
   const sym = new Symatem();

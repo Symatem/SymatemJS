@@ -1,11 +1,5 @@
 /* global WebAssembly */
 
-const path = require('path');
-const fs = require('fs');
-const {
-  promisify
-} = require('util');
-
 function uint8ArrayToString(array) {
   return String.fromCharCode.apply(null, array);
 }
@@ -27,12 +21,11 @@ const symbolByName = {
   UTF8: 17
 };
 
-export class Symatem {
-  async initialize() {
+export class SymatemCore {
+  async initialize(wasmBlob) {
     if (this.wasmModule) return;
 
-    const f = path.join(__dirname, '..', 'Symatem.wasm');
-    this.wasmModule = await WebAssembly.compile(new Uint8Array(await promisify(fs.readFile)(f)));
+    this.wasmModule = await WebAssembly.compile(wasmBlob);
 
     const self = this;
     this.wasmInstance = new WebAssembly.Instance(this.wasmModule, {
