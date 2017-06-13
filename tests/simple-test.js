@@ -40,20 +40,21 @@ test('number blobs', async t => {
 });
 
 
-test('images', async t => {
+test('encode/decode', async t => {
   const sym1 = new Symatem();
   await sym1.initialize();
 
   const s1 = sym1.createSymbol();
   sym1.setBlob(s1, 1000);
 
-  const image = sym1.saveImage();
-
-  console.log(image);
+  const encoded = sym1.encodeOntologyBinary();
+  //console.log(encoded);
+  t.is(encoded.byteLength >= 338, true);
+  t.is(encoded.byteLength < 1024, true);
 
   const sym2 = new Symatem();
   await sym2.initialize();
-  sym2.loadImage(image);
+  sym2.decodeOntologyBinary(encoded);
 
   t.is(sym2.getBlob(s1), 1000);
 });

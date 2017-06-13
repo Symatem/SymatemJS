@@ -15,11 +15,15 @@ const initializerFunction = '_GLOBAL__sub_I_';
 const chunkSize = 65536;
 const blobBufferSize = 4096;
 const symbolByName = {
-  BlobType: 13,
-  Natural: 14,
-  Integer: 15,
-  Float: 16,
-  UTF8: 17
+  Void: 0,
+  PosX: 13,
+  PosY: 14,
+  BlobType: 15,
+  Natural: 16,
+  Integer: 17,
+  Float: 18,
+  UTF8: 19,
+  BinaryOntologyCodec: 22
 };
 
 export class SymatemCore {
@@ -63,9 +67,17 @@ export class SymatemCore {
     return this.wasmInstance.exports[name](...params);
   }
 
-  saveImage() {
-    this.call('saveImage');
-    return this.wasmInstance.exports.memory.buffer.slice(this.superPageByteAddress);
+  encodeOntologyBinary() {
+    this.call('encodeOntologyBinary');
+    const data = this.getBlob(symbolByName.BinaryOntologyCodec);
+    this.setBlobSize(symbolByName.BinaryOntologyCodec, 0);
+    return data;
+  }
+
+  decodeOntologyBinary(data) {
+    this.setBlob(data, symbolByName.BinaryOntologyCodec);
+    this.call('decodeOntologyBinary');
+    this.setBlobSize(symbolByName.BinaryOntologyCodec, 0);
   }
 
   loadImage(image) {
@@ -168,15 +180,12 @@ export class SymatemCore {
     return (result.length === 1) ? result[0] : 0;
   }
 
-  setBlob(symbol, data) {
+  setBlob(data, symbol) {
     let type = 0,
       buffer = data;
     switch (typeof data) {
       case 'string':
-        buffer = new Uint8Array(data.length);
-        for (let i = 0; i < data.length; ++i) {
-          buffer[i] = data[i].charCodeAt(0);
-        }
+        buffer = stringToUtf8Array(data);
         type = symbolByName.UTF8;
         break;
       case 'number':
@@ -194,12 +203,14 @@ export class SymatemCore {
         }
         break;
     }
-    if (!this.writeBlob(symbol, buffer)) {
+    const size = (buffer) ? buffer.length * 8 : 0;
+    this.setBlobSize(symbol, size);
+    if (size > 0 && !this.writeBlob(buffer, symbol)) {
       return false;
     }
     this.setSolitary(symbol, symbolByName.BlobType, type);
     return true;
-  }
+  };
 
   deserializeHRL(inputString, packageSymbol = 0) {
     const inputSymbol = this.createSymbol(),
@@ -263,6 +274,21 @@ export class SymatemCore {
   }
 
   setSolitary(entity, attribute, newValue) {
+    const result = this.queryArray(queryMask.MMV, entity, attribute, 0);
+    let needsToBeLinked = true;
+    for (const oldValue of result) {
+      if (oldValue == newValue) {
+        needsToBeLinked = false;
+      } else {
+        this.unlinkTriple(entity, attribute, oldValue);
+      }
+    }
+    if (needsToBeLinked)  {
+      this.linkTriple(entity, attribute, newValue);
+    }
+  };
+
+  _setSolitary(entity, attribute, newValue) {
     const result = this.queryArray(queryMask.MMV, entity, attribute, 0);
     let needsToBeLinked = true;
     for (const oldValue of result) {
