@@ -121,19 +121,19 @@ export class SymatemCore {
     return blob;
   }
 
-  readBlob(symbol, offset, length) {
-    if (!offset) {
-      offset = 0;
-    }
-    if (!length) {
-      length = this.getBlobSize(symbol) - offset;
-    }
-    if (length < 0) {
-      return;
-    }
+
+
+  readBlob(symbol, offset = 0, length = undefined) {
     let sliceOffset = 0;
     const bufferByteAddress = this.call('getStackPointer') - blobBufferSize,
-      data = new Uint8Array(Math.ceil(length / 8));
+      size = this.getBlobSize(symbol);
+    if (!length) {
+      length = size - offset;
+    }
+    if (length < 0 || offset < 0 || length + offset > size) {
+      return false;
+    }
+    const data = new Uint8Array(Math.ceil(length / 8));
     while (length > 0) {
       const sliceLength = Math.min(length, blobBufferSize * 8);
       this.call('readBlob', symbol, offset + sliceOffset * 8, sliceLength);
@@ -145,26 +145,42 @@ export class SymatemCore {
     return data;
   }
 
-  writeBlob(symbol, data, offset) {
-    const bufferByteAddress = this.call('getStackPointer') - blobBufferSize,
-      oldLength = this.getBlobSize(symbol);
-    let newLength = (data === undefined) ? 0 : data.length * 8,
-      sliceOffset = 0;
-    if (!offset) {
-      offset = 0;
-      this.setBlobSize(symbol, newLength);
-    } else if (newLength + offset > oldLength) {
+  writeBlob(data, symbol, offset = 0, padding = 0) {
+    if (padding < 0 || padding > 7) {
       return false;
     }
-    while (newLength > 0) {
-      const sliceLength = Math.min(newLength, blobBufferSize * 8),
+
+    let sliceOffset = 0;
+    const bufferByteAddress = this.call('getStackPointer') - blobBufferSize,
+      size = this.getBlobSize(symbol);
+    let length = ((data === undefined) ? 0 : data.length * 8) - padding;
+    if (length < 0 || offset < 0 || length + offset > size) {
+      return false;
+    }
+    while (length > 0) {
+      const sliceLength = Math.min(length, blobBufferSize * 8),
         bufferSlice = new Uint8Array(data.slice(sliceOffset, sliceOffset + Math.ceil(sliceLength / 8)));
-      this.setMemorySlice(bufferByteAddress, bufferSlice);
+      this.setMemorySlice(bufferSlice, bufferByteAddress);
       this.call('writeBlob', symbol, offset + sliceOffset * 8, sliceLength);
-      newLength -= sliceLength;
+      length -= sliceLength;
       sliceOffset += Math.ceil(sliceLength / 8);
     }
     return true;
+  }
+
+  cryptBlob(symbol, key, nonce) {
+    const blockSymbol = this.createSymbol(),
+      block = new Uint8Array(64),
+      view = DataView(block.buffer),
+      str = "expand 32-byte k";
+    for (let i = 0; i < str.length; ++i) {
+      block[i] = str.charCodeAt(i);
+    }
+    block.set(key, 16);
+    block.set(nonce, 48);
+    this.setBlob(block, blockSymbol);
+    this.call('chaCha20', symbol, blockSymbol);
+    this.releaseSymbol(blockSymbol);
   }
 
   getBlobSize(symbol) {
@@ -173,6 +189,14 @@ export class SymatemCore {
 
   setBlobSize(symbol, size) {
     this.call('setBlobSize', symbol, size);
+  }
+
+  decreaseBlobSize(symbol, offset, length) {
+    return this.call('decreaseBlobSize', symbol, offset, length);
+  }
+
+  increaseBlobSize(symbol, offset, length) {
+    this.call('increaseBlobSize', symbol, offset, length);
   }
 
   getBlobType(symbol) {
@@ -287,21 +311,6 @@ export class SymatemCore {
       this.linkTriple(entity, attribute, newValue);
     }
   };
-
-  _setSolitary(entity, attribute, newValue) {
-    const result = this.queryArray(queryMask.MMV, entity, attribute, 0);
-    let needsToBeLinked = true;
-    for (const oldValue of result) {
-      if (oldValue === newValue) {
-        needsToBeLinked = false;
-      } else {
-        this.unlinkTriple(entity, attribute, oldValue);
-      }
-    }
-    if (needsToBeLinked) {
-      this.linkTriple(entity, attribute, newValue);
-    }
-  }
 
   createSymbol() {
     return this.call('_createSymbol');
