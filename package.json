@@ -10,7 +10,7 @@
     "url": "https://github.com/Symatem/SymatemWasm.git"
   },
   "engines": {
-    "node": ">=8.1"
+    "node": ">=8.1.2"
   },
   "description": "Symatem WebAssembly API",
   "main": "dist/node-interface.js",
@@ -18,7 +18,6 @@
   "dependencies": {},
   "devDependencies": {
     "ava": "^0.19.1",
-    "babel-preset-es2015-rollup": "^3.0.0",
     "nyc": "^11.0.2",
     "rollup": "^0.42.0",
     "rollup-plugin-babel": "^2.7.1",

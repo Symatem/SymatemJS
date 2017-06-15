@@ -6,7 +6,7 @@ export default {
   external: ['ava'],
   plugins: [
     babel({
-      presets: ['es2015-rollup'],
+      presets: [],
       exclude: 'node_modules/**'
     }),
     multiEntry()
