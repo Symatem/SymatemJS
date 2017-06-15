@@ -1,7 +1,25 @@
 /* global WebAssembly */
 
-function uint8ArrayToString(array) {
-  return String.fromCharCode.apply(null, array);
+function utf8ArrayToString(array) {
+  let data = '';
+  for (let i = 0; i < array.length; ++i) {
+    data += '%' + array[i].toString(16);
+  }
+  return decodeURIComponent(data);
+}
+
+function stringToUtf8Array(string) {
+  const data = encodeURI(string),
+    array = [];
+  for (let i = 0; i < data.length; ++i) {
+    if (data[i] === '%') {
+      array.push(parseInt(data.substr(i + 1, 2), 16));
+      i += 2;
+    } else {
+      array.push(data.charCodeAt(i));
+    }
+  }
+  return new Uint8Array(array);
 }
 
 const queryMode = ['M', 'V', 'I'];
@@ -38,7 +56,7 @@ export class SymatemCore {
     this.wasmInstance = new WebAssembly.Instance(this.wasmModule, {
       env: {
         consoleLogString(basePtr, length) {
-            console.log(uint8ArrayToString(self.getMemorySlice(basePtr, length)));
+            console.log(utf8ArrayToString(self.getMemorySlice(basePtr, length)));
           },
           consoleLogInteger(value) {
             console.log(value);
@@ -55,18 +73,6 @@ export class SymatemCore {
     this.resetImage();
   }
 
-  getMemorySlice(begin, length) {
-    return new Uint8Array(this.wasmInstance.exports.memory.buffer.slice(begin, begin + length));
-  }
-
-  setMemorySlice(begin, slice) {
-    new Uint8Array(this.wasmInstance.exports.memory.buffer).set(slice, begin);
-  }
-
-  call(name, ...params) {
-    return this.wasmInstance.exports[name](...params);
-  }
-
   encodeOntologyBinary() {
     this.call('encodeOntologyBinary');
     const data = this.getBlob(symbolByName.BinaryOntologyCodec);
@@ -80,23 +86,50 @@ export class SymatemCore {
     this.setBlobSize(symbolByName.BinaryOntologyCodec, 0);
   }
 
+  getMemorySlice(begin, length) {
+    return new Uint8Array(this.wasmInstance.exports.memory.buffer.slice(begin, begin + length));
+  }
+
+  setMemorySlice(slice, begin) {
+    new Uint8Array(this.wasmInstance.exports.memory.buffer).set(slice, begin);
+  }
+
+  saveImage() {
+    return this.wasmInstance.exports.memory.buffer.slice(this.superPageByteAddress);
+  }
+
   loadImage(image) {
     const currentSize = this.wasmInstance.exports.memory.buffer.byteLength,
       newSize = this.superPageByteAddress + image.byteLength;
     if (currentSize < newSize) {
       this.wasmInstance.exports.memory.grow(Math.ceil((newSize - currentSize) / chunkSize));
     }
-    this.setMemorySlice(this.superPageByteAddress, image);
+    this.setMemorySlice(image, this.superPageByteAddress);
   }
 
   resetImage() {
-    this.setMemorySlice(this.superPageByteAddress, new Uint8Array(chunkSize));
+    this.setMemorySlice(new Uint8Array(chunkSize), this.superPageByteAddress);
     this.call(initializerFunction + 'WASM.cpp');
   }
 
   readSymbolBlob(symbol) {
     const buffer = this.readBlob(symbol).buffer;
     return Array.prototype.slice.call(new Uint32Array(buffer));
+  }
+
+  call(name, ...params) {
+    return this.wasmInstance.exports[name](...params);
+  }
+
+  deserializeHRL(inputString, packageSymbol = 0) {
+    const inputSymbol = this.createSymbol();
+    const outputSymbol = this.createSymbol();
+    this.setBlob(inputString, inputSymbol);
+    const exception = this.call('deserializeHRL', inputSymbol, outputSymbol, packageSymbol);
+    const result = this.readSymbolBlob(outputSymbol);
+    this.unlinkSymbol(inputSymbol);
+    this.unlinkSymbol(outputSymbol);
+    return exception ? exception : result;
   }
 
   getBlob(symbol) {
@@ -116,12 +149,10 @@ export class SymatemCore {
       case symbolByName.Float:
         return dataView.getFloat32(0, true);
       case symbolByName.UTF8:
-        return uint8ArrayToString(blob);
+        return utf8ArrayToString(blob);
     }
     return blob;
   }
-
-
 
   readBlob(symbol, offset = 0, length = undefined) {
     let sliceOffset = 0;
@@ -169,10 +200,10 @@ export class SymatemCore {
   }
 
   cryptBlob(symbol, key, nonce) {
-    const blockSymbol = this.createSymbol(),
-      block = new Uint8Array(64),
-      view = DataView(block.buffer),
-      str = "expand 32-byte k";
+    const blockSymbol = this.createSymbol();
+    const block = new Uint8Array(64);
+    //const view = DataView(block.buffer);
+    const str = 'expand 32-byte k';
     for (let i = 0; i < str.length; ++i) {
       block[i] = str.charCodeAt(i);
     }
@@ -196,12 +227,12 @@ export class SymatemCore {
   }
 
   increaseBlobSize(symbol, offset, length) {
-    this.call('increaseBlobSize', symbol, offset, length);
+    return this.call('increaseBlobSize', symbol, offset, length);
   }
 
   getBlobType(symbol) {
     const result = this.queryArray(queryMask.MMV, symbol, symbolByName.BlobType, 0);
-    return (result.length === 1) ? result[0] : 0;
+    return result.length === 1 ? result[0] : 0;
   }
 
   setBlob(data, symbol) {
@@ -227,24 +258,17 @@ export class SymatemCore {
         }
         break;
     }
-    const size = (buffer) ? buffer.length * 8 : 0;
+    const size = buffer ? buffer.length * 8 : 0;
     this.setBlobSize(symbol, size);
+
     if (size > 0 && !this.writeBlob(buffer, symbol)) {
       return false;
     }
+
+    //console.log(`setBlob: ${data} ${symbol} -> ${type} ${size} ${buffer}`);
+
     this.setSolitary(symbol, symbolByName.BlobType, type);
     return true;
-  };
-
-  deserializeHRL(inputString, packageSymbol = 0) {
-    const inputSymbol = this.createSymbol(),
-      outputSymbol = this.createSymbol();
-    this.setBlob(inputSymbol, inputString);
-    const exception = this.call('deserializeHRL', inputSymbol, outputSymbol, packageSymbol);
-    const result = this.readSymbolBlob(outputSymbol);
-    this.unlinkSymbol(inputSymbol);
-    this.unlinkSymbol(outputSymbol);
-    return (exception) ? exception : result;
   }
 
   deserializeBlob(string) {
@@ -261,7 +285,7 @@ export class SymatemCore {
     } else if (!Number.isNaN(parseInt(string, 10))) {
       return parseInt(string, 10);
     }
-  };
+  }
 
   serializeBlob(symbol) {
     const blob = this.getBlob(symbol);
@@ -271,23 +295,27 @@ export class SymatemCore {
       case 'string':
         return '"' + blob + '"';
       case 'object':
-        let string = '';
-        for (let i = 0; i < blob.length; ++i) {
-          const byte = blob[i];
-          string += (byte & 0xF).toString(16) + (byte >> 4).toString(16);
+        {
+          let string = '';
+          for (let i = 0; i < blob.length; ++i) {
+            const byte = blob[i];
+            string += (byte & 0xF).toString(16) + (byte >> 4).toString(16);
+          }
+          return 'hex:' + string.toUpperCase();
         }
-        return 'hex:' + string.toUpperCase();
       default:
         return String(blob);
     }
   }
 
   linkTriple(entity, attribute, value) {
-    this.call('link', entity, attribute, value);
+    return this.call('link', entity, attribute, value);
   }
 
   unlinkTriple(entity, attribute, value) {
-    this.call('unlink', entity, attribute, value);
+    if (!this.call('unlink', entity, attribute, value)) {
+      return false;
+    }
     const referenceCount =
       this.queryCount(queryMask.MVV, entity, 0, 0) +
       this.queryCount(queryMask.VMV, 0, entity, 0) +
@@ -295,22 +323,23 @@ export class SymatemCore {
     if (referenceCount === 0) {
       this.releaseSymbol(entity);
     }
+    return true;
   }
 
   setSolitary(entity, attribute, newValue) {
     const result = this.queryArray(queryMask.MMV, entity, attribute, 0);
     let needsToBeLinked = true;
     for (const oldValue of result) {
-      if (oldValue == newValue) {
+      if (oldValue === newValue) {
         needsToBeLinked = false;
       } else {
         this.unlinkTriple(entity, attribute, oldValue);
       }
     }
-    if (needsToBeLinked)  {
+    if (needsToBeLinked) {
       this.linkTriple(entity, attribute, newValue);
     }
-  };
+  }
 
   createSymbol() {
     return this.call('_createSymbol');

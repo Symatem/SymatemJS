@@ -24,7 +24,7 @@ test('string blobs', async t => {
   await sym.initialize();
 
   const s1 = sym.createSymbol();
-  sym.setBlob(s1, 'a text');
+  t.true(sym.setBlob('a text', s1));
 
   t.is(sym.getBlobSize(s1), 48);
   t.is(sym.getBlob(s1), 'a text');
@@ -35,7 +35,7 @@ test('number blobs', async t => {
   await sym.initialize();
 
   const s1 = sym.createSymbol();
-  sym.setBlob(s1, 1000);
+  t.true(sym.setBlob(1000, s1));
   t.is(sym.getBlob(s1), 1000);
 });
 
@@ -45,7 +45,7 @@ test('encode/decode', async t => {
   await sym1.initialize();
 
   const s1 = sym1.createSymbol();
-  sym1.setBlob(s1, 1000);
+  t.true(sym1.setBlob(1000, s1));
 
   const encoded = sym1.encodeOntologyBinary();
   //console.log(encoded);
