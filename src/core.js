@@ -242,8 +242,8 @@ export class SymatemCore {
   }
 
   setBlob(data, symbol) {
-    let type = 0,
-      buffer = data;
+    let type;
+    let buffer;
     switch (typeof data) {
       case 'string':
         buffer = stringToUtf8Array(data);
@@ -263,6 +263,9 @@ export class SymatemCore {
           type = symbolByName.Natural;
         }
         break;
+      default:
+        type = 0;
+        buffer = data;
     }
     const size = buffer ? buffer.length * 8 : 0;
     this.setBlobSize(symbol, size);
