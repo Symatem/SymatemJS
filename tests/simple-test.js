@@ -49,8 +49,9 @@ test('triples', async t => {
 
   sym.linkTriple(entity, attribute, value);
 
-  const pairs = sym.queryArray(sym.queryMask.MVV, entity, 0, 0);
-  t.deepEqual(pairs, [attribute, value]);
+  t.deepEqual(sym.queryArray(sym.queryMask.MVV, entity, undefined, undefined), [attribute, value]);
+  t.deepEqual(sym.queryArray(sym.queryMask.VMV, undefined, attribute, undefined), [entity, value]);
+  t.deepEqual(sym.queryArray(sym.queryMask.VVM, undefined, undefined, value), [entity, attribute]);
 });
 
 test('encode/decode', async t => {
