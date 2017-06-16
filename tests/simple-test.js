@@ -39,6 +39,19 @@ test('number blobs', async t => {
   t.is(sym.getBlob(s1), 1000);
 });
 
+test('triples', async t => {
+  const sym = new Symatem();
+  await sym.initialize();
+
+  const entity = sym.createSymbol();
+  const attribute = sym.createSymbol();
+  const value = sym.createSymbol();
+
+  sym.linkTriple(entity, attribute, value);
+
+  const pairs = sym.queryArray(sym.queryMask.MVV, entity, 0, 0);
+  t.deepEqual(pairs, [attribute, value]);
+});
 
 test('encode/decode', async t => {
   const sym1 = new Symatem();
