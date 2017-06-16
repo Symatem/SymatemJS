@@ -24,6 +24,7 @@ function stringToUtf8Array(string) {
 
 const queryMode = ['M', 'V', 'I'];
 const queryMask = {};
+
 for (let i = 0; i < 27; ++i) {
   queryMask[queryMode[i % 3] + queryMode[Math.floor(
     i / 3) % 3] + queryMode[Math.floor(i / 9) % 3]] = i;
@@ -45,6 +46,11 @@ const symbolByName = {
 };
 
 export class SymatemCore {
+
+  get queryMask() {
+    return queryMask;
+  }
+
   async initialize(wasmBlob) {
     if (this.wasmModule) {
       return;
