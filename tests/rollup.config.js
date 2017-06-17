@@ -1,14 +1,9 @@
-import babel from 'rollup-plugin-babel';
 import multiEntry from 'rollup-plugin-multi-entry';
 
 export default {
   entry: 'tests/**/*-test.js',
   external: ['ava'],
   plugins: [
-    babel({
-      presets: [],
-      exclude: 'node_modules/**'
-    }),
     multiEntry()
   ],
   format: 'cjs',

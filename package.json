@@ -19,7 +19,7 @@
   "devDependencies": {
     "ava": "^0.19.1",
     "nyc": "^11.0.2",
-    "rollup": "^0.42.0",
+    "rollup": "^0.43.0",
     "rollup-plugin-babel": "^2.7.1",
     "rollup-plugin-multi-entry": "^2.0.1",
     "semantic-release": "^6.3.6"
@@ -28,7 +28,7 @@
     "cover": "nyc ava",
     "test": "ava",
     "semantic-release": "semantic-release pre && npm publish && semantic-release post",
-    "prepublish": "rollup --output=dist/node-interface.js -c -- src/node-interface.js",
+    "prepublish": "rollup -c -- src/node-interface.js",
     "pretest": "rollup -c tests/rollup.config.js",
     "precover": "rollup -c tests/rollup.config.js"
   },
