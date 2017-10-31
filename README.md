@@ -1,52 +1,58 @@
-# Symatem JS/WebAssembly API
+# Symatem JS & WebAssembly API
 
-## Symbol
-### symbolID = createSymbol()
-Returns a new symbol.
-### releaseSymbol(symbolID)
-Releases a symbol you don't need anymore.
-But in most cases you want to call unlinkSymbol instead.
-### unlinkSymbol(symbolID)
-Unlinks all triples of a symbol and releases it.
-
-## Blob
-### sizeInBits = getBlobSize(symbolID)
-Returns the size of a blobs virtual space.
-### setBlobSize(symbolID, sizeInBits)
-Increases or deceases the size of a blobs virtual space at the end.
-### successBool = decreaseBlobSize(symbolID, offsetInBits, lengthInBits)
-Removes a slice of a blobs virtual space at the given offset and with the given length.
-All data behind the slice moves down.
-Returns true on success and false if invalid parameters were given.
-### successBool = increaseBlobSize(symbolID, offsetInBits, lengthInBits)
-Inserts a slice of a blobs virtual space at the given offset and with the given length.
-All data behind the slice moves up.
-Returns true on success and false if invalid parameters were given.
-### dataAsUint8Array = readBlob(symbolID, offsetInBits, lengthInBits)
-Returns a slice of a blob starting at the given offset and with the given length or nothing if invalid parameters were given.
-The slice will start at the beginning if no offset is given and reach to the end if no length is given.
-### successBool = writeBlob(dataAsUint8Array, symbolID, offsetInBits, paddingInBits)
-Replaces a slice of a blob starting at the given offset and with the length of the given data minus the given padding by the given data.
-The slice will start at the beginning if no offset is given and have the length of the given data if no padding is given.
-Returns true on success and false if invalid parameters were given.
-### symbolID = getBlobType(symbolID)
-Returns the symbolID of the type associated with the given blobs symbolID.
-### data = getBlob(symbolID)
-Returns an entire blob converted to JS native data types.
-### setBlob(data, symbolID)
-Replaces an entire blob by JS native data types.
-### string = serializeBlob(symbolID)
-Converts a blob to a string.
-### data = deserializeBlob(string)
+## Static
+### downloadAsFile(dataBytes, fileName)
+Saves dataBytes as download file in browsers.
+### string = utf8ArrayToString(dataBytes)
+Converts a Uint8Array containing UTF8 to a string.
+### dataBytes = stringToUtf8Array(string)
+Converts a string to a Uint8Array containing UTF8.
+### string = encodeText(data)
+Converts JS native data types to a string.
+### data = decodeText(string)
 Converts a string to JS native data types.
 
+## Symbol
+### symbol = createSymbol(symbolSpace, symbol)
+Makes sure the given symbol exists or creates a new one and returns it if no symbol was given.
+### releaseSymbol(symbolSpace, symbol)
+Releases an empty symbol.
+But in most cases you want to call unlinkSymbol instead to make sure the symbol is empty.
+### unlinkSymbol(symbolSpace, symbol)
+Unlinks all triples of a symbol and releases it.
+
+## Data
+### length = getLength(symbolSpace, symbol)
+Returns the length of the symbols virtual space.
+### setLength(symbolSpace, symbol, length)
+Increases or deceases the length of a symbols virtual space at the end.
+### decreaseLength(symbolSpace, symbol, offset, length)
+Removes a slice of a symbols virtual space at the given offset and with the given length.
+All data behind the slice moves downward.
+### increaseLength(symbolSpace, symbol, offset, length)
+Inserts a slice of a symbols virtual space at the given offset and with the given length.
+All data behind the slice moves upward.
+### dataBytes = readData(symbolSpace, symbol, offset, length)
+Returns a slice of data starting at the given offset and with the given length.
+NOTE: Do not modify the return value as it might be used internally.
+### writeData(symbolSpace, symbol, offset, length, dataBytes)
+Replaces a slice of data starting at the given offset and with the given length by dataBytes.
+### dataValue = getData(symbolSpace, symbol)
+Returns the symbols entire data converted to JS native data types.
+### setData(symbolSpace, symbol, dataValue)
+Replaces the symbols entire data by JS native data types.
+
 ## Triple
-### successBool = linkTriple(entitySymbolID, attributeSymbolID, valueSymbolID)
-Returns true if the created triple didn't exist before and false otherwise.
-### successBool = unlinkTriple(entitySymbolID, attributeSymbolID, valueSymbolID)
-Returns true if the removed triple existed before and false otherwise.
-### resultArray = queryArray(mask, entitySymbolID, attributeSymbolID, valueSymbolID)
-Returns the set of all matching symbolIDs, pairs or triples according to the given triple and mask.
+### successBool = setTriple(symbolSpace, link, [entity, attribute, value])
+Links or unlinks a triple.
+Returns false if no changes were made.
+### setSolitary(symbolSpace, [entity, attribute, value])
+Does the same as setTriple (link = true) but also unlinks all triples with different values and returns nothing.
+### value = getSolitary(symbolSpace, entity, attribute)
+Returns the value if exactly one triple matches with the given entity-attribute-pair.
+### iterator = queryTriples(symbolSpace, mask, [entity, attribute, value])
+Yields all matching triples according to the given triple and mask.
+The final .next() returns the count of matches.
 
 The mask is a 3-tuple itself and each position matches one position of the triple using the three possible mask-states:
 - Match: You are looking for triples which match the given triple at this position exactly.
@@ -56,16 +62,16 @@ The mask is a 3-tuple itself and each position matches one position of the tripl
 So three possible mask-states powered by three positions are 27 possible masks and questions to ask:
 - MMM: Does the given triple exist?
 - VVV: Which triples exist?
-- III: Is there at least one triple?
+- III: (only for completeness)
 - MII: Is there at least one occurrence of the given entity?
 - IMI: Is there at least one occurrence of the given attribute?
 - IIM: Is there at least one occurrence of the given value?
-- IMM: Is there at least one entity with the given attribute-value pair?
-- MIM: Is there at least one attribute with the given entity-value pair?
-- MMI: Is there at least one value with the given entity-attribute pair?
-- VMM: Which entities has the given attribute-value pair?
-- MVM: Which attributes has the given entity-value pair?
-- MMV: Which values has the given entity-attribute pair?
+- IMM: Is there at least one entity with the given attribute-value-pair?
+- MIM: Is there at least one attribute with the given entity-value-pair?
+- MMI: Is there at least one value with the given entity-attribute-pair?
+- VMM: Which entities has the given attribute-value-pair?
+- MVM: Which attributes has the given entity-value-pair?
+- MMV: Which values has the given entity-attribute-pair?
 - MVV: Which attribute-value pairs has the given entity?
 - VMV: Which entity-value pairs has the given attribute?
 - VVM: Which entity-attribute pairs has the given value?
@@ -82,23 +88,15 @@ So three possible mask-states powered by three positions are 27 possible masks a
 - IVI: Which attributes exist?
 - IIV: Which values exist?
 
-They are accessed by Symatem.queryMask.MMM for example.
-Positions of the triple which aren't masked by match but varying or ignore should be set to Symatem.symbolByName.Void or 0.
+They are accessed by BasicBackend.queryMask.MMM for example.
+Positions of the triple which are not masked by Match but by Varying or by Ignore should be set to BasicBackend.symbolByName.Void or 0.
 The second dimension of the result array corresponds to the count of varyings in the mask.
 So without any varying you will get an empty result, but you could use resultCount() instead.
-### resultCount = queryCount(mask, entitySymbolID, attributeSymbolID, valueSymbolID)
-Does the same as queryArray but returns only the count of triple matches independent of the count of varyings in the mask.
-### setSolitary(entitySymbolID, attributeSymbolID, valueSymbolID)
-Does the same as linkTriple but also unlinks all triples with different values and returns nothing.
 
-## Ontology
-### dataAsUint8Array = encodeOntologyBinary()
-Returns the entire ontology as binary LTS format.
-### decodeOntologyBinary(dataAsUint8Array)
-Loads an entire ontology from the binary LTS format.
-### dataAsUint8Array = saveImage()
-Returns the entire VM-state as RAM-image which might be incompatible with other versions.
-### loadImage(dataAsUint8Array)
-Loads an entire VM-state from a RAM-image which might be incompatible with other versions.
-### resetImage()
-Resets the VM-state.
+## Ontology / SymbolSpace
+### createSymbolSpace(symbol)
+Returns a new SymbolSpace.
+### encodeJsonFromSymbolSpace(symbolSpace)
+Returns the symbolSpace as JSON LTS format.
+### decodeJsonIntoSymbolSpace(symbolSpace, data)
+Loads an symbolSpace from the JSON LTS format.
