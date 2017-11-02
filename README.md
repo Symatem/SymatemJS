@@ -90,8 +90,6 @@ So three possible mask-states powered by three positions are 27 possible masks a
 
 They are accessed by BasicBackend.queryMask.MMM for example.
 Positions of the triple which are not masked by Match but by Varying or by Ignore should be set to BasicBackend.symbolByName.Void or 0.
-The second dimension of the result array corresponds to the count of varyings in the mask.
-So without any varying you will get an empty result, but you could use resultCount() instead.
 
 ## Ontology / SymbolSpace
 ### createSymbolSpace(symbol)

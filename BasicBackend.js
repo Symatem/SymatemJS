@@ -3,9 +3,21 @@ const queryMode = ['M', 'V', 'I'],
 for(let i = 0; i < 27; ++i)
     queryMask[queryMode[i % 3] + queryMode[Math.floor(i / 3) % 3] + queryMode[Math.floor(i / 9) % 3]] = i;
 
+const symbolByName = {
+    'Encoding': 1,
+    'BinaryNumber': 2,
+    'TwosComplement': 3,
+    'IEEE754': 4,
+    'UTF8': 5
+};
+
 export default class BasicBackend {
     static get queryMask() {
         return queryMask;
+    }
+
+    get symbolByName() {
+        return symbolByName;
     }
 
     static downloadAsFile(dataBytes, fileName) {
@@ -22,10 +34,10 @@ export default class BasicBackend {
         URL.revokeObjectURL(url);
     }
 
-    static utf8ArrayToString(byteArray) {
-        // return new TextDecoder('utf8').decode(byteArray);
+    static utf8ArrayToString(dataBytes) {
+        // return new TextDecoder('utf8').decode(dataBytes);
         let uri = '';
-        for(const byte of byteArray)
+        for(const byte of new Uint8Array(dataBytes))
             uri += '%' + byte.toString(16);
         return decodeURIComponent(uri);
     }
@@ -33,15 +45,15 @@ export default class BasicBackend {
     static stringToUtf8Array(string) {
         // return new TextEncoder('utf8').encode(string);
         const uri = encodeURI(string),
-              byteArray = [];
+              dataBytes = [];
         for(let i = 0; i < uri.length; ++i) {
             if(uri[i] == '%') {
-                byteArray.push(parseInt(uri.substr(i + 1, 2), 16));
+                dataBytes.push(parseInt(uri.substr(i + 1, 2), 16));
                 i += 2;
             } else
-                byteArray.push(uri.charCodeAt(i));
+                dataBytes.push(uri.charCodeAt(i));
         }
-        return new Uint8Array(byteArray);
+        return (new Uint8Array(dataBytes)).buffer;
     }
 
     static encodeText(dataValue) {
@@ -50,7 +62,7 @@ export default class BasicBackend {
                 return '"' + dataValue + '"';
             case 'object':
                 let string = '';
-                for(let i = 0; i < dataValue.length; ++i) {
+                for(let i = 0; i < dataValue.byteLength; ++i) {
                     const byte = dataValue[i];
                     string += (byte & 0xF).toString(16) + (byte >> 4).toString(16);
                 }
@@ -64,8 +76,8 @@ export default class BasicBackend {
         if(string.length > 2 && string[0] == '"' && string[string.length - 1] == '"')
             return string.substr(1, string.length - 2);
         else if(string.length > 4 && string.substr(0, 4) == 'hex:') {
-            const dataValue = new Uint8Array(Math.floor((string.length - 4) / 2));
-            for(let i = 0; i < dataValue.length; ++i)
+            const dataValue = new ArrayBuffer(Math.floor((string.length - 4) / 2));
+            for(let i = 0; i < dataValue.byteLength; ++i)
                 dataValue[i] = parseInt(string[i * 2 + 4], 16) | (parseInt(string[i * 2 + 5], 16) << 4);
             return dataValue;
         } else if(!Number.isNaN(parseFloat(string)))
@@ -77,9 +89,9 @@ export default class BasicBackend {
 
 
     getData(symbolSpace, symbol) {
-        const dataBytes = this.readData(symbolSpace, symbol, this.getLength(symbolSpace, symbol)),
-              dataView = new DataView(dataBytes.buffer);
-        if(dataBytes.length === 0)
+        const dataBytes = this.readData(symbolSpace, symbol, 0, this.getLength(symbolSpace, symbol)),
+              dataView = new DataView(dataBytes);
+        if(dataBytes.byteLength === 0)
             return;
         const encoding = this.getSolitary(symbolSpace, symbol, this.symbolByName.Encoding);
         switch(encoding) {
@@ -105,8 +117,8 @@ export default class BasicBackend {
                 encoding = this.symbolByName.UTF8;
                 break;
             case 'number':
-                dataBytes = new Uint8Array(4);
-                const dataView = new DataView(dataBytes.buffer);
+                dataBytes = new ArrayBuffer(4);
+                const dataView = new DataView(dataBytes);
                 if(!Number.isInteger(dataValue)) {
                     dataView.setFloat32(0, dataValue, true);
                     encoding = this.symbolByName.IEEE754;
@@ -119,19 +131,19 @@ export default class BasicBackend {
                 }
                 break;
         }
-        if(byteArray != undefined) {
-            this.setLength(symbolSpace, symbol, byteArray.length * 8);
-            this.writeData(symbolSpace, symbol, byteArray.length * 8, byteArray);
+        if(dataBytes != undefined) {
+            this.setLength(symbolSpace, symbol, dataBytes.byteLength * 8);
+            this.writeData(symbolSpace, symbol, 0, dataBytes.byteLength * 8, dataBytes);
         } else
             this.setLength(symbolSpace, symbol, 0);
-        this.setSolitary(symbolSpace, [symbol, this.symbolByName.BitMapType, encoding]);
+        this.setSolitary(symbolSpace, [symbol, this.symbolByName.Encoding, encoding]);
     }
 
     setLength(symbolSpace, symbol, newLength) {
         const length = this.getLength(symbolSpace, symbol);
         if(newLength > length)
             this.increaseLength(symbolSpace, symbol, length, newLength - length);
-        else
+        else if(newLength < length)
             this.decreaseLength(symbolSpace, symbol, newLength, length - newLength);
     }
 
@@ -142,16 +154,16 @@ export default class BasicBackend {
             this.setTriple(symbolSpace, false, triple);
         for(const triple of this.queryTriples(symbolSpace, queryMask.VVM, [0, 0, symbol]))
             this.setTriple(symbolSpace, false, triple);
-        this.releaseSymbol(symbol);
+        this.releaseSymbol(symbolSpace, symbol);
     }
 
     setSolitary(symbolSpace, triple) {
         let needsToBeLinked = true;
-        for(const triple of this.queryTriples(symbolSpace, queryMask.MMV, triple)) {
-            if(triple[2] == newValue)
+        for(const iTriple of this.queryTriples(symbolSpace, queryMask.MMV, triple)) {
+            if(iTriple[2] == triple[2])
                 needsToBeLinked = false;
             else
-                this.setTriple(symbolSpace, false, triple);
+                this.setTriple(symbolSpace, false, iTriple);
         }
         if(needsToBeLinked)
             this.setTriple(symbolSpace, true, triple);
@@ -185,7 +197,7 @@ export default class BasicBackend {
             ]);
         }
         return JSON.stringify({
-            "entities": entities
+            'entities': entities
         }, undefined, '\t');
     }
 

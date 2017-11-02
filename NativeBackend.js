@@ -183,7 +183,7 @@ export default class NativeBackend extends BasicBackend {
             if(symbolSpace.freeSymbols.size == 0)
                 handle.symbol = symbolSpace.nextSymbol++;
             else {
-                handle.symbol = symbolSpace.freeSymbols.entries().next();
+                handle.symbol = symbolSpace.freeSymbols.values().next().value;
                 symbolSpace.freeSymbols.delete(handle.symbol);
             }
         } else {
@@ -191,12 +191,16 @@ export default class NativeBackend extends BasicBackend {
                 return symbol;
             handle.symbol = symbol;
             symbolSpace.freeSymbols.delete(handle.symbol);
-            while(symbolSpace.nextSymbol <= handle.symbol)
-                symbolSpace.freeSymbols.add(symbolSpace.nextSymbol++);
+            while(symbolSpace.nextSymbol < handle.symbol) {
+                if(!symbolSpace.handles.has(symbolSpace.nextSymbol))
+                    symbolSpace.freeSymbols.add(symbolSpace.nextSymbol);
+                ++symbolSpace.nextSymbol;
+            }
+            ++symbolSpace.nextSymbol;
         }
         handle.dataLength = 0;
-        handle.dataBytes = new Uint8Array();
-        // handle.dataView = new DataView(handle.dataBytes.buffer);
+        handle.dataBytes = new ArrayBuffer();
+        // handle.dataView = new DataView(handle.dataBytes);
         handle.subIndices = [];
         for(let i = 0; i < 6; ++i)
             handle.subIndices.push(new Map());
@@ -221,15 +225,17 @@ export default class NativeBackend extends BasicBackend {
 
     decreaseLength(symbolSpace, symbol, offset, length) {
         const handle = symbolSpace.handles.get(symbol);
-        handle.dataBytes.copyWithin(offset / 8, (offset + length) / 8);
-        handle.dataBytes = new Uint8Array(ArrayBuffer.transfer(handle.dataBytes.buffer, (handle.dataLength - length) / 8));
+        new Uint8Array(handle.dataBytes).copyWithin(offset / 8, (offset + length) / 8);
+        handle.dataBytes = handle.dataBytes.slice(0, (handle.dataLength - length) / 8);
         handle.dataLength -= length;
     }
 
     increaseLength(symbolSpace, symbol, offset, length) {
         const handle = symbolSpace.handles.get(symbol);
-        handle.dataBytes = new Uint8Array(ArrayBuffer.transfer(handle.dataBytes.buffer, (handle.dataLength + length) / 8));
-        handle.dataBytes.copyWithin((offset + length) / 8, offset / 8);
+        const dataBytes = new Uint8Array((handle.dataLength + length) / 8);
+        dataBytes.set(handle.dataBytes, 0);
+        dataBytes.copyWithin((offset + length) / 8, offset / 8);
+        handle.dataBytes = dataBytes.buffer;
         handle.dataLength += length;
     }
 
@@ -244,7 +250,7 @@ export default class NativeBackend extends BasicBackend {
         const handle = symbolSpace.handles.get(symbol);
         if(offset == 0 && length == handle.dataLength) {
             handle.dataBytes = dataBytes;
-            handle.dataLength = dataBytes.length * 8;
+            handle.dataLength = dataBytes.byteLength * 8;
         } else
             handle.dataBytes.set(dataBytes, offset / 8);
     }
