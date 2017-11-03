@@ -53,7 +53,7 @@ export default class BasicBackend {
             } else
                 dataBytes.push(uri.charCodeAt(i));
         }
-        return (new Uint8Array(dataBytes)).buffer;
+        return new Uint8Array(dataBytes);
     }
 
     static encodeText(dataValue) {
@@ -76,7 +76,7 @@ export default class BasicBackend {
         if(string.length > 2 && string[0] == '"' && string[string.length - 1] == '"')
             return string.substr(1, string.length - 2);
         else if(string.length > 4 && string.substr(0, 4) == 'hex:') {
-            const dataValue = new ArrayBuffer(Math.floor((string.length - 4) / 2));
+            const dataValue = new Uint8Array(Math.floor((string.length - 4) / 2));
             for(let i = 0; i < dataValue.byteLength; ++i)
                 dataValue[i] = parseInt(string[i * 2 + 4], 16) | (parseInt(string[i * 2 + 5], 16) << 4);
             return dataValue;
@@ -90,7 +90,7 @@ export default class BasicBackend {
 
     getData(symbolSpace, symbol) {
         const dataBytes = this.readData(symbolSpace, symbol, 0, this.getLength(symbolSpace, symbol)),
-              dataView = new DataView(dataBytes);
+              dataView = new DataView(dataBytes.buffer);
         if(dataBytes.byteLength === 0)
             return;
         const encoding = this.getSolitary(symbolSpace, symbol, this.symbolByName.Encoding);
@@ -117,8 +117,8 @@ export default class BasicBackend {
                 encoding = this.symbolByName.UTF8;
                 break;
             case 'number':
-                dataBytes = new ArrayBuffer(4);
-                const dataView = new DataView(dataBytes);
+                dataBytes = new Uint8Array(4);
+                const dataView = new DataView(dataBytes.buffer);
                 if(!Number.isInteger(dataValue)) {
                     dataView.setFloat32(0, dataValue, true);
                     encoding = this.symbolByName.IEEE754;

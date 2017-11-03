@@ -199,7 +199,7 @@ export default class NativeBackend extends BasicBackend {
             ++symbolSpace.nextSymbol;
         }
         handle.dataLength = 0;
-        handle.dataBytes = new ArrayBuffer();
+        handle.dataBytes = new Uint8Array();
         // handle.dataView = new DataView(handle.dataBytes);
         handle.subIndices = [];
         for(let i = 0; i < 6; ++i)
@@ -225,7 +225,7 @@ export default class NativeBackend extends BasicBackend {
 
     decreaseLength(symbolSpace, symbol, offset, length) {
         const handle = symbolSpace.handles.get(symbol);
-        new Uint8Array(handle.dataBytes).copyWithin(offset / 8, (offset + length) / 8);
+        handle.dataBytes.copyWithin(offset / 8, (offset + length) / 8);
         handle.dataBytes = handle.dataBytes.slice(0, (handle.dataLength - length) / 8);
         handle.dataLength -= length;
     }
@@ -235,7 +235,7 @@ export default class NativeBackend extends BasicBackend {
         const dataBytes = new Uint8Array((handle.dataLength + length) / 8);
         dataBytes.set(handle.dataBytes, 0);
         dataBytes.copyWithin((offset + length) / 8, offset / 8);
-        handle.dataBytes = dataBytes.buffer;
+        handle.dataBytes = dataBytes;
         handle.dataLength += length;
     }
 
