@@ -158,7 +158,7 @@ export default class BasicBackend {
     }
 
     setSolitary(symbolSpace, triple) {
-        let needsToBeLinked = true;
+        let needsToBeLinked = triple[2] != undefined;
         for(const iTriple of this.queryTriples(symbolSpace, queryMask.MMV, triple)) {
             if(iTriple[2] == triple[2])
                 needsToBeLinked = false;
