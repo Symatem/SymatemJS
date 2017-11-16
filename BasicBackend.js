@@ -37,8 +37,10 @@ export default class BasicBackend {
     static utf8ArrayToString(dataBytes) {
         // return new TextDecoder('utf8').decode(dataBytes);
         let uri = '';
-        for(const byte of new Uint8Array(dataBytes))
-            uri += '%' + byte.toString(16);
+        for(const byte of new Uint8Array(dataBytes)) {
+            const hex = byte.toString(16);
+            uri += '%' + ((hex.length == 1) ? '0' + hex : hex);
+        }
         return decodeURIComponent(uri);
     }
 
@@ -73,8 +75,9 @@ export default class BasicBackend {
     }
 
     static decodeText(string) {
-        if(string.length > 2 && string[0] == '"' && string[string.length - 1] == '"')
-            return string.substr(1, string.length - 2);
+        const inner = string.match(/"((?:[^\\"]|\\.)*)"/);
+        if(inner != undefined)
+            return inner[1];
         else if(string.length > 4 && string.substr(0, 4) == 'hex:') {
             const dataValue = new Uint8Array(Math.floor((string.length - 4) / 2));
             for(let i = 0; i < dataValue.byteLength; ++i)
@@ -206,11 +209,12 @@ export default class BasicBackend {
         for(const entity of entities) {
             this.createSymbol(symbolSpace, entity[0]);
             this.setLength(symbolSpace, entity[0], entity[1]);
-            this.writeData(symbolSpace, entity[0], 0, entity[1], this.constructor.decodeText(entity[2]));
+            if(entity[1] > 0)
+                this.writeData(symbolSpace, entity[0], 0, entity[1], this.constructor.decodeText(entity[2]));
             const attributes = entity[3];
-            for(const i = 0; i < attributes.length; i += 2)
+            for(let i = 0; i < attributes.length; i += 2)
                 for(const value of attributes[i*2+1])
-                    this.setTriple(symbolSpace, true, entity[0], attributes[i*2], value);
+                    this.setTriple(symbolSpace, true, [entity[0], attributes[i*2], value]);
         }
     }
 };

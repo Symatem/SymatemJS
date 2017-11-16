@@ -200,7 +200,6 @@ export default class NativeBackend extends BasicBackend {
         }
         handle.dataLength = 0;
         handle.dataBytes = new Uint8Array();
-        // handle.dataView = new DataView(handle.dataBytes);
         handle.subIndices = [];
         for(let i = 0; i < 6; ++i)
             handle.subIndices.push(new Map());
