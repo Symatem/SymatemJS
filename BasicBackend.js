@@ -4,19 +4,26 @@ for(let i = 0; i < 27; ++i)
     queryMask[queryMode[i % 3] + queryMode[Math.floor(i / 3) % 3] + queryMode[Math.floor(i / 9) % 3]] = i;
 
 const symbolByName = {
-    'Encoding': 1,
-    'BinaryNumber': 2,
-    'TwosComplement': 3,
-    'IEEE754': 4,
-    'UTF8': 5
+    'Void': 0,
+    'Encoding': 0,
+    'BinaryNumber': 0,
+    'TwosComplement': 0,
+    'IEEE754': 0,
+    'UTF8': 0,
 };
+
+{
+    let symbol = 0;
+    for(const name in symbolByName)
+        symbolByName[name] = symbol++;
+}
 
 export default class BasicBackend {
     static get queryMask() {
         return queryMask;
     }
 
-    get symbolByName() {
+    static get symbolByName() {
         return symbolByName;
     }
 
@@ -96,15 +103,15 @@ export default class BasicBackend {
               dataView = new DataView(dataBytes.buffer);
         if(dataBytes.byteLength === 0)
             return;
-        const encoding = this.getSolitary(symbolSpace, symbol, this.symbolByName.Encoding);
+        const encoding = this.getSolitary(symbolSpace, symbol, symbolByName.Encoding);
         switch(encoding) {
-            case this.symbolByName.BinaryNumber:
+            case symbolByName.BinaryNumber:
                 return dataView.getUint32(0, true);
-            case this.symbolByName.TwosComplement:
+            case symbolByName.TwosComplement:
                 return dataView.getInt32(0, true);
-            case this.symbolByName.IEEE754:
+            case symbolByName.IEEE754:
                 return dataView.getFloat32(0, true);
-            case this.symbolByName.UTF8:
+            case symbolByName.UTF8:
                 return this.constructor.utf8ArrayToString(dataBytes);
             default:
                 return dataBytes;
@@ -117,20 +124,20 @@ export default class BasicBackend {
         switch(typeof dataValue) {
             case 'string':
                 dataBytes = this.constructor.stringToUtf8Array(dataValue);
-                encoding = this.symbolByName.UTF8;
+                encoding = symbolByName.UTF8;
                 break;
             case 'number':
                 dataBytes = new Uint8Array(4);
                 const dataView = new DataView(dataBytes.buffer);
                 if(!Number.isInteger(dataValue)) {
                     dataView.setFloat32(0, dataValue, true);
-                    encoding = this.symbolByName.IEEE754;
+                    encoding = symbolByName.IEEE754;
                 } else if(dataValue < 0) {
                     dataView.setInt32(0, dataValue, true);
-                    encoding = this.symbolByName.TwosComplement;
+                    encoding = symbolByName.TwosComplement;
                 } else {
                     dataView.setUint32(0, dataValue, true);
-                    encoding = this.symbolByName.BinaryNumber;
+                    encoding = symbolByName.BinaryNumber;
                 }
                 break;
         }
@@ -139,7 +146,7 @@ export default class BasicBackend {
             this.writeData(symbolSpace, symbol, 0, dataBytes.byteLength * 8, dataBytes);
         } else
             this.setLength(symbolSpace, symbol, 0);
-        this.setSolitary(symbolSpace, [symbol, this.symbolByName.Encoding, encoding]);
+        this.setSolitary(symbolSpace, [symbol, symbolByName.Encoding, encoding]);
     }
 
     setLength(symbolSpace, symbol, newLength) {

@@ -169,12 +169,15 @@ export default class NativeBackend extends BasicBackend {
     }
 
     createSymbolSpace(symbol) {
-        return {
+        const symbolSpace = {
             'symbol': symbol,
             'nextSymbol': 0,
             'freeSymbols': new Set(),
             'handles': new Map()
         };
+        for(const name in this.constructor.symbolByName)
+            this.setData(symbolSpace, this.createSymbol(symbolSpace, this.constructor.symbolByName[name]), name);
+        return symbolSpace;
     }
 
     createSymbol(symbolSpace, symbol) {
@@ -191,12 +194,9 @@ export default class NativeBackend extends BasicBackend {
                 return symbol;
             handle.symbol = symbol;
             symbolSpace.freeSymbols.delete(handle.symbol);
-            while(symbolSpace.nextSymbol < handle.symbol) {
-                if(!symbolSpace.handles.has(symbolSpace.nextSymbol))
-                    symbolSpace.freeSymbols.add(symbolSpace.nextSymbol);
-                ++symbolSpace.nextSymbol;
-            }
-            ++symbolSpace.nextSymbol;
+            while(symbolSpace.nextSymbol < handle.symbol)
+                symbolSpace.freeSymbols.add(symbolSpace.nextSymbol++);
+            symbolSpace.nextSymbol = Math.max(symbolSpace.nextSymbol, handle.symbol+1);
         }
         handle.dataLength = 0;
         handle.dataBytes = new Uint8Array();
