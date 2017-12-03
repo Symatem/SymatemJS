@@ -43,11 +43,11 @@ Returns the symbols entire data converted to JS native data types.
 Replaces the symbols entire data by JS native data types.
 
 ## Triple
-### successBool = setTriple(symbolSpace, link, [entity, attribute, value])
+### successBool = setTriple(symbolSpace, [entity, attribute, value], linked)
 Links or unlinks a triple.
 Returns false if no changes were made.
 ### setSolitary(symbolSpace, [entity, attribute, value])
-Does the same as setTriple (link = true) but also unlinks all triples with different values and returns nothing.
+Does the same as setTriple (linked = true) but also unlinks all triples with different values and returns nothing.
 ### value = getSolitary(symbolSpace, entity, attribute)
 Returns the value if exactly one triple matches with the given entity-attribute-pair.
 ### iterator = queryTriples(symbolSpace, mask, [entity, attribute, value])

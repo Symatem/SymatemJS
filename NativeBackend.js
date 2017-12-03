@@ -256,9 +256,9 @@ export default class NativeBackend extends BasicBackend {
 
 
 
-    setTriple(symbolSpace, link, triple) {
+    setTriple(symbolSpace, triple, linked) {
         function operateSubIndex(subIndex, beta, gamma) {
-            if(link) {
+            if(linked) {
                 let set;
                 if(!subIndex.has(beta)) {
                     set = new Set();
@@ -281,7 +281,7 @@ export default class NativeBackend extends BasicBackend {
             }
             return true;
         }
-        if(link) {
+        if(linked) {
             this.createSymbol(symbolSpace, triple[0]);
             this.createSymbol(symbolSpace, triple[1]);
             this.createSymbol(symbolSpace, triple[2]);

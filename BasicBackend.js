@@ -119,8 +119,7 @@ export default class BasicBackend {
     }
 
     setData(symbolSpace, symbol, dataValue) {
-        let encoding = 0,
-            dataBytes = dataValue;
+        let encoding, dataBytes = dataValue;
         switch(typeof dataValue) {
             case 'string':
                 dataBytes = this.constructor.stringToUtf8Array(dataValue);
@@ -159,11 +158,11 @@ export default class BasicBackend {
 
     unlinkSymbol(symbolSpace, symbol) {
         for(const triple of this.queryTriples(symbolSpace, queryMask.MVV, [symbol, 0, 0]))
-            this.setTriple(symbolSpace, false, triple);
+            this.setTriple(symbolSpace, triple, false);
         for(const triple of this.queryTriples(symbolSpace, queryMask.VMV, [0, symbol, 0]))
-            this.setTriple(symbolSpace, false, triple);
+            this.setTriple(symbolSpace, triple, false);
         for(const triple of this.queryTriples(symbolSpace, queryMask.VVM, [0, 0, symbol]))
-            this.setTriple(symbolSpace, false, triple);
+            this.setTriple(symbolSpace, triple, false);
         this.releaseSymbol(symbolSpace, symbol);
     }
 
@@ -173,10 +172,10 @@ export default class BasicBackend {
             if(iTriple[2] == triple[2])
                 needsToBeLinked = false;
             else
-                this.setTriple(symbolSpace, false, iTriple);
+                this.setTriple(symbolSpace, iTriple, false);
         }
         if(needsToBeLinked)
-            this.setTriple(symbolSpace, true, triple);
+            this.setTriple(symbolSpace, triple, true);
     }
 
     getSolitary(symbolSpace, entity, attribute) {
@@ -221,7 +220,7 @@ export default class BasicBackend {
             const attributes = entity[3];
             for(let i = 0; i < attributes.length; i += 2)
                 for(const value of attributes[i*2+1])
-                    this.setTriple(symbolSpace, true, [entity[0], attributes[i*2], value]);
+                    this.setTriple(symbolSpace, [entity[0], attributes[i*2], value], true);
         }
     }
 };
