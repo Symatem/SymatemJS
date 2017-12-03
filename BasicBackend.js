@@ -29,15 +29,13 @@ export default class BasicBackend {
 
     static downloadAsFile(dataBytes, fileName) {
         const file = new Blob([dataBytes], {type: 'octet/stream'}),
-              url = URL.createObjectURL(file);
-        if(navigator.userAgent.toLowerCase().indexOf('firefox') > -1)
-            window.open(url, '_blank');
-        else {
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = fileName;
-            a.click();
-        }
+              url = URL.createObjectURL(file),
+              a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
         URL.revokeObjectURL(url);
     }
 
