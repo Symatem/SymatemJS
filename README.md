@@ -11,46 +11,54 @@ Converts a string to a Uint8Array containing UTF8.
 Converts JS native data types to a string.
 ### data = decodeText(string)
 Converts a string to JS native data types.
+### symbol = concatIntoSymbol(namespaceIdentity, identity)
+Converts the given identities into a symbol.
+### namespaceIdentity = getNameSpaceOfSymbol(symbol)
+Extracts the namespace of a symbol.
+### identity = getIdentityOfSymbol(symbol)
+Extracts the identity of a symbol.
 
 ## Symbol
-### symbol = createSymbol(symbolSpace, symbol)
-Makes sure the given symbol exists or creates a new one and returns it if no symbol was given.
-### releaseSymbol(symbolSpace, symbol)
+### symbol = manifestSymbol(symbol)
+Makes sure the given symbol exists.
+### symbol = createSymbol(namespaceIdentity)
+Creates a new symbol and returns it.
+### releaseSymbol(symbol)
 Releases an empty symbol.
 But in most cases you want to call unlinkSymbol instead to make sure the symbol is empty.
-### unlinkSymbol(symbolSpace, symbol)
+### unlinkSymbol(symbol)
 Unlinks all triples of a symbol and releases it.
 
 ## Data
-### length = getLength(symbolSpace, symbol)
+### length = getLength(symbol)
 Returns the length of the symbols virtual space.
-### setLength(symbolSpace, symbol, length)
+### setLength(symbol, length)
 Increases or deceases the length of a symbols virtual space at the end.
-### decreaseLength(symbolSpace, symbol, offset, length)
+### decreaseLength(symbol, offset, length)
 Removes a slice of a symbols virtual space at the given offset and with the given length.
 All data behind the slice moves downward.
-### increaseLength(symbolSpace, symbol, offset, length)
+### increaseLength(symbol, offset, length)
 Inserts a slice of a symbols virtual space at the given offset and with the given length.
 All data behind the slice moves upward.
-### dataBytes = readData(symbolSpace, symbol, offset, length)
+### dataBytes = readData(symbol, offset, length)
 Returns a slice of data starting at the given offset and with the given length.
 NOTE: Do not modify the return value as it might be used internally.
-### writeData(symbolSpace, symbol, offset, length, dataBytes)
+### writeData(symbol, offset, length, dataBytes)
 Replaces a slice of data starting at the given offset and with the given length by dataBytes.
-### dataValue = getData(symbolSpace, symbol)
+### dataValue = getData(symbol)
 Returns the symbols entire data converted to JS native data types.
-### setData(symbolSpace, symbol, dataValue)
+### setData(symbol, dataValue)
 Replaces the symbols entire data by JS native data types.
 
 ## Triple
-### successBool = setTriple(symbolSpace, [entity, attribute, value], linked)
+### successBool = setTriple([entity, attribute, value], linked)
 Links or unlinks a triple.
 Returns false if no changes were made.
-### setSolitary(symbolSpace, [entity, attribute, value])
+### setSolitary([entity, attribute, value])
 Does the same as setTriple (linked = true) but also unlinks all triples with different values and returns nothing.
-### value = getSolitary(symbolSpace, entity, attribute)
+### value = getSolitary(entity, attribute)
 Returns the value if exactly one triple matches with the given entity-attribute-pair.
-### iterator = queryTriples(symbolSpace, mask, [entity, attribute, value])
+### iterator = queryTriples(mask, [entity, attribute, value])
 Yields all matching triples according to the given triple and mask.
 The final .next() returns the count of matches.
 
@@ -91,10 +99,8 @@ So three possible mask-states powered by three positions are 27 possible masks a
 They are accessed by BasicBackend.queryMask.MMM for example.
 Positions of the triple which are not masked by Match but by Varying or by Ignore should be set to BasicBackend.symbolByName.Void or 0.
 
-## Ontology / SymbolSpace
-### createSymbolSpace(symbol)
-Returns a new SymbolSpace.
-### encodeJsonFromSymbolSpace(symbolSpace)
-Returns the symbolSpace as JSON LTS format.
-### decodeJsonIntoSymbolSpace(symbolSpace, data)
-Loads an symbolSpace from the JSON LTS format.
+## Ontology
+### encodeJson()
+Returns the ontology as JSON LTS format.
+### decodeJson(data)
+Loads an ontology from the JSON LTS format.

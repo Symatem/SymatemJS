@@ -3,7 +3,7 @@ const indexByName = {
     'EVA': 3, 'AEV': 4, 'VAE': 5
 };
 
-const tripleReordered = [
+const triplePrioritized = [
     [0, 1, 2, 0, 1, 2],
     [1, 2, 0, 2, 0, 1],
     [2, 0, 1, 1, 2, 0]
@@ -15,126 +15,141 @@ const tripleNormalized = [
     [2, 1, 0, 1, 2, 0]
 ];
 
-function normalizedTriple(index, triple) {
-    return [triple[tripleNormalized[0][index]], triple[tripleNormalized[1][index]], triple[tripleNormalized[2][index]]];
+function reorderTriple(order, index, triple) {
+    return [triple[order[0][index]], triple[order[1][index]], triple[order[2][index]]];
 }
 
-function* searchMMM(symbolSpace, index, triple) {
-    if(!symbolSpace.handles.has(triple[0]))
+function* searchMMM(index, triple) {
+    const handle = this.getHandle(triple[0]);
+    if(!handle)
         return 0;
-    const subIndex = symbolSpace.handles.get(triple[0]).subIndices[index];
+    const subIndex = handle.subIndices[index];
     if(!subIndex.has(triple[1]))
         return 0;
     const set = subIndex.get(triple[1]);
     if(!set.has(triple[2]))
         return 0;
-    yield normalizedTriple(index, triple);
+    yield reorderTriple(tripleNormalized, index, triple);
     return 1;
 }
 
-function* searchMMI(symbolSpace, index, triple) {
-    if(!symbolSpace.handles.has(triple[0]))
+function* searchMMI(index, triple) {
+    const handle = this.getHandle(triple[0]);
+    if(!handle)
         return 0;
-    const subIndex = symbolSpace.handles.get(triple[0]).subIndices[index];
+    const subIndex = handle.subIndices[index];
     if(!subIndex.has(triple[1]))
         return 0;
-    yield normalizedTriple(index, triple);
+    yield reorderTriple(tripleNormalized, index, triple);
     return 1;
 }
 
-function* searchMII(symbolSpace, index, triple) {
-    if(!symbolSpace.handles.has(triple[0]))
+function* searchMII(index, triple) {
+    const handle = this.getHandle(triple[0]);
+    if(!handle)
         return 0;
-    yield normalizedTriple(index, triple);
+    yield reorderTriple(tripleNormalized, index, triple);
     return 1;
 }
 
-function* searchIII(symbolSpace, index, triple) {
+function* searchIII(index, triple) {
     return 0;
 }
 
-function* searchMMV(symbolSpace, index, triple) {
-    if(!symbolSpace.handles.has(triple[0]))
+function* searchMMV(index, triple) {
+    const handle = this.getHandle(triple[0]);
+    if(!handle)
         return 0;
-    const subIndex = symbolSpace.handles.get(triple[0]).subIndices[index];
+    const subIndex = handle.subIndices[index];
     if(!subIndex.has(triple[1]))
         return 0;
     const set = subIndex.get(triple[1]);
     for(triple[2] of set)
-        yield normalizedTriple(index, triple);
+        yield reorderTriple(tripleNormalized, index, triple);
     return set.size;
 }
 
-function* searchMVV(symbolSpace, index, triple) {
-    if(!symbolSpace.handles.has(triple[0]))
+function* searchMVV(index, triple) {
+    const handle = this.getHandle(triple[0]);
+    if(!handle)
         return 0;
-    const subIndex = symbolSpace.handles.get(triple[0]).subIndices[index];
+    const subIndex = handle.subIndices[index];
     let count = 0;
     for(const [beta, set] of subIndex) {
         triple[1] = beta;
         for(triple[2] of set)
-            yield normalizedTriple(index, triple);
+            yield reorderTriple(tripleNormalized, index, triple);
         count += set.size;
     }
     return count;
 }
 
-function* searchMIV(symbolSpace, index, triple) {
-    if(!symbolSpace.handles.has(triple[0]))
+function* searchMIV(index, triple) {
+    const handle = this.getHandle(triple[0]);
+    if(!handle)
         return 0;
-    const subIndex = symbolSpace.handles.get(triple[0]).subIndices[index],
+    const subIndex = handle.subIndices[index],
           results = new Set();
     for(const set of subIndex.values())
         for(const result of set)
             results.add(result);
     for(triple[2] of results)
-        yield normalizedTriple(index, triple);
+        yield reorderTriple(tripleNormalized, index, triple);
     return results.size;
 }
 
-function* searchMVI(symbolSpace, index, triple) {
-    if(!symbolSpace.handles.has(triple[0]))
+function* searchMVI(index, triple) {
+    const handle = this.getHandle(triple[0]);
+    if(!handle)
         return 0;
-    const subIndex = symbolSpace.handles.get(triple[0]).subIndices[index];
+    const subIndex = handle.subIndices[index];
     for(const beta of subIndex.keys()) {
         triple[1] = beta;
-        yield normalizedTriple(index, triple);
+        yield reorderTriple(tripleNormalized, index, triple);
     }
     return subIndex.size;
 }
 
-function* searchVII(symbolSpace, index, triple) {
-    if(symbolSpace.handles.size > 0)
-        yield normalizedTriple(index, triple);
-    return symbolSpace.handles.size;
-}
-
-function* searchVVI(symbolSpace, index, triple) {
+function* searchVII(index, triple) {
     let count = 0;
-    for(const alpha of symbolSpace.handles.values()) {
-        triple[0] = alpha.symbol;
-        const subIndex = alpha.subIndices[index];
-        for(const [beta, set] of subIndex) {
-            triple[1] = beta;
-            yield normalizedTriple(index, triple);
+    for(const [namespaceIdentity, namespace] of this.namespaces) {
+        for(const [alphaIdentity, alpha] of namespace.handles) {
+            triple[0] = this.constructor.concatIntoSymbol(namespaceIdentity, alphaIdentity);
+            yield reorderTriple(tripleNormalized, index, triple);
         }
-        count += subIndex.size;
+        count += namespace.handles.size;
     }
     return count;
 }
 
-function* searchVVV(symbolSpace, index, triple) {
+function* searchVVI(index, triple) {
     let count = 0;
-    for(const alpha of symbolSpace.handles.values()) {
-        triple[0] = alpha.symbol;
-        const subIndex = alpha.subIndices[index];
-        for(const [beta, set] of subIndex) {
-            triple[1] = beta;
-            for(triple[2] of set)
-                yield normalizedTriple(index, triple);
-            count += set.size;
+    for(const [namespaceIdentity, namespace] of this.namespaces)
+        for(const [alphaIdentity, alpha] of namespace.handles) {
+            triple[0] = this.constructor.concatIntoSymbol(namespaceIdentity, alphaIdentity);
+            const subIndex = alpha.subIndices[index];
+            for(const [beta, set] of subIndex) {
+                triple[1] = beta;
+                yield reorderTriple(tripleNormalized, index, triple);
+            }
+            count += subIndex.size;
         }
-    }
+    return count;
+}
+
+function* searchVVV(index, triple) {
+    let count = 0;
+    for(const [namespaceIdentity, namespace] of this.namespaces)
+        for(const [alphaIdentity, alpha] of namespace.handles) {
+            triple[0] = this.constructor.concatIntoSymbol(namespaceIdentity, alphaIdentity);
+            const subIndex = alpha.subIndices[index];
+            for(const [beta, set] of subIndex) {
+                triple[1] = beta;
+                for(triple[2] of set)
+                    yield reorderTriple(tripleNormalized, index, triple);
+                count += set.size;
+            }
+        }
     return count;
 }
 
@@ -166,71 +181,95 @@ import BasicBackend from './BasicBackend.js';
 export default class NativeBackend extends BasicBackend {
     constructor() {
         super();
-    }
-
-    createSymbolSpace(symbol) {
-        const symbolSpace = {
-            'symbol': symbol,
-            'nextSymbol': 0,
-            'freeSymbols': new Set(),
-            'handles': new Map()
-        };
+        this.namespaces = new Map();
         for(const name in this.constructor.symbolByName)
-            this.setData(symbolSpace, this.createSymbol(symbolSpace, this.constructor.symbolByName[name]), name);
-        return symbolSpace;
+            this.setData(this.manifestSymbol(this.constructor.symbolByName[name]), name);
     }
 
-    createSymbol(symbolSpace, symbol) {
-        const handle = {};
-        if(symbol == undefined) {
-            if(symbolSpace.freeSymbols.size == 0)
-                handle.symbol = symbolSpace.nextSymbol++;
-            else {
-                handle.symbol = symbolSpace.freeSymbols.values().next().value;
-                symbolSpace.freeSymbols.delete(handle.symbol);
-            }
-        } else {
-            if(symbolSpace.handles.has(symbol))
-                return symbol;
-            handle.symbol = symbol;
-            symbolSpace.freeSymbols.delete(handle.symbol);
-            while(symbolSpace.nextSymbol < handle.symbol)
-                symbolSpace.freeSymbols.add(symbolSpace.nextSymbol++);
-            symbolSpace.nextSymbol = Math.max(symbolSpace.nextSymbol, handle.symbol+1);
+    getHandle(symbol) {
+        const namespace = this.namespaces.get(this.constructor.namespaceOfSymbol(symbol));
+        return (namespace) ? namespace.handles.get(this.constructor.identityOfSymbol(symbol)) : undefined;
+    }
+
+    manifestNamespace(namespaceIdentity) {
+        let namespace = this.namespaces.get(namespaceIdentity);
+        if(!namespace) {
+            namespace = {
+                // 'identity': namespaceIdentity,
+                'nextIdentity': 0,
+                'freeIdentities': new Set(),
+                'handles': new Map()
+            };
+            this.namespaces.set(namespaceIdentity, namespace);
         }
+        return namespace;
+    }
+
+    manifestSymbol(symbol) {
+        const namespaceIdentity = this.constructor.namespaceOfSymbol(symbol),
+              namespace = this.manifestNamespace(namespaceIdentity),
+              identity = this.constructor.identityOfSymbol(symbol);
+        if(namespace.handles.has(identity))
+            return symbol;
+        namespace.freeIdentities.delete(identity);
+        while(namespace.nextIdentity < identity)
+            namespace.freeIdentities.add(namespace.nextIdentity++);
+        namespace.nextIdentity = Math.max(namespace.nextIdentity, identity+1);
+        const handle = {};
+        // handle.namespace = namespace;
+        // handle.identity = identity;
         handle.dataLength = 0;
         handle.dataBytes = new Uint8Array();
         handle.subIndices = [];
         for(let i = 0; i < 6; ++i)
             handle.subIndices.push(new Map());
-        symbolSpace.handles.set(handle.symbol, handle);
-        return handle.symbol;
+        namespace.handles.set(identity, handle);
+        return symbol;
     }
 
-    releaseSymbol(symbolSpace, symbol) {
-        symbolSpace.handles.delete(symbol);
-        if(symbol == symbolSpace.nextSymbol - 1)
-            --symbolSpace.nextSymbol;
-        else
-            symbolSpace.freeSymbols.add(symbol);
+    createSymbol(namespaceIdentity) {
+        const namespace = this.manifestNamespace(namespaceIdentity);
+        let identity;
+        if(namespace.freeIdentities.size == 0)
+            identity = namespace.nextIdentity++;
+        else {
+            identity = namespace.freeIdentities.values().next().value;
+            namespace.freeIdentities.delete(identity);
+        }
+        return this.manifestSymbol(this.constructor.concatIntoSymbol(namespaceIdentity, identity));
+    }
+
+    releaseSymbol(symbol) {
+        const namespaceIdentity = this.constructor.namespaceOfSymbol(symbol),
+              namespace = this.namespaces.get(namespaceIdentity),
+              identity = this.constructor.identityOfSymbol(symbol);
+        namespace.handles.delete(identity);
+        if(namespace.handles.size == 0)
+            this.namespaces.delete(namespaceIdentity);
+        else {
+            if(identity == namespace.nextIdentity - 1)
+                --namespace.nextIdentity;
+            else if(identity < namespace.nextIdentity - 1)
+                namespace.freeIdentities.add(identity);
+        }
     }
 
 
 
-    getLength(symbolSpace, symbol) {
-        const handle = symbolSpace.handles.get(symbol);
+    getLength(symbol) {
+        const handle = this.getHandle(symbol);
         return handle.dataLength;
     }
 
-    decreaseLength(symbolSpace, symbol, offset, length) {
-        const handle = symbolSpace.handles.get(symbol);
+    decreaseLength(symbol, offset, length) {
+        const handle = this.getHandle(symbol);
         handle.dataBytes.copyWithin(offset / 8, (offset + length) / 8);
         handle.dataBytes = handle.dataBytes.slice(0, (handle.dataLength - length) / 8);
         handle.dataLength -= length;
     }
 
-    increaseLength(symbolSpace, symbol, offset, length) {
-        const handle = symbolSpace.handles.get(symbol);
+    increaseLength(symbol, offset, length) {
+        const handle = this.getHandle(symbol);
         const dataBytes = new Uint8Array((handle.dataLength + length) / 8);
         dataBytes.set(handle.dataBytes, 0);
         dataBytes.copyWithin((offset + length) / 8, offset / 8);
@@ -238,15 +277,15 @@ export default class NativeBackend extends BasicBackend {
         handle.dataLength += length;
     }
 
-    readData(symbolSpace, symbol, offset, length) {
-        const handle = symbolSpace.handles.get(symbol);
+    readData(symbol, offset, length) {
+        const handle = this.getHandle(symbol);
         if(offset == 0 && length == handle.dataLength)
             return handle.dataBytes;
         return handle.dataBytes.slice(offset / 8, (offset + length) / 8);
     }
 
-    writeData(symbolSpace, symbol, offset, length, dataBytes) {
-        const handle = symbolSpace.handles.get(symbol);
+    writeData(symbol, offset, length, dataBytes) {
+        const handle = this.getHandle(symbol);
         if(offset == 0 && length == handle.dataLength) {
             handle.dataBytes = dataBytes;
             handle.dataLength = dataBytes.byteLength * 8;
@@ -256,7 +295,7 @@ export default class NativeBackend extends BasicBackend {
 
 
 
-    setTriple(symbolSpace, triple, linked) {
+    setTriple(triple, linked) {
         function operateSubIndex(subIndex, beta, gamma) {
             if(linked) {
                 let set;
@@ -282,13 +321,13 @@ export default class NativeBackend extends BasicBackend {
             return true;
         }
         if(linked) {
-            this.createSymbol(symbolSpace, triple[0]);
-            this.createSymbol(symbolSpace, triple[1]);
-            this.createSymbol(symbolSpace, triple[2]);
+            this.manifestSymbol(triple[0]);
+            this.manifestSymbol(triple[1]);
+            this.manifestSymbol(triple[2]);
         }
-        const entityHandle = symbolSpace.handles.get(triple[0]),
-              attributeHandle = symbolSpace.handles.get(triple[1]),
-              valueHandle = symbolSpace.handles.get(triple[2]);
+        const entityHandle = this.getHandle(triple[0]),
+              attributeHandle = this.getHandle(triple[1]),
+              valueHandle = this.getHandle(triple[2]);
         operateSubIndex(entityHandle.subIndices[indexByName.EAV], triple[1], triple[2]);
         operateSubIndex(attributeHandle.subIndices[indexByName.AVE], triple[2], triple[0]);
         operateSubIndex(valueHandle.subIndices[indexByName.VEA], triple[0], triple[1]);
@@ -297,42 +336,8 @@ export default class NativeBackend extends BasicBackend {
         operateSubIndex(valueHandle.subIndices[indexByName.VAE], triple[1], triple[0]);
     }
 
-    queryTriples(symbolSpace, mask, triple) {
+    queryTriples(mask, triple) {
         const index = indexLookup[mask];
-        return searchLookup[mask](symbolSpace, index, [triple[tripleReordered[0][index]], triple[tripleReordered[1][index]], triple[tripleReordered[2][index]]]);
-    }
-
-
-
-    encodeJsonFromSymbolSpace(symbolSpace) {
-        const entities = [];
-        for(const [entity, entityHandle] of symbolSpace.handles) {
-            const length = entityHandle.dataLength,
-                  attributes = [...entityHandle.subIndices[indexByName.EAV]],
-                  attributeValues = [];
-            if(length == 0 && attributes.length == 0)
-                continue;
-            attributes.sort(function(a, b) {
-                return a[0] > b[0];
-            });
-            for(const [attribute, valuesSet] of attributes) {
-                const values = [...valuesSet];
-                values.sort();
-                attributeValues.push(attribute);
-                attributeValues.push(values);
-            }
-            entities.push([
-                entity,
-                length,
-                this.constructor.encodeText(this.readData(symbolSpace, entity, 0, length)),
-                attributeValues
-            ]);
-        }
-        entities.sort(function(a, b) {
-            return a[0] > b[0];
-        });
-        return JSON.stringify({
-            "entities": entities
-        }, undefined, '\t');
+        return searchLookup[mask].call(this, index, reorderTriple(triplePrioritized, index, triple));
     }
 };

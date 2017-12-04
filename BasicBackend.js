@@ -94,14 +94,26 @@ export default class BasicBackend {
             return parseInt(string);
     }
 
+    static concatIntoSymbol(namespace, identity) {
+        return ((namespace & 0xFF) << 24) | (identity & 0xFFFFFF);
+    }
+
+    static namespaceOfSymbol(symbol) {
+        return (symbol >> 24) & 0xFF;
+    }
+
+    static identityOfSymbol(symbol) {
+        return symbol & 0xFFFFFF;
+    }
 
 
-    getData(symbolSpace, symbol) {
-        const dataBytes = this.readData(symbolSpace, symbol, 0, this.getLength(symbolSpace, symbol)),
+
+    getData(symbol) {
+        const dataBytes = this.readData(symbol, 0, this.getLength(symbol)),
               dataView = new DataView(dataBytes.buffer);
         if(dataBytes.byteLength === 0)
             return;
-        const encoding = this.getSolitary(symbolSpace, symbol, symbolByName.Encoding);
+        const encoding = this.getSolitary(symbol, symbolByName.Encoding);
         switch(encoding) {
             case symbolByName.BinaryNumber:
                 return dataView.getUint32(0, true);
@@ -116,7 +128,7 @@ export default class BasicBackend {
         }
     }
 
-    setData(symbolSpace, symbol, dataValue) {
+    setData(symbol, dataValue) {
         let encoding, dataBytes = dataValue;
         switch(typeof dataValue) {
             case 'string':
@@ -139,86 +151,98 @@ export default class BasicBackend {
                 break;
         }
         if(dataBytes != undefined) {
-            this.setLength(symbolSpace, symbol, dataBytes.byteLength * 8);
-            this.writeData(symbolSpace, symbol, 0, dataBytes.byteLength * 8, dataBytes);
+            this.setLength(symbol, dataBytes.byteLength * 8);
+            this.writeData(symbol, 0, dataBytes.byteLength * 8, dataBytes);
         } else
-            this.setLength(symbolSpace, symbol, 0);
-        this.setSolitary(symbolSpace, [symbol, symbolByName.Encoding, encoding]);
+            this.setLength(symbol, 0);
+        this.setSolitary([symbol, symbolByName.Encoding, encoding]);
     }
 
-    setLength(symbolSpace, symbol, newLength) {
-        const length = this.getLength(symbolSpace, symbol);
+    setLength(symbol, newLength) {
+        const length = this.getLength(symbol);
         if(newLength > length)
-            this.increaseLength(symbolSpace, symbol, length, newLength - length);
+            this.increaseLength(symbol, length, newLength - length);
         else if(newLength < length)
-            this.decreaseLength(symbolSpace, symbol, newLength, length - newLength);
+            this.decreaseLength(symbol, newLength, length - newLength);
     }
 
-    unlinkSymbol(symbolSpace, symbol) {
-        for(const triple of this.queryTriples(symbolSpace, queryMask.MVV, [symbol, 0, 0]))
-            this.setTriple(symbolSpace, triple, false);
-        for(const triple of this.queryTriples(symbolSpace, queryMask.VMV, [0, symbol, 0]))
-            this.setTriple(symbolSpace, triple, false);
-        for(const triple of this.queryTriples(symbolSpace, queryMask.VVM, [0, 0, symbol]))
-            this.setTriple(symbolSpace, triple, false);
-        this.releaseSymbol(symbolSpace, symbol);
+    unlinkSymbol(symbol) {
+        for(const triple of this.queryTriples(queryMask.MVV, [symbol, 0, 0]))
+            this.setTriple(triple, false);
+        for(const triple of this.queryTriples(queryMask.VMV, [0, symbol, 0]))
+            this.setTriple(triple, false);
+        for(const triple of this.queryTriples(queryMask.VVM, [0, 0, symbol]))
+            this.setTriple(triple, false);
+        this.releaseSymbol(symbol);
     }
 
-    setSolitary(symbolSpace, triple) {
+    setSolitary(triple) {
         let needsToBeLinked = triple[2] != undefined;
-        for(const iTriple of this.queryTriples(symbolSpace, queryMask.MMV, triple)) {
+        for(const iTriple of this.queryTriples(queryMask.MMV, triple)) {
             if(iTriple[2] == triple[2])
                 needsToBeLinked = false;
             else
-                this.setTriple(symbolSpace, iTriple, false);
+                this.setTriple(iTriple, false);
         }
         if(needsToBeLinked)
-            this.setTriple(symbolSpace, triple, true);
+            this.setTriple(triple, true);
     }
 
-    getSolitary(symbolSpace, entity, attribute) {
-        const iterator = this.queryTriples(symbolSpace, queryMask.MMV, [entity, attribute, 0]);
+    getSolitary(entity, attribute) {
+        const iterator = this.queryTriples(queryMask.MMV, [entity, attribute, 0]);
         let triple = iterator.next().value;
         return (iterator.next().value == 1) ? triple[2] : undefined;
     }
 
 
 
-    encodeJsonFromSymbolSpace(symbolSpace) {
+    encodeJson() {
+        const constructor = this.constructor;
+        function symbolToString(symbol) {
+            return (constructor.namespaceOfSymbol(symbol).toString(16)+':'+constructor.identityOfSymbol(symbol).toString(16)).toUpperCase();
+        }
         const entities = [];
-        for(const tripleE of this.queryTriples(symbolSpace, queryMask.VII, [0, 0, 0])) {
-            const length = this.getLength(symbolSpace, tripleE[0]),
+        for(const tripleE of this.queryTriples(queryMask.VII, [0, 0, 0])) {
+            const length = this.getLength(tripleE[0]),
                   attributes = [];
-            for(const tripleA of this.queryTriples(symbolSpace, queryMask.MVI, tripleE)) {
+            for(const tripleA of this.queryTriples(queryMask.MVI, tripleE)) {
                 const values = [];
-                for(const tripleV of this.queryTriples(symbolSpace, queryMask.MMV, tripleA))
-                    values.push(tripleV[2]);
-                attributes.push(tripleA[1]);
+                for(const tripleV of this.queryTriples(queryMask.MMV, tripleA))
+                    values.push(symbolToString(tripleV[2]));
+                attributes.push(symbolToString(tripleA[1]));
                 attributes.push(values);
             }
             entities.push([
-                tripleE[0],
+                symbolToString(tripleE[0]),
                 length,
-                this.constructor.encodeText(this.readData(symbolSpace, tripleE[0], 0, length)),
+                this.constructor.encodeText(this.readData(tripleE[0], 0, length)),
                 attributes
             ]);
         }
         return JSON.stringify({
-            'entities': entities
+            'symbols': entities
         }, undefined, '\t');
     }
 
-    decodeJsonIntoSymbolSpace(symbolSpace, data) {
-        const entities = JSON.parse(data).entities;
+    decodeJson(data) {
+        const constructor = this.constructor;
+        function stringToSymbol(str) {
+            str = str.split(':');
+            return constructor.concatIntoSymbol(parseInt(str[0], 16), parseInt(str[1], 16));
+        }
+        const entities = JSON.parse(data).symbols;
         for(const entity of entities) {
-            this.createSymbol(symbolSpace, entity[0]);
-            this.setLength(symbolSpace, entity[0], entity[1]);
+            const entitySymbol = stringToSymbol(entitySymbol);
+            this.manifestSymbol(entitySymbol);
+            this.setLength(entitySymbol, entity[1]);
             if(entity[1] > 0)
-                this.writeData(symbolSpace, entity[0], 0, entity[1], this.constructor.decodeText(entity[2]));
+                this.writeData(entitySymbol, 0, entity[1], this.constructor.decodeText(entity[2]));
             const attributes = entity[3];
-            for(let i = 0; i < attributes.length; i += 2)
+            for(let i = 0; i < attributes.length; i += 2) {
+                const attribute = stringToSymbol(attributes[i*2]);
                 for(const value of attributes[i*2+1])
-                    this.setTriple(symbolSpace, [entity[0], attributes[i*2], value], true);
+                    this.setTriple([entitySymbol, attribute, stringToSymbol(value)], true);
+            }
         }
     }
 };
