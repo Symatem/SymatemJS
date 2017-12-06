@@ -12,12 +12,6 @@ const symbolByName = {
     'UTF8': 0,
 };
 
-{
-    let symbol = 0;
-    for(const name in symbolByName)
-        symbolByName[name] = symbol++;
-}
-
 export default class BasicBackend {
     static get queryMask() {
         return queryMask;
@@ -68,6 +62,8 @@ export default class BasicBackend {
             case 'string':
                 return '"' + dataValue + '"';
             case 'object':
+                if(dataValue instanceof Uint32Array)
+                    return BasicBackend.namespaceOfSymbol(dataValue)+':'+BasicBackend.identityOfSymbol(dataValue);
                 let string = '';
                 for(let i = 0; i < dataValue.byteLength; ++i) {
                     const byte = dataValue[i];
@@ -83,6 +79,9 @@ export default class BasicBackend {
         const inner = string.match(/"((?:[^\\"]|\\.)*)"/);
         if(inner != undefined)
             return inner[1];
+        const split = string.split(':');
+        if(split.length === 2 && !isNaN(parseInt(split[0])) && split[1].length > 0)
+            return BasicBackend.concatIntoSymbol(parseInt(searchInput[0]), parseInt(searchInput[1]));
         else if(string.length > 4 && string.substr(0, 4) == 'hex:') {
             const dataValue = new Uint8Array(Math.floor((string.length - 4) / 2));
             for(let i = 0; i < dataValue.byteLength; ++i)
@@ -95,26 +94,24 @@ export default class BasicBackend {
     }
 
     static concatIntoSymbol(namespace, identity) {
-        return ((namespace & 0xFF) << 24) | (identity & 0xFFFFFF);
+        return new Uint32Array([namespace, identity]);
     }
 
     static namespaceOfSymbol(symbol) {
-        return (symbol >> 24) & 0xFF;
+        return symbol[0];
     }
 
     static identityOfSymbol(symbol) {
-        return symbol & 0xFFFFFF;
+        return symbol[1];
     }
 
 
 
-    getData(symbol) {
-        const dataBytes = this.readData(symbol, 0, this.getLength(symbol)),
-              dataView = new DataView(dataBytes.buffer);
-        if(dataBytes.byteLength === 0)
-            return;
-        const encoding = this.getSolitary(symbol, symbolByName.Encoding);
+    decodeBinary(encoding, dataBytes) {
+        const dataView = new DataView(dataBytes.buffer);
         switch(encoding) {
+            case symbolByName.Void:
+                return dataBytes;
             case symbolByName.BinaryNumber:
                 return dataView.getUint32(0, true);
             case symbolByName.TwosComplement:
@@ -123,39 +120,66 @@ export default class BasicBackend {
                 return dataView.getFloat32(0, true);
             case symbolByName.UTF8:
                 return this.constructor.utf8ArrayToString(dataBytes);
-            default:
-                return dataBytes;
         }
     }
 
-    setData(symbol, dataValue) {
-        let encoding, dataBytes = dataValue;
+    encodeBinary(encoding, dataValue) {
+        let dataBytes = new Uint8Array(4);
+        const dataView = new DataView(dataBytes.buffer);
+        switch(encoding) {
+            case symbolByName.Void:
+                return dataValue;
+            case symbolByName.BinaryNumber:
+                dataView.setUint32(0, dataValue, true);
+                return dataBytes;
+            case symbolByName.TwosComplement:
+                dataView.setInt32(0, dataValue, true);
+                return dataBytes;
+            case symbolByName.IEEE754:
+                dataView.setFloat32(0, dataValue, true);
+                return dataBytes;
+            case symbolByName.UTF8:
+                return this.constructor.stringToUtf8Array(dataValue);
+        }
+    }
+
+    getData(symbol) {
+        const dataBytes = this.readData(symbol, 0, this.getLength(symbol));
+        if(dataBytes.byteLength === 0)
+            return;
+        const encoding = this.getSolitary(symbol, symbolByName.Encoding);
+        return this.decodeBinary(encoding, dataBytes);
+    }
+
+    setData(symbol, dataValue, offset=0) {
+        let encoding;
         switch(typeof dataValue) {
             case 'string':
-                dataBytes = this.constructor.stringToUtf8Array(dataValue);
                 encoding = symbolByName.UTF8;
+                this.setSolitary([symbol, symbolByName.Encoding, encoding]);
                 break;
             case 'number':
-                dataBytes = new Uint8Array(4);
-                const dataView = new DataView(dataBytes.buffer);
-                if(!Number.isInteger(dataValue)) {
-                    dataView.setFloat32(0, dataValue, true);
+                if(!Number.isInteger(dataValue))
                     encoding = symbolByName.IEEE754;
-                } else if(dataValue < 0) {
-                    dataView.setInt32(0, dataValue, true);
+                else if(dataValue < 0)
                     encoding = symbolByName.TwosComplement;
-                } else {
-                    dataView.setUint32(0, dataValue, true);
+                else
                     encoding = symbolByName.BinaryNumber;
-                }
+                this.setSolitary([symbol, symbolByName.Encoding, encoding]);
+                break;
+            default:
+                encoding = this.getSolitary(symbol, symbolByName.Encoding);
                 break;
         }
+        const dataBytes = this.encodeBinary(encoding, dataValue);
         if(dataBytes != undefined) {
             this.setLength(symbol, dataBytes.byteLength * 8);
-            this.writeData(symbol, 0, dataBytes.byteLength * 8, dataBytes);
-        } else
+            this.writeData(symbol, offset, dataBytes.byteLength * 8, dataBytes);
+            return dataBytes.byteLength * 8;
+        } else {
             this.setLength(symbol, 0);
-        this.setSolitary([symbol, symbolByName.Encoding, encoding]);
+            return 0;
+        }
     }
 
     setLength(symbol, newLength) {
@@ -191,16 +215,12 @@ export default class BasicBackend {
     getSolitary(entity, attribute) {
         const iterator = this.queryTriples(queryMask.MMV, [entity, attribute, 0]);
         let triple = iterator.next().value;
-        return (iterator.next().value == 1) ? triple[2] : undefined;
+        return (iterator.next().value == 1) ? triple[2] : symbolByName.Void;
     }
 
 
 
     encodeJson() {
-        const constructor = this.constructor;
-        function symbolToString(symbol) {
-            return (constructor.namespaceOfSymbol(symbol).toString(16)+':'+constructor.identityOfSymbol(symbol).toString(16)).toUpperCase();
-        }
         const entities = [];
         for(const tripleE of this.queryTriples(queryMask.VII, [0, 0, 0])) {
             const length = this.getLength(tripleE[0]),
@@ -208,12 +228,12 @@ export default class BasicBackend {
             for(const tripleA of this.queryTriples(queryMask.MVI, tripleE)) {
                 const values = [];
                 for(const tripleV of this.queryTriples(queryMask.MMV, tripleA))
-                    values.push(symbolToString(tripleV[2]));
-                attributes.push(symbolToString(tripleA[1]));
+                    values.push(this.constructor.encodeText(tripleV[2]));
+                attributes.push(this.constructor.encodeText(tripleA[1]));
                 attributes.push(values);
             }
             entities.push([
-                symbolToString(tripleE[0]),
+                this.constructor.encodeText(tripleE[0]),
                 length,
                 this.constructor.encodeText(this.readData(tripleE[0], 0, length)),
                 attributes
@@ -225,24 +245,25 @@ export default class BasicBackend {
     }
 
     decodeJson(data) {
-        const constructor = this.constructor;
-        function stringToSymbol(str) {
-            str = str.split(':');
-            return constructor.concatIntoSymbol(parseInt(str[0], 16), parseInt(str[1], 16));
-        }
         const entities = JSON.parse(data).symbols;
         for(const entity of entities) {
-            const entitySymbol = stringToSymbol(entitySymbol);
+            const entitySymbol = this.constructor.decodeText(entitySymbol);
             this.manifestSymbol(entitySymbol);
             this.setLength(entitySymbol, entity[1]);
             if(entity[1] > 0)
                 this.writeData(entitySymbol, 0, entity[1], this.constructor.decodeText(entity[2]));
             const attributes = entity[3];
             for(let i = 0; i < attributes.length; i += 2) {
-                const attribute = stringToSymbol(attributes[i*2]);
+                const attribute = this.constructor.decodeText(attributes[i*2]);
                 for(const value of attributes[i*2+1])
-                    this.setTriple([entitySymbol, attribute, stringToSymbol(value)], true);
+                    this.setTriple([entitySymbol, attribute, this.constructor.decodeText(value)], true);
             }
         }
     }
 };
+
+{
+    let symbol = 0;
+    for(const name in symbolByName)
+        symbolByName[name] = BasicBackend.concatIntoSymbol(0, symbol++);
+}
