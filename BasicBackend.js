@@ -10,6 +10,10 @@ const symbolByName = {
     'TwosComplement': 0,
     'IEEE754': 0,
     'UTF8': 0,
+
+    'Basics': 2,
+    'Index': 2,
+    'Namespaces': 2,
 };
 
 export default class BasicBackend {
@@ -263,7 +267,12 @@ export default class BasicBackend {
 };
 
 {
-    let symbol = 0;
-    for(const name in symbolByName)
-        symbolByName[name] = BasicBackend.concatIntoSymbol(0, symbol++);
+    let namespace, symbol;
+    for(const name in symbolByName) {
+        if(namespace !== symbolByName[name]) {
+            namespace = symbolByName[name];
+            symbol = 0;
+        }
+        symbolByName[name] = BasicBackend.concatIntoSymbol(namespace, symbol++);
+    }
 }
