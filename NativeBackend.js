@@ -182,8 +182,7 @@ export default class NativeBackend extends BasicBackend {
     constructor() {
         super();
         this.namespaces = new Map();
-        for(const name in this.constructor.symbolByName)
-            this.setData(this.manifestSymbol(this.constructor.symbolByName[name]), name);
+        this.initBasicOntology();
     }
 
     getHandle(symbol) {
