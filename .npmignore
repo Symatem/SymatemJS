@@ -1,0 +1,10 @@
+build
+tests
+doc
+*.log
+*.tmp
+.test
+.tmp
+.gitignore
+.travis.yml
+rollup.config.js

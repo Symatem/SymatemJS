@@ -13,7 +13,7 @@ const symbolByName = {
     'UTF8': 0,
     'Composite': 0,
     'Default': 0,
-    'Length': 0,
+    'SlotSize': 0,
     'Count': 0,
     'Dynamic': 0,
 
@@ -153,15 +153,15 @@ export default class BasicBackend {
             case symbolByName.UTF8:
                 return this.constructor.utf8ArrayToString(dataBytes);
         }
-        if(this.getSolitary(encoding, symbolByName.Type) !== symbolByName.Composite)
+        if(!this.getTriple([encoding, symbolByName.Type, symbolByName.Composite]))
             return dataBytes;
 
         const dataValue = [],
               defaultEncoding = this.getSolitary(encoding, symbolByName.Default);
 
-        let childLength = this.getSolitary(encoding, symbolByName.Length);
-        if(childLength !== symbolByName.Void && childLength !== symbolByName.Dynamic)
-            childLength = this.getData(childLength);
+        let slotSize = this.getSolitary(encoding, symbolByName.SlotSize);
+        if(slotSize !== symbolByName.Void && slotSize !== symbolByName.Dynamic)
+            slotSize = this.getData(slotSize);
 
         let offset = 0, count = this.getSolitary(encoding, symbolByName.Count);
         if(count === symbolByName.Dynamic)
@@ -174,7 +174,7 @@ export default class BasicBackend {
             let childEncoding = this.getSolitary(encoding, this.constructor.symbolInNamespace('Index', i));
             if(childEncoding === symbolByName.Void)
                 childEncoding = defaultEncoding;
-            const childFeedback = {'length': (childLength === symbolByName.Dynamic) ? dataView.getUint32(offset+i, true) : childLength};
+            const childFeedback = {'length': (slotSize === symbolByName.Dynamic) ? dataView.getUint32(offset+i, true) : slotSize};
             let childDataBytes;
             if(childFeedback.length === symbolByName.Void) {
                 childDataBytes = dataBytes.slice(feedback.length/8);
@@ -208,15 +208,15 @@ export default class BasicBackend {
             case symbolByName.UTF8:
                 return this.constructor.stringToUtf8Array(dataValue);
         }
-        if(this.getSolitary(encoding, symbolByName.Type) !== symbolByName.Composite)
+        if(!this.getTriple([encoding, symbolByName.Type, symbolByName.Composite]))
             return dataValue;
 
         const dataBytesArray = [],
               defaultEncoding = this.getSolitary(encoding, symbolByName.Default);
 
-        let childLength = this.getSolitary(encoding, symbolByName.Length);
-        if(childLength !== symbolByName.Void && childLength !== symbolByName.Dynamic)
-            childLength = this.getData(childLength);
+        let slotSize = this.getSolitary(encoding, symbolByName.SlotSize);
+        if(slotSize !== symbolByName.Void && slotSize !== symbolByName.Dynamic)
+            slotSize = this.getData(slotSize);
 
         let offset = 0, count = this.getSolitary(encoding, symbolByName.Count);
         if(count === symbolByName.Dynamic)
@@ -230,7 +230,7 @@ export default class BasicBackend {
             if(childEncoding === symbolByName.Void)
                 childEncoding = defaultEncoding;
             const childDataBytes = this.encodeBinary(childEncoding, dataValue[i]);
-            if(childLength === symbolByName.Dynamic)
+            if(slotSize === symbolByName.Dynamic)
                 dataView.setUint32(offset+i, childDataBytes.length*8, true);
             dataBytesArray.push(childDataBytes);
             length += childDataBytes.length*8;
@@ -308,6 +308,11 @@ export default class BasicBackend {
         for(const triple of this.queryTriples(queryMask.VVM, [0, 0, symbol]))
             this.setTriple(triple, false);
         this.releaseSymbol(symbol);
+    }
+
+    getTriple(triple) {
+        const iterator = this.queryTriples(queryMask.MMM, triple);
+        return iterator.next().value.length === 3 && iterator.next().value === 1;
     }
 
     setSolitary(triple) {

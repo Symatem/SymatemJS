@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "authors": ["Alexander Meißner"],
   "description": "Symatem JS & WebAssembly API",
-  "module": "src/NativeBackend.js",
+  "module": "NativeBackend.js",
   "main": "dist/NativeBackend.js",
   "scripts": {
     "prepare": "rollup -c"
