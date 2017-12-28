@@ -54,6 +54,8 @@ Replaces the symbols entire data by JS native data types.
 ### successBool = setTriple([entity, attribute, value], linked)
 Links or unlinks a triple.
 Returns false if no changes were made.
+### bool = getTriple([entity, attribute, value])
+Tests if the given Triple exists (same as queryTriples with the mask MMM)
 ### setSolitary([entity, attribute, value])
 Does the same as setTriple (linked = true) but also unlinks all triples with different values and returns nothing.
 ### value = getSolitary(entity, attribute)

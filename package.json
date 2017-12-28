@@ -5,5 +5,5 @@
         "Alexander Meißner"
     ],
     "description": "Symatem JS & WebAssembly API",
-    "module": "BasicBackend.js"
+    "module": "NativeBackend.js"
 }
