@@ -6,9 +6,11 @@
   "module": "NativeBackend.js",
   "main": "dist/NativeBackend.js",
   "scripts": {
-    "prepare": "rollup -c"
+    "prepare": "rollup -c",
+    "semantic-release": "semantic-release"
   },
   "devDependencies": {
-    "rollup": "^0.53.0"
+    "rollup": "^0.53.0",
+    "semantic-release": "^11.1.0"
   }
 }
