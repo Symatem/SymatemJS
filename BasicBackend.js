@@ -5,6 +5,11 @@ for(let i = 0; i < 27; ++i)
 
 const symbolByName = {
     'Void': 0,
+    'Symbol': 0,
+    'Entity': 0,
+    'Attribute': 0,
+    'Value': 0,
+
     'Type': 0,
     'Encoding': 0,
     'BinaryNumber': 0,
@@ -22,6 +27,19 @@ const symbolByName = {
     'Namespaces': 2,
 };
 
+/**
+ * @typedef {Object} Symbol
+ * @property {number} namespaceIdentity
+ * @property {number} identity
+ */
+
+/**
+ * @typedef {Object} Triple
+ * @property {Symbol} entity
+ * @property {Symbol} attribute
+ * @property {Symbol} value
+ */
+
 export default class BasicBackend {
     static get queryMask() {
         return queryMask;
@@ -31,6 +49,11 @@ export default class BasicBackend {
         return symbolByName;
     }
 
+    /**
+     * Saves dataBytes as download file in browsers
+     * @param {Uint8Array} dataBytes
+     * @param {string} fileName
+     */
     static downloadAsFile(dataBytes, fileName) {
         const file = new Blob([dataBytes], {type: 'octet/stream'}),
               url = URL.createObjectURL(file),
@@ -43,23 +66,33 @@ export default class BasicBackend {
         URL.revokeObjectURL(url);
     }
 
-    static utf8ArrayToString(dataBytes) {
-        // return new TextDecoder('utf8').decode(dataBytes);
+    /**
+     * Converts UTF8 encoded Uint8Array to text
+     * @param {Uint8Array} utf8
+     * @return {string} text
+     */
+    static utf8ArrayToText(utf8) {
+        // return new TextDecoder('utf8').decode(utf8);
         let uri = '';
-        for(const byte of new Uint8Array(dataBytes)) {
+        for(const byte of new Uint8Array(utf8)) {
             const hex = byte.toString(16);
             uri += '%' + ((hex.length == 1) ? '0' + hex : hex);
         }
         try {
             return decodeURIComponent(uri);
         } catch(error) {
-            return dataBytes;
+            return utf8;
         }
     }
 
-    static stringToUtf8Array(string) {
-        // return new TextEncoder('utf8').encode(string);
-        const uri = encodeURI(string),
+    /**
+     * Converts text to UTF8 encoded Uint8Array
+     * @param {string} text
+     * @return {Uint8Array} utf8
+     */
+    static textToUtf8Array(text) {
+        // return new TextEncoder('utf8').encode(text);
+        const uri = encodeURI(text),
               dataBytes = [];
         for(let i = 0; i < uri.length; ++i) {
             if(uri[i] == '%') {
@@ -71,6 +104,11 @@ export default class BasicBackend {
         return new Uint8Array(dataBytes);
     }
 
+    /**
+     * Converts JS native data types to text
+     * @param {Object} dataValue
+     * @return {string} text
+     */
     static encodeText(dataValue) {
         switch(typeof dataValue) {
             case 'string':
@@ -89,41 +127,71 @@ export default class BasicBackend {
         }
     }
 
-    static decodeText(string) {
-        const inner = string.match(/"((?:[^\\"]|\\.)*)"/);
+    /**
+     * Converts text to JS native data types
+     * @param {string} text
+     * @return {Object} dataValue
+     */
+    static decodeText(text) {
+        const inner = text.match(/"((?:[^\\"]|\\.)*)"/);
         if(inner != undefined)
             return inner[1];
-        if(string.length > 4 && string.substr(0, 4) == 'hex:') {
-            const dataValue = new Uint8Array(Math.floor((string.length - 4) / 2));
+        if(text.length > 4 && text.substr(0, 4) == 'hex:') {
+            const dataValue = new Uint8Array(Math.floor((text.length - 4) / 2));
             for(let i = 0; i < dataValue.byteLength; ++i)
-                dataValue[i] = parseInt(string[i * 2 + 4], 16) | (parseInt(string[i * 2 + 5], 16) << 4);
+                dataValue[i] = parseInt(text[i * 2 + 4], 16) | (parseInt(text[i * 2 + 5], 16) << 4);
             return dataValue;
-        } else if(!Number.isNaN(parseFloat(string)))
-            return parseFloat(string);
-        else if(!Number.isNaN(parseInt(string)))
-            return parseInt(string);
-        else if(string.toLowerCase() === 'nan')
+        } else if(!Number.isNaN(parseFloat(text)))
+            return parseFloat(text);
+        else if(!Number.isNaN(parseInt(text)))
+            return parseInt(text);
+        else if(text.toLowerCase() === 'nan')
             return NaN;
     }
 
+    /**
+     * Concats namespaceIdentity and identity into a symbol
+     * @param {number} namespaceIdentity
+     * @param {number} identity
+     * @return {Symbol} symbol
+     */
+    static concatIntoSymbol(namespaceIdentity, identity) {
+        return `${namespaceIdentity}:${identity}`;
+    }
+
+    /**
+     * Same as concatIntoSymbol but resolves the namespaceIdentity by name
+     * @param {number} namespaceName
+     * @param {number} identity
+     * @return {Symbol} symbol
+     */
     static symbolInNamespace(namespaceName, identity) {
         return BasicBackend.concatIntoSymbol(BasicBackend.identityOfSymbol(symbolByName[namespaceName]), identity);
     }
 
-    static concatIntoSymbol(namespace, identity) {
-        return `${namespace}:${identity}`;
-    }
-
+    /**
+     * Extracts the namespaceIdentity of a symbol
+     * @param {Symbol} symbol
+     * @return {number} namespaceIdentity
+     */
     static namespaceOfSymbol(symbol) {
         return parseInt(symbol.split(':')[0]);
     }
 
+    /**
+     * Extracts the identity of a symbol
+     * @param {Symbol} symbol
+     * @return {number} identity
+     */
     static identityOfSymbol(symbol) {
         return parseInt(symbol.split(':')[1]);
     }
 
 
 
+    /**
+     * Fills the ontology with the predefined symbols
+     */
     initBasicOntology() {
         for(const name in symbolByName)
             this.setData(this.manifestSymbol(symbolByName[name]), name);
@@ -131,6 +199,14 @@ export default class BasicBackend {
             this.setTriple([entity, symbolByName.Type, symbolByName.Encoding], true);
     }
 
+    /**
+     * Converts bits to JS native data types using the given encoding
+     * @param {Symbol} encoding
+     * @param {Uint8Array} dataBytes
+     * @param {Object} feedback Used to control the length (input and output)
+     * @param {number} feedback.length in bits
+     * @return {Object} dataValue
+     */
     decodeBinary(encoding, dataBytes, feedback) {
         const dataView = new DataView(dataBytes.buffer);
         switch(encoding) {
@@ -151,7 +227,7 @@ export default class BasicBackend {
                         return dataView.getFloat32(0, true);
                 }
             case symbolByName.UTF8:
-                return this.constructor.utf8ArrayToString(dataBytes);
+                return this.constructor.utf8ArrayToText(dataBytes);
         }
         if(!this.getTriple([encoding, symbolByName.Type, symbolByName.Composite]))
             return dataBytes;
@@ -190,6 +266,12 @@ export default class BasicBackend {
         return dataValue;
     }
 
+    /**
+     * Converts JS native data types to bits using the given encoding
+     * @param {Symbol} encoding
+     * @param {Object} dataValue
+     * @return {Uint8Array} dataBytes
+     */
     encodeBinary(encoding, dataValue) {
         let dataBytes = new Uint8Array(4);
         const dataView = new DataView(dataBytes.buffer);
@@ -206,7 +288,7 @@ export default class BasicBackend {
                 dataView.setFloat32(0, dataValue, true);
                 return dataBytes;
             case symbolByName.UTF8:
-                return this.constructor.stringToUtf8Array(dataValue);
+                return this.constructor.textToUtf8Array(dataValue);
         }
         if(!this.getTriple([encoding, symbolByName.Type, symbolByName.Composite]))
             return dataValue;
@@ -244,6 +326,12 @@ export default class BasicBackend {
         return dataBytes;
     }
 
+    /**
+     * Returns a symbols entire data converted to JS native data types
+     * @param {Symbol} symbol
+     * @param {Uint8Array} dataBytes
+     * @return {Object} dataValue
+     */
     getData(symbol, dataBytes) {
         if(dataBytes == undefined)
             dataBytes = this.getRawData(symbol);
@@ -253,14 +341,22 @@ export default class BasicBackend {
         return this.decodeBinary(encoding, dataBytes, {'length': dataBytes.length*8});
     }
 
+    /**
+     * Replaces the symbols entire data by JS native data types
+     * @param {Symbol} symbol
+     * @param {Object} dataValue
+     * @return {Uint8Array} dataBytes
+     */
     setData(symbol, dataValue) {
         let encoding;
         switch(typeof dataValue) {
             case 'undefined':
                 encoding = symbolByName.Void;
+                this.setSolitary([symbol, symbolByName.Encoding, encoding]);
                 break;
             case 'string':
                 encoding = symbolByName.UTF8;
+                this.setSolitary([symbol, symbolByName.Encoding, encoding]);
                 break;
             case 'number':
                 if(!Number.isInteger(dataValue))
@@ -269,20 +365,31 @@ export default class BasicBackend {
                     encoding = symbolByName.TwosComplement;
                 else
                     encoding = symbolByName.BinaryNumber;
+                this.setSolitary([symbol, symbolByName.Encoding, encoding]);
                 break;
             default:
                 encoding = this.getSolitary(symbol, symbolByName.Encoding);
-                this.setRawData(symbol, this.encodeBinary(encoding, dataValue));
-                return;
+                break;
         }
-        this.setSolitary([symbol, symbolByName.Encoding, encoding]);
-        this.setRawData(symbol, this.encodeBinary(encoding, dataValue));
+        const dataBytes = this.encodeBinary(encoding, dataValue);
+        this.setRawData(symbol, dataBytes);
+        return dataBytes;
     }
 
+    /**
+     * Returns the entire data of a symbol
+     * @param {Symbol} symbol
+     * @return {Uint8Array} dataBytes
+     */
     getRawData(symbol) {
         return this.readData(symbol, 0, this.getLength(symbol));
     }
 
+    /**
+     * Replaces the entire data of a symbol
+     * @param {Symbol} symbol
+     * @param {Uint8Array} dataBytes
+     */
     setRawData(symbol, dataBytes) {
         if(dataBytes == undefined) {
             this.setLength(symbol, 0);
@@ -292,6 +399,11 @@ export default class BasicBackend {
         this.writeData(symbol, 0, dataBytes.byteLength * 8, dataBytes);
     }
 
+    /**
+     * Increases or deceases the length of a symbols virtual space at the end
+     * @param {Symbol} symbol
+     * @param {number} newLength in bits
+     */
     setLength(symbol, newLength) {
         const length = this.getLength(symbol);
         if(newLength > length)
@@ -300,6 +412,10 @@ export default class BasicBackend {
             this.decreaseLength(symbol, newLength, length - newLength);
     }
 
+    /**
+     * Unlinks all triples of a symbol and releases it
+     * @param {Symbol} symbol
+     */
     unlinkSymbol(symbol) {
         for(const triple of this.queryTriples(queryMask.MVV, [symbol, 0, 0]))
             this.setTriple(triple, false);
@@ -310,11 +426,20 @@ export default class BasicBackend {
         this.releaseSymbol(symbol);
     }
 
+    /**
+     * Tests if the given Triple exists
+     * @param {Triple} triple
+     * @return {boolean} linked
+     */
     getTriple(triple) {
         const iterator = this.queryTriples(queryMask.MMM, triple);
         return iterator.next().value.length === 3 && iterator.next().value === 1;
     }
 
+    /**
+     * Does the same as setTriple (linked = true) but also unlinks all triples with different values and returns nothing
+     * @param {Triple} triple
+     */
     setSolitary(triple) {
         let needsToBeLinked = triple[2] !== symbolByName.Void;
         for(const iTriple of this.queryTriples(queryMask.MMV, triple)) {
@@ -327,6 +452,12 @@ export default class BasicBackend {
             this.setTriple(triple, true);
     }
 
+    /**
+     * Returns the value if exactly one triple matches with the given entity-attribute-pair
+     * @param {Symbol} entity
+     * @param {Symbol} attribute
+     * @return {Symbol} value or Void
+     */
     getSolitary(entity, attribute) {
         const iterator = this.queryTriples(queryMask.MMV, [entity, attribute, symbolByName.Void]);
         let triple = iterator.next().value;
@@ -335,13 +466,17 @@ export default class BasicBackend {
 
 
 
+    /**
+     * Stores the ontology as JSON LTS format
+     * @return {string} json
+     */
     encodeJson() {
         const entities = [];
         for(const tripleE of this.queryTriples(queryMask.VII, [0, 0, 0])) {
             const length = this.getLength(tripleE[0]),
                   data = this.readData(tripleE[0], 0, length),
                   attributes = [];
-            if(symbolByName[this.constructor.utf8ArrayToString(data)] === tripleE[0])
+            if(symbolByName[this.constructor.utf8ArrayToText(data)] === tripleE[0])
                 continue;
             for(const tripleA of this.queryTriples(queryMask.MVI, tripleE)) {
                 const values = [];
@@ -362,9 +497,13 @@ export default class BasicBackend {
         }, undefined, '\t');
     }
 
-    decodeJson(data) {
+    /**
+     * Loads the ontology from JSON LTS format
+     * @param {string} json
+     */
+    decodeJson(json) {
         const entities = new Set();
-        for(const entity of JSON.parse(data).symbols) {
+        for(const entity of JSON.parse(json).symbols) {
             const entitySymbol = entity[0];
             this.manifestSymbol(entitySymbol);
             entities.add(entitySymbol);

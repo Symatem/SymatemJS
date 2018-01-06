@@ -204,6 +204,11 @@ export default class NativeBackend extends BasicBackend {
         return namespace;
     }
 
+    /**
+     * Reserves the identity of a symbol in its namespace
+     * @param {Symbol} symbol
+     * @return {Symbol} symbol
+     */
     manifestSymbol(symbol) {
         const namespaceIdentity = this.constructor.namespaceOfSymbol(symbol),
               namespace = this.manifestNamespace(namespaceIdentity),
@@ -226,6 +231,11 @@ export default class NativeBackend extends BasicBackend {
         return symbol;
     }
 
+    /**
+     * Creates a new symbol
+     * @param {number} namespaceIdentity Identity of the namespace to create the symbol in
+     * @return {Symbol} symbol
+     */
     createSymbol(namespaceIdentity) {
         const namespace = this.manifestNamespace(namespaceIdentity);
         let identity;
@@ -238,6 +248,10 @@ export default class NativeBackend extends BasicBackend {
         return this.manifestSymbol(this.constructor.concatIntoSymbol(namespaceIdentity, identity));
     }
 
+    /**
+     * Releases the identity of a symbol in its namespace
+     * @param {Symbol} symbol
+     */
     releaseSymbol(symbol) {
         const namespaceIdentity = this.constructor.namespaceOfSymbol(symbol),
               namespace = this.namespaces.get(namespaceIdentity),
@@ -255,11 +269,22 @@ export default class NativeBackend extends BasicBackend {
 
 
 
+    /**
+     * Returns the length of the symbols virtual space
+     * @param {Symbol} symbol
+     * @return {number} length in bits
+     */
     getLength(symbol) {
         const handle = this.getHandle(symbol);
         return handle.dataLength;
     }
 
+    /**
+     * Erases a slice of a symbols virtual space at the given offset and with the given length
+     * @param {Symbol} symbol
+     * @param {Symbol} offset in bits
+     * @param {Symbol} length in bits
+     */
     decreaseLength(symbol, offset, length) {
         const handle = this.getHandle(symbol);
         handle.dataBytes.copyWithin(offset / 8, (offset + length) / 8);
@@ -267,6 +292,12 @@ export default class NativeBackend extends BasicBackend {
         handle.dataLength -= length;
     }
 
+    /**
+     * Inserts a slice of a symbols virtual space at the given offset and with the given length
+     * @param {Symbol} symbol
+     * @param {Symbol} offset in bits
+     * @param {Symbol} length in bits
+     */
     increaseLength(symbol, offset, length) {
         const handle = this.getHandle(symbol);
         const dataBytes = new Uint8Array((handle.dataLength + length) / 8);
@@ -276,6 +307,13 @@ export default class NativeBackend extends BasicBackend {
         handle.dataLength += length;
     }
 
+    /**
+     * Returns a slice of data starting at the given offset and with the given length
+     * @param {Symbol} symbol
+     * @param {Symbol} offset in bits
+     * @param {Symbol} length in bits
+     * @return {Uint8Array} dataSlice Do not modify the return value as it might be used internally
+     */
     readData(symbol, offset, length) {
         const handle = this.getHandle(symbol);
         if(offset == 0 && length == handle.dataLength)
@@ -283,6 +321,13 @@ export default class NativeBackend extends BasicBackend {
         return handle.dataBytes.slice(offset / 8, (offset + length) / 8);
     }
 
+    /**
+     * Replaces a slice of data starting at the given offset and with the given length by dataBytes
+     * @param {Symbol} symbol
+     * @param {Symbol} offset in bits
+     * @param {Symbol} length in bits
+     * @param {Uint8Array} dataBytes
+     */
     writeData(symbol, offset, length, dataBytes) {
         const handle = this.getHandle(symbol);
         if(offset == 0 && length == handle.dataLength) {
@@ -294,6 +339,12 @@ export default class NativeBackend extends BasicBackend {
 
 
 
+    /**
+     * Links or unlinks a triple
+     * @param {Triple} triple
+     * @param {boolean} linked
+     * @return {boolean} success Returns false if no changes were made
+     */
     setTriple(triple, linked) {
         function operateSubIndex(subIndex, beta, gamma) {
             if(linked) {
@@ -335,6 +386,12 @@ export default class NativeBackend extends BasicBackend {
         operateSubIndex(valueHandle.subIndices[indexByName.VAE], triple[1], triple[0]);
     }
 
+    /**
+     * Yields all matching triples according to the given triple and mask. The final .next() returns the count of matches
+     * @param {QueryMask} mask
+     * @param {Triple} triple
+     * @return {Triple} iterator of matches
+     */
     queryTriples(mask, triple) {
         const index = indexLookup[mask];
         return searchLookup[mask].call(this, index, reorderTriple(triplePrioritized, index, triple));
