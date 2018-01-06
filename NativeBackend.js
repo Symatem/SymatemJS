@@ -282,8 +282,8 @@ export default class NativeBackend extends BasicBackend {
     /**
      * Erases a slice of a symbols virtual space at the given offset and with the given length
      * @param {Symbol} symbol
-     * @param {Symbol} offset in bits
-     * @param {Symbol} length in bits
+     * @param {number} offset in bits
+     * @param {number} length in bits
      */
     decreaseLength(symbol, offset, length) {
         const handle = this.getHandle(symbol);
@@ -295,8 +295,8 @@ export default class NativeBackend extends BasicBackend {
     /**
      * Inserts a slice of a symbols virtual space at the given offset and with the given length
      * @param {Symbol} symbol
-     * @param {Symbol} offset in bits
-     * @param {Symbol} length in bits
+     * @param {number} offset in bits
+     * @param {number} length in bits
      */
     increaseLength(symbol, offset, length) {
         const handle = this.getHandle(symbol);
@@ -310,8 +310,8 @@ export default class NativeBackend extends BasicBackend {
     /**
      * Returns a slice of data starting at the given offset and with the given length
      * @param {Symbol} symbol
-     * @param {Symbol} offset in bits
-     * @param {Symbol} length in bits
+     * @param {number} offset in bits
+     * @param {number} length in bits
      * @return {Uint8Array} dataSlice Do not modify the return value as it might be used internally
      */
     readData(symbol, offset, length) {
@@ -324,8 +324,8 @@ export default class NativeBackend extends BasicBackend {
     /**
      * Replaces a slice of data starting at the given offset and with the given length by dataBytes
      * @param {Symbol} symbol
-     * @param {Symbol} offset in bits
-     * @param {Symbol} length in bits
+     * @param {number} offset in bits
+     * @param {number} length in bits
      * @param {Uint8Array} dataBytes
      */
     writeData(symbol, offset, length, dataBytes) {

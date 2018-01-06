@@ -87,8 +87,8 @@ Erases a slice of a symbols virtual space at the given offset and with the given
 **Parameters**
 
 -   `symbol` **[Symbol](#symbol)** 
--   `offset` **[Symbol](#symbol)** in bits
--   `length` **[Symbol](#symbol)** in bits
+-   `offset` **[number](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Number)** in bits
+-   `length` **[number](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Number)** in bits
 
 ### increaseLength
 
@@ -97,8 +97,8 @@ Inserts a slice of a symbols virtual space at the given offset and with the give
 **Parameters**
 
 -   `symbol` **[Symbol](#symbol)** 
--   `offset` **[Symbol](#symbol)** in bits
--   `length` **[Symbol](#symbol)** in bits
+-   `offset` **[number](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Number)** in bits
+-   `length` **[number](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Number)** in bits
 
 ### readData
 
@@ -107,8 +107,8 @@ Returns a slice of data starting at the given offset and with the given length
 **Parameters**
 
 -   `symbol` **[Symbol](#symbol)** 
--   `offset` **[Symbol](#symbol)** in bits
--   `length` **[Symbol](#symbol)** in bits
+-   `offset` **[number](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Number)** in bits
+-   `length` **[number](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Number)** in bits
 
 Returns **[Uint8Array](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Uint8Array)** dataSlice Do not modify the return value as it might be used internally
 
@@ -119,8 +119,8 @@ Replaces a slice of data starting at the given offset and with the given length 
 **Parameters**
 
 -   `symbol` **[Symbol](#symbol)** 
--   `offset` **[Symbol](#symbol)** in bits
--   `length` **[Symbol](#symbol)** in bits
+-   `offset` **[number](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Number)** in bits
+-   `length` **[number](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Number)** in bits
 -   `dataBytes` **[Uint8Array](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Uint8Array)** 
 
 ### setTriple
