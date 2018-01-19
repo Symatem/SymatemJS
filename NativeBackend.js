@@ -103,10 +103,8 @@ function* searchMVI(index, triple) {
     if(!handle)
         return 0;
     const subIndex = handle.subIndices[index];
-    for(const beta of subIndex.keys()) {
-        triple[1] = beta;
+    for(triple[1] of subIndex.keys())
         yield reorderTriple(tripleNormalized, index, triple);
-    }
     return subIndex.size;
 }
 
@@ -128,10 +126,8 @@ function* searchVVI(index, triple) {
         for(const [alphaIdentity, alpha] of namespace.handles) {
             triple[0] = this.constructor.concatIntoSymbol(namespaceIdentity, alphaIdentity);
             const subIndex = alpha.subIndices[index];
-            for(const [beta, set] of subIndex) {
-                triple[1] = beta;
+            for(triple[1] of subIndex.keys())
                 yield reorderTriple(tripleNormalized, index, triple);
-            }
             count += subIndex.size;
         }
     return count;

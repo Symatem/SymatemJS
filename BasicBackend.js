@@ -200,6 +200,24 @@ export default class BasicBackend {
     }
 
     /**
+     * Creates a new namespace with the given symbols and adds them to symbolByName
+     * @param {Array} namespaceName
+     * @param {Array} symbolNames
+     * @return {number} identity of the new namespace
+     */
+    registerAdditionalSymbols(namespaceName, symbolNames) {
+        const namespace = this.createSymbol(BasicBackend.identityOfSymbol(BasicBackend.symbolByName.Namespaces)),
+              namespaceIdentity = BasicBackend.identityOfSymbol(namespace);
+        this.setData(namespace, namespaceName);
+        for(const name of symbolNames) {
+            const symbol = this.createSymbol(namespaceIdentity);
+            symbolByName[name] = symbol;
+            this.setData(symbol, name);
+        }
+        return namespaceIdentity;
+    }
+
+    /**
      * Converts bits to JS native data types using the given encoding
      * @param {Symbol} encoding
      * @param {Uint8Array} dataBytes
