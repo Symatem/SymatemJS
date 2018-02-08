@@ -141,7 +141,9 @@ export default class BasicBackend {
             for(let i = 0; i < dataValue.byteLength; ++i)
                 dataValue[i] = parseInt(text[i * 2 + 4], 16) | (parseInt(text[i * 2 + 5], 16) << 4);
             return dataValue;
-        } else if(!Number.isNaN(parseFloat(text)))
+        } else if(text === 'false' || text === 'true')
+            return (text === 'true');
+        else if(!Number.isNaN(parseFloat(text)))
             return parseFloat(text);
         else if(!Number.isNaN(parseInt(text)))
             return parseInt(text);
@@ -233,6 +235,8 @@ export default class BasicBackend {
             case symbolByName.BinaryNumber:
             case symbolByName.TwosComplement:
             case symbolByName.IEEE754:
+                if(feedback.length === 1 && encoding === symbolByName.BinaryNumber)
+                    return (dataView.getUint8(0) === 1);
                 if(feedback.length < 32)
                     return;
                 feedback.length = 32;
@@ -297,6 +301,8 @@ export default class BasicBackend {
             case symbolByName.Void:
                 return dataValue;
             case symbolByName.BinaryNumber:
+                if(typeof dataValue === 'boolean')
+                    return new Uint8Array([(dataValue) ? 1 : 0]);
                 dataView.setUint32(0, dataValue, true);
                 return dataBytes;
             case symbolByName.TwosComplement:
@@ -348,15 +354,18 @@ export default class BasicBackend {
      * Returns a symbols entire data converted to JS native data types
      * @param {Symbol} symbol
      * @param {Uint8Array} dataBytes
+     * @param {number} dataLength in bits
      * @return {Object} dataValue
      */
-    getData(symbol, dataBytes) {
-        if(dataBytes == undefined)
+    getData(symbol, dataBytes, dataLength) {
+        if(!dataBytes)
             dataBytes = this.getRawData(symbol);
-        if(dataBytes.byteLength === 0)
-            return;
-        const encoding = this.getSolitary(symbol, symbolByName.Encoding);
-        return this.decodeBinary(encoding, dataBytes, {'length': dataBytes.length*8});
+        if(!dataLength)
+            dataLength = this.getLength(symbol);
+        if(dataLength > 0) {
+            const encoding = this.getSolitary(symbol, symbolByName.Encoding);
+            return this.decodeBinary(encoding, dataBytes, {'length': dataLength});
+        }
     }
 
     /**
@@ -367,6 +376,7 @@ export default class BasicBackend {
      */
     setData(symbol, dataValue) {
         let encoding;
+        const isBool = (typeof dataValue === 'boolean');
         switch(typeof dataValue) {
             case 'undefined':
                 encoding = symbolByName.Void;
@@ -377,7 +387,8 @@ export default class BasicBackend {
                 this.setSolitary([symbol, symbolByName.Encoding, encoding]);
                 break;
             case 'number':
-                if(!Number.isInteger(dataValue))
+            case 'boolean':
+                if(!Number.isInteger(dataValue) && !isBool)
                     encoding = symbolByName.IEEE754;
                 else if(dataValue < 0)
                     encoding = symbolByName.TwosComplement;
@@ -390,7 +401,7 @@ export default class BasicBackend {
                 break;
         }
         const dataBytes = this.encodeBinary(encoding, dataValue);
-        this.setRawData(symbol, dataBytes);
+        this.setRawData(symbol, dataBytes, (isBool) ? 1 : 0);
         return dataBytes;
     }
 
@@ -407,14 +418,17 @@ export default class BasicBackend {
      * Replaces the entire data of a symbol
      * @param {Symbol} symbol
      * @param {Uint8Array} dataBytes
+     * @param {number} dataLength in bits
      */
-    setRawData(symbol, dataBytes) {
-        if(dataBytes == undefined) {
+    setRawData(symbol, dataBytes, dataLength) {
+        if(!dataBytes) {
             this.setLength(symbol, 0);
             return;
         }
-        this.setLength(symbol, dataBytes.byteLength * 8);
-        this.writeData(symbol, 0, dataBytes.byteLength * 8, dataBytes);
+        if(!dataLength)
+            dataLength = dataBytes.byteLength * 8;
+        this.setLength(symbol, dataLength);
+        this.writeData(symbol, 0, dataLength, dataBytes);
     }
 
     /**

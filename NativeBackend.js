@@ -283,8 +283,8 @@ export default class NativeBackend extends BasicBackend {
      */
     decreaseLength(symbol, offset, length) {
         const handle = this.getHandle(symbol);
-        handle.dataBytes.copyWithin(offset / 8, (offset + length) / 8);
-        handle.dataBytes = handle.dataBytes.slice(0, (handle.dataLength - length) / 8);
+        handle.dataBytes.copyWithin(Math.ceil(offset / 8), Math.ceil((offset + length) / 8));
+        handle.dataBytes = handle.dataBytes.slice(0, Math.ceil((handle.dataLength - length) / 8));
         handle.dataLength -= length;
     }
 
@@ -296,9 +296,9 @@ export default class NativeBackend extends BasicBackend {
      */
     increaseLength(symbol, offset, length) {
         const handle = this.getHandle(symbol);
-        const dataBytes = new Uint8Array((handle.dataLength + length) / 8);
+        const dataBytes = new Uint8Array(Math.ceil((handle.dataLength + length) / 8));
         dataBytes.set(handle.dataBytes, 0);
-        dataBytes.copyWithin((offset + length) / 8, offset / 8);
+        dataBytes.copyWithin(Math.ceil((offset + length) / 8), Math.ceil(offset / 8));
         handle.dataBytes = dataBytes;
         handle.dataLength += length;
     }
@@ -314,7 +314,7 @@ export default class NativeBackend extends BasicBackend {
         const handle = this.getHandle(symbol);
         if(offset == 0 && length == handle.dataLength)
             return handle.dataBytes;
-        return handle.dataBytes.slice(offset / 8, (offset + length) / 8);
+        return handle.dataBytes.slice(Math.ceil(offset / 8), Math.ceil((offset + length) / 8));
     }
 
     /**
@@ -328,9 +328,9 @@ export default class NativeBackend extends BasicBackend {
         const handle = this.getHandle(symbol);
         if(offset == 0 && length == handle.dataLength) {
             handle.dataBytes = dataBytes;
-            handle.dataLength = dataBytes.byteLength * 8;
+            handle.dataLength = length;
         } else
-            handle.dataBytes.set(dataBytes, offset / 8);
+            handle.dataBytes.set(dataBytes, Math.ceil(offset / 8));
     }
 
 
