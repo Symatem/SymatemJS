@@ -1,3 +1,11 @@
+Object.clone = function(obj) {
+    return Object.assign(Object.create(Object.getPrototypeOf(obj)), obj);
+};
+
+Map.prototype.sorted = function(callback) {
+    return new Map(Array.from(this.entries()).sort(callback));
+};
+
 const queryMode = ['M', 'V', 'I'],
       queryMask = {};
 for(let i = 0; i < 27; ++i)
@@ -195,7 +203,7 @@ export default class BasicBackend {
      * Fills the ontology with the predefined symbols
      */
     initBasicOntology() {
-        for(const name in symbolByName)
+        for(const name of Object.getOwnPropertyNames(symbolByName))
             this.setData(this.manifestSymbol(symbolByName[name]), name);
         for(const entity of [symbolByName.BinaryNumber, symbolByName.TwosComplement, symbolByName.IEEE754, symbolByName.UTF8, symbolByName.Composite])
             this.setTriple([entity, symbolByName.Type, symbolByName.Encoding], true);
@@ -328,7 +336,7 @@ export default class BasicBackend {
         if(count === symbolByName.Dynamic)
             dataView.setUint32(offset++, dataValue.length, true);
         else if(count !== symbolByName.Void && dataValue.length !== this.getData(count))
-            console.error('dataValue.length != this.getData(count)');
+            throw new Error('Provided dataValue array length does not match count specified in the composite encoding');
 
         let length = 0;
         for(let i = 0; i < dataValue.length; ++i) {
@@ -555,7 +563,7 @@ export default class BasicBackend {
 
 {
     let namespace, symbol;
-    for(const name in symbolByName) {
+    for(const name of Object.getOwnPropertyNames(symbolByName)) {
         if(namespace !== symbolByName[name]) {
             namespace = symbolByName[name];
             symbol = 0;
