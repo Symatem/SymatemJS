@@ -6,6 +6,13 @@ Map.prototype.sorted = function(callback) {
     return new Map(Array.from(this.entries()).sort(callback));
 };
 
+DataView.prototype.djb2Hash = function() {
+    let result = 5381;
+    for(let i = 0; i < this.byteLength; ++i)
+        result = ((result<<5)+result+this.getUint8(i))>>>0;
+    return result; // ('0000000'+result.toString(16).toUpperCase()).substr(-8);
+}
+
 const queryMode = ['M', 'V', 'I'],
       queryMask = {};
 for(let i = 0; i < 27; ++i)
@@ -218,6 +225,7 @@ export default class BasicBackend {
     registerAdditionalSymbols(namespaceName, symbolNames) {
         const namespace = this.createSymbol(BasicBackend.identityOfSymbol(BasicBackend.symbolByName.Namespaces)),
               namespaceIdentity = BasicBackend.identityOfSymbol(namespace);
+        symbolByName[namespaceName] = namespace;
         this.setData(namespace, namespaceName);
         for(const name of symbolNames) {
             const symbol = this.createSymbol(namespaceIdentity);
