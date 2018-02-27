@@ -20,7 +20,6 @@ for(let i = 0; i < 27; ++i)
 
 const symbolByName = {
     'Void': 0,
-    'Symbol': 0,
     'Entity': 0,
     'Attribute': 0,
     'Value': 0,
@@ -501,15 +500,27 @@ export default class BasicBackend {
     }
 
     /**
-     * Returns the value if exactly one triple matches with the given entity-attribute-pair
-     * @param {Symbol} entity
-     * @param {Symbol} attribute
-     * @return {Symbol} value or Void
+     * Returns the value if exactly one triple matches with the given pair
+     * @param {Symbol} first symbol
+     * @param {Symbol} second symbol
+     * @param {Number} index 0, 1, 2 search for Entity, Attribute or Value
+     * @return {Symbol} third symbol or Void
      */
-    getSolitary(entity, attribute) {
-        const iterator = this.queryTriples(queryMask.MMV, [entity, attribute, symbolByName.Void]);
-        let triple = iterator.next().value;
-        return (iterator.next().value == 1) ? triple[2] : symbolByName.Void;
+    getSolitary(first, second, index=2) {
+        let iterator;
+        switch(index) {
+            case 0:
+                iterator = this.queryTriples(queryMask.VMM, [symbolByName.Void, first, second]);
+                break;
+            case 1:
+                iterator = this.queryTriples(queryMask.MVM, [first, symbolByName.Void, second]);
+                break;
+            case 2:
+                iterator = this.queryTriples(queryMask.MMV, [first, second, symbolByName.Void]);
+                break;
+        }
+        const triple = iterator.next().value;
+        return (iterator.next().value == 1) ? triple[index] : symbolByName.Void;
     }
 
 
