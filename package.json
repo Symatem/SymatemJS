@@ -1,7 +1,9 @@
 {
   "name": "SymatemJS",
   "version": "0.0.0",
-  "authors": ["Alexander Meißner"],
+  "authors": [
+    "Alexander Meißner"
+  ],
   "license": "MIT",
   "description": "Symatem JS & WebAssembly API",
   "module": "NativeBackend.js",
@@ -21,8 +23,8 @@
   },
   "dependencies": {},
   "devDependencies": {
-    "rollup": "^0.53.0",
-    "semantic-release": "^11.1.0",
-    "documentation": "^5.3.5"
+    "documentation": "^6.3.3",
+    "rollup": "^0.59.1",
+    "semantic-release": "^15.4.1"
   }
 }
