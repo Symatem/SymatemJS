@@ -19,6 +19,7 @@
 -   [Symbol](#symbol)
 -   [Triple](#triple)
 -   [initBasicOntology](#initbasicontology)
+-   [registerAdditionalSymbols](#registeradditionalsymbols)
 -   [decodeBinary](#decodebinary)
 -   [encodeBinary](#encodebinary)
 -   [getData](#getdata)
@@ -168,6 +169,17 @@ Type: [Object](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Globa
 
 Fills the ontology with the predefined symbols
 
+### registerAdditionalSymbols
+
+Creates a new namespace with the given symbols and adds them to symbolByName
+
+**Parameters**
+
+-   `namespaceName` **[Array](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Array)** 
+-   `symbolNames` **[Array](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Array)** 
+
+Returns **[number](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Number)** identity of the new namespace
+
 ### decodeBinary
 
 Converts bits to JS native data types using the given encoding
@@ -200,6 +212,7 @@ Returns a symbols entire data converted to JS native data types
 
 -   `symbol` **[Symbol](#symbol)** 
 -   `dataBytes` **[Uint8Array](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Uint8Array)** 
+-   `dataLength` **[number](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Number)** in bits
 
 Returns **[Object](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object)** dataValue
 
@@ -232,6 +245,7 @@ Replaces the entire data of a symbol
 
 -   `symbol` **[Symbol](#symbol)** 
 -   `dataBytes` **[Uint8Array](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Uint8Array)** 
+-   `dataLength` **[number](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Number)** in bits
 
 ### setLength
 
@@ -270,14 +284,15 @@ Does the same as setTriple (linked = true) but also unlinks all triples with dif
 
 ### getSolitary
 
-Returns the value if exactly one triple matches with the given entity-attribute-pair
+Returns the value if exactly one triple matches with the given pair
 
 **Parameters**
 
--   `entity` **[Symbol](#symbol)** 
--   `attribute` **[Symbol](#symbol)** 
+-   `first` **[Symbol](#symbol)** symbol
+-   `second` **[Symbol](#symbol)** symbol
+-   `index` **[Number](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Number)** 0, 1, 2 search for Entity, Attribute or Value (optional, default `2`)
 
-Returns **[Symbol](#symbol)** value or Void
+Returns **[Symbol](#symbol)** third symbol or Void
 
 ### encodeJson
 
