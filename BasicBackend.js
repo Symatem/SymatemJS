@@ -2,6 +2,19 @@ Object.clone = function(obj) {
     return Object.assign(Object.create(Object.getPrototypeOf(obj)), obj);
 };
 
+String.prototype.repeat = function(count) {
+    if(count < 1)
+        return '';
+    let result = '', pattern = this.valueOf();
+    while(count > 1) {
+        if(count & 1)
+            result += pattern;
+        count >>= 1;
+        pattern += pattern;
+    }
+    return result+pattern;
+};
+
 Map.prototype.sorted = function(callback) {
     return new Map(Array.from(this.entries()).sort(callback));
 };
@@ -201,6 +214,17 @@ export default class BasicBackend {
      */
     static identityOfSymbol(symbol) {
         return parseInt(symbol.split(':')[1]);
+    }
+
+    /**
+     * Relocates a symbol into another namespace according to a lookup table
+     * @param {Symbol} symbol
+     * @param {Map} namespaces relocation table
+     * @return {Symbol} relocated symbol
+     */
+    static relocateSymbol(symbol, namespaces) {
+        const namespaceId = namespaces[BasicBackend.namespaceOfSymbol(symbol)];
+        return (namespaceId) ? BasicBackend.concatIntoSymbol(namespaceId, BasicBackend.identityOfSymbol(symbol)) : symbol;
     }
 
 
@@ -453,10 +477,8 @@ export default class BasicBackend {
      */
     setLength(symbol, newLength) {
         const length = this.getLength(symbol);
-        if(newLength > length)
-            this.increaseLength(symbol, length, newLength - length);
-        else if(newLength < length)
-            this.decreaseLength(symbol, newLength, length - newLength);
+        if(newLength != length)
+            this.creaseLength(symbol, length, newLength-length);
     }
 
     /**
@@ -488,7 +510,7 @@ export default class BasicBackend {
      * @param {Triple} triple
      */
     setSolitary(triple) {
-        let needsToBeLinked = triple[2] !== symbolByName.Void;
+        let needsToBeLinked = (triple[2] !== symbolByName.Void);
         for(const iTriple of this.queryTriples(queryMask.MMV, triple)) {
             if(iTriple[2] == triple[2])
                 needsToBeLinked = false;

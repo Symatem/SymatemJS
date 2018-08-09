@@ -276,30 +276,22 @@ export default class NativeBackend extends BasicBackend {
     }
 
     /**
-     * Erases a slice of a symbols virtual space at the given offset and with the given length
+     * Inserts or erases a slice of a symbols virtual space at the given offset and with the given length
      * @param {Symbol} symbol
      * @param {number} offset in bits
-     * @param {number} length in bits
+     * @param {number} length in bits (positive=insert, negative=erase)
      */
-    decreaseLength(symbol, offset, length) {
+    creaseLength(symbol, offset, length) {
         const handle = this.getHandle(symbol);
-        handle.dataBytes.copyWithin(Math.ceil(offset / 8), Math.ceil((offset + length) / 8));
-        handle.dataBytes = handle.dataBytes.slice(0, Math.ceil((handle.dataLength - length) / 8));
-        handle.dataLength -= length;
-    }
-
-    /**
-     * Inserts a slice of a symbols virtual space at the given offset and with the given length
-     * @param {Symbol} symbol
-     * @param {number} offset in bits
-     * @param {number} length in bits
-     */
-    increaseLength(symbol, offset, length) {
-        const handle = this.getHandle(symbol);
-        const dataBytes = new Uint8Array(Math.ceil((handle.dataLength + length) / 8));
-        dataBytes.set(handle.dataBytes, 0);
-        dataBytes.copyWithin(Math.ceil((offset + length) / 8), Math.ceil(offset / 8));
-        handle.dataBytes = dataBytes;
+        if(length < 0) {
+            handle.dataBytes.copyWithin(Math.ceil(offset / 8), Math.ceil((offset - length) / 8));
+            handle.dataBytes = handle.dataBytes.slice(0, Math.ceil((handle.dataLength + length) / 8));
+        } else {
+            const dataBytes = new Uint8Array(Math.ceil((handle.dataLength + length) / 8));
+            dataBytes.set(handle.dataBytes, 0);
+            dataBytes.copyWithin(Math.ceil((offset + length) / 8), Math.ceil(offset / 8));
+            handle.dataBytes = dataBytes;
+        }
         handle.dataLength += length;
     }
 
