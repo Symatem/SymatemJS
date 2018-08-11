@@ -548,7 +548,7 @@ export default class BasicBackend {
 
 
     /**
-     * Stores the ontology as JSON LTS format
+     * Stores the ontology as JSON format
      * @return {string} json
      */
     encodeJson() {
@@ -579,7 +579,7 @@ export default class BasicBackend {
     }
 
     /**
-     * Loads the ontology from JSON LTS format
+     * Loads the ontology from JSON format
      * @param {string} json
      */
     decodeJson(json) {

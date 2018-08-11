@@ -23,11 +23,9 @@ function* searchMMM(index, triple) {
     const handle = this.getHandle(triple[0]);
     if(!handle)
         return 0;
-    const subIndex = handle.subIndices[index];
-    if(!subIndex.has(triple[1]))
-        return 0;
-    const set = subIndex.get(triple[1]);
-    if(!set.has(triple[2]))
+    const subIndex = handle.subIndices[index],
+          set = subIndex[triple[1]];
+    if(!set || !set[triple[2]])
         return 0;
     yield reorderTriple(tripleNormalized, index, triple);
     return 1;
@@ -37,8 +35,9 @@ function* searchMMI(index, triple) {
     const handle = this.getHandle(triple[0]);
     if(!handle)
         return 0;
-    const subIndex = handle.subIndices[index];
-    if(!subIndex.has(triple[1]))
+    const subIndex = handle.subIndices[index],
+          set = subIndex[triple[1]];
+    if(!set)
         return 0;
     yield reorderTriple(tripleNormalized, index, triple);
     return 1;
@@ -60,13 +59,16 @@ function* searchMMV(index, triple) {
     const handle = this.getHandle(triple[0]);
     if(!handle)
         return 0;
-    const subIndex = handle.subIndices[index];
-    if(!subIndex.has(triple[1]))
+    const subIndex = handle.subIndices[index],
+          set = subIndex[triple[1]];
+    if(!set)
         return 0;
-    const set = subIndex.get(triple[1]);
-    for(triple[2] of set)
+    let count = 0;
+    for(triple[2] in set) {
         yield reorderTriple(tripleNormalized, index, triple);
-    return set.size;
+        ++count;
+    }
+    return count;
 }
 
 function* searchMVV(index, triple) {
@@ -75,11 +77,12 @@ function* searchMVV(index, triple) {
         return 0;
     const subIndex = handle.subIndices[index];
     let count = 0;
-    for(const [beta, set] of subIndex) {
-        triple[1] = beta;
-        for(triple[2] of set)
+    for(triple[1] in subIndex) {
+        const set = subIndex[triple[1]];
+        for(triple[2] in set) {
             yield reorderTriple(tripleNormalized, index, triple);
-        count += set.size;
+            ++count;
+        }
     }
     return count;
 }
@@ -89,13 +92,16 @@ function* searchMIV(index, triple) {
     if(!handle)
         return 0;
     const subIndex = handle.subIndices[index],
-          results = new Set();
-    for(const set of subIndex.values())
-        for(const result of set)
-            results.add(result);
-    for(triple[2] of results)
+          results = {};
+    for(const beta in subIndex)
+        for(const result of subIndex[beta])
+            results[result] = true;
+    let count = 0;
+    for(triple[2] in results) {
         yield reorderTriple(tripleNormalized, index, triple);
-    return results.size;
+        ++count;
+    }
+    return count;
 }
 
 function* searchMVI(index, triple) {
@@ -103,47 +109,52 @@ function* searchMVI(index, triple) {
     if(!handle)
         return 0;
     const subIndex = handle.subIndices[index];
-    for(triple[1] of subIndex.keys())
+    let count = 0;
+    for(triple[1] in subIndex) {
         yield reorderTriple(tripleNormalized, index, triple);
-    return subIndex.size;
+        ++count;
+    }
+    return count;
 }
 
 function* searchVII(index, triple) {
     let count = 0;
-    for(const [namespaceIdentity, namespace] of this.namespaces) {
-        for(const [alphaIdentity, alpha] of namespace.handles) {
+    for(const [namespaceIdentity, namespace] of this.namespaces.entries()) {
+        for(const [alphaIdentity, alpha] of namespace.handles.entries()) {
             triple[0] = this.constructor.concatIntoSymbol(namespaceIdentity, alphaIdentity);
             yield reorderTriple(tripleNormalized, index, triple);
+            ++count;
         }
-        count += namespace.handles.size;
     }
     return count;
 }
 
 function* searchVVI(index, triple) {
     let count = 0;
-    for(const [namespaceIdentity, namespace] of this.namespaces)
-        for(const [alphaIdentity, alpha] of namespace.handles) {
+    for(const [namespaceIdentity, namespace] of this.namespaces.entries())
+        for(const [alphaIdentity, alpha] of namespace.handles.entries()) {
             triple[0] = this.constructor.concatIntoSymbol(namespaceIdentity, alphaIdentity);
             const subIndex = alpha.subIndices[index];
-            for(triple[1] of subIndex.keys())
+            for(triple[1] in subIndex) {
                 yield reorderTriple(tripleNormalized, index, triple);
-            count += subIndex.size;
+                ++count;
+            }
         }
     return count;
 }
 
 function* searchVVV(index, triple) {
     let count = 0;
-    for(const [namespaceIdentity, namespace] of this.namespaces)
-        for(const [alphaIdentity, alpha] of namespace.handles) {
+    for(const [namespaceIdentity, namespace] of this.namespaces.entries())
+        for(const [alphaIdentity, alpha] of namespace.handles.entries()) {
             triple[0] = this.constructor.concatIntoSymbol(namespaceIdentity, alphaIdentity);
             const subIndex = alpha.subIndices[index];
-            for(const [beta, set] of subIndex) {
-                triple[1] = beta;
-                for(triple[2] of set)
+            for(triple[1] in subIndex) {
+                const set = subIndex[triple[1]];
+                for(triple[2] in set) {
                     yield reorderTriple(tripleNormalized, index, triple);
-                count += set.size;
+                    ++count;
+                }
             }
         }
     return count;
@@ -177,25 +188,25 @@ import BasicBackend from './BasicBackend.js';
 export default class NativeBackend extends BasicBackend {
     constructor() {
         super();
-        this.namespaces = new Map();
+        this.namespaces = {};
         this.initBasicOntology();
     }
 
     getHandle(symbol) {
-        const namespace = this.namespaces.get(this.constructor.namespaceOfSymbol(symbol));
-        return (namespace) ? namespace.handles.get(this.constructor.identityOfSymbol(symbol)) : undefined;
+        const namespace = this.namespaces[this.constructor.namespaceOfSymbol(symbol)];
+        return (namespace) ? namespace.handles[this.constructor.identityOfSymbol(symbol)] : undefined;
     }
 
     manifestNamespace(namespaceIdentity) {
-        let namespace = this.namespaces.get(namespaceIdentity);
+        let namespace = this.namespaces[namespaceIdentity];
         if(!namespace) {
             namespace = {
                 // 'identity': namespaceIdentity,
                 'nextIdentity': 0,
-                'freeIdentities': new Set(),
-                'handles': new Map()
+                'freeIdentities': {},
+                'handles': {}
             };
-            this.namespaces.set(namespaceIdentity, namespace);
+            this.namespaces[namespaceIdentity] = namespace;
         }
         return namespace;
     }
@@ -209,21 +220,21 @@ export default class NativeBackend extends BasicBackend {
         const namespaceIdentity = this.constructor.namespaceOfSymbol(symbol),
               namespace = this.manifestNamespace(namespaceIdentity),
               identity = this.constructor.identityOfSymbol(symbol);
-        if(namespace.handles.has(identity))
+        if(namespace.handles[identity])
             return symbol;
-        namespace.freeIdentities.delete(identity);
+        delete namespace.freeIdentities[identity];
         while(namespace.nextIdentity < identity)
-            namespace.freeIdentities.add(namespace.nextIdentity++);
+            namespace.freeIdentities[namespace.nextIdentity++] = true;
         namespace.nextIdentity = Math.max(namespace.nextIdentity, identity+1);
-        const handle = {};
-        // handle.namespace = namespace;
-        // handle.identity = identity;
-        handle.dataLength = 0;
-        handle.dataBytes = new Uint8Array();
-        handle.subIndices = [];
+        const handle = namespace.handles[identity] = {
+            // namespace: namespace,
+            // identity: identity,
+            dataLength: 0,
+            dataBytes: new Uint8Array(),
+            subIndices: []
+        };
         for(let i = 0; i < 6; ++i)
-            handle.subIndices.push(new Map());
-        namespace.handles.set(identity, handle);
+            handle.subIndices.push({});
         return symbol;
     }
 
@@ -235,11 +246,11 @@ export default class NativeBackend extends BasicBackend {
     createSymbol(namespaceIdentity) {
         const namespace = this.manifestNamespace(namespaceIdentity);
         let identity;
-        if(namespace.freeIdentities.size == 0)
+        if(Object.keys(namespace.freeIdentities).length == 0)
             identity = namespace.nextIdentity++;
         else {
-            identity = namespace.freeIdentities.values().next().value;
-            namespace.freeIdentities.delete(identity);
+            identity = namespace.freeIdentities.keys().next().value;
+            delete namespace.freeIdentities[identity];
         }
         return this.manifestSymbol(this.constructor.concatIntoSymbol(namespaceIdentity, identity));
     }
@@ -250,16 +261,16 @@ export default class NativeBackend extends BasicBackend {
      */
     releaseSymbol(symbol) {
         const namespaceIdentity = this.constructor.namespaceOfSymbol(symbol),
-              namespace = this.namespaces.get(namespaceIdentity),
+              namespace = this.namespaces[namespaceIdentity],
               identity = this.constructor.identityOfSymbol(symbol);
-        namespace.handles.delete(identity);
-        if(namespace.handles.size == 0)
-            this.namespaces.delete(namespaceIdentity);
+        delete namespace.handles[identity];
+        if(Object.keys(namespace.handles).length == 0)
+            delete this.namespaces[namespaceIdentity];
         else {
             if(identity == namespace.nextIdentity - 1)
                 --namespace.nextIdentity;
             else if(identity < namespace.nextIdentity - 1)
-                namespace.freeIdentities.add(identity);
+                namespace.freeIdentities[identity] = true;
         }
     }
 
@@ -337,24 +348,22 @@ export default class NativeBackend extends BasicBackend {
         function operateSubIndex(subIndex, beta, gamma) {
             if(linked) {
                 let set;
-                if(!subIndex.has(beta)) {
-                    set = new Set();
-                    subIndex.set(beta, set);
+                if(!subIndex[beta]) {
+                    set = {};
+                    subIndex[beta] = set;
                 } else {
-                    set = subIndex.get(beta);
-                    if(set.has(gamma))
+                    set = subIndex[beta];
+                    if(set[gamma])
                         return false;
                 }
-                set.add(gamma);
+                set[gamma] = true;
             } else {
-                if(!subIndex.has(beta))
+                const set = subIndex[beta];
+                if(!set || !set[gamma])
                     return false;
-                const set = subIndex.get(beta);
-                if(!set.has(gamma))
-                    return false;
-                set.delete(gamma);
-                if(set.size == 0)
-                    subIndex.delete(beta);
+                delete set[gamma];
+                if(Object.keys(set).length === 0)
+                    delete subIndex[beta];
             }
             return true;
         }
