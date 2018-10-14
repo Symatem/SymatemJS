@@ -50,6 +50,7 @@ const symbolByName = {
     'Dynamic': 0,
 
     'Create': 0,
+    'Release': 0,
     'Rename': 0,
     'IncreaseLength': 0,
     'DecreaseLength': 0,
