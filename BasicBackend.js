@@ -54,6 +54,7 @@ const symbolByName = {
     'Rename': 0,
     'IncreaseLength': 0,
     'DecreaseLength': 0,
+    'Draft': 0,
     'Replace': 0,
     'Link': 0,
     'Unlink': 0,
