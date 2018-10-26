@@ -375,12 +375,14 @@ export default class NativeBackend extends BasicBackend {
         const entityHandle = this.getHandle(triple[0]),
               attributeHandle = this.getHandle(triple[1]),
               valueHandle = this.getHandle(triple[2]);
+        if(!linked && !(entityHandle && attributeHandle && valueHandle))
+            return true;
         operateSubIndex(entityHandle.subIndices[indexByName.EAV], triple[1], triple[2]);
         operateSubIndex(attributeHandle.subIndices[indexByName.AVE], triple[2], triple[0]);
         operateSubIndex(valueHandle.subIndices[indexByName.VEA], triple[0], triple[1]);
         operateSubIndex(entityHandle.subIndices[indexByName.EVA], triple[2], triple[1]);
         operateSubIndex(attributeHandle.subIndices[indexByName.AEV], triple[0], triple[2]);
-        operateSubIndex(valueHandle.subIndices[indexByName.VAE], triple[1], triple[0]);
+        return operateSubIndex(valueHandle.subIndices[indexByName.VAE], triple[1], triple[0]);
     }
 
     /**
