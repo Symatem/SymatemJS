@@ -60,12 +60,42 @@ export class Differential {
             }
     }
 
+    getIntermediateOffset(symbol, offset) {
+        const operations = [];
+        for(const type of [BasicBackend.symbolByName.DecreaseLength, BasicBackend.symbolByName.IncreaseLength])
+            for(const opTriple of this.versionControl.ontology.queryTriples(BasicBackend.queryMask.MMV, [this.symbol, type, BasicBackend.symbolByName.Void])) {
+                if(this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.Destination) !== symbol)
+                    continue;
+                const dstOffsetSymbol = this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.DestinationOffset),
+                      lengthSymbol = this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.Length);
+                operations.push({
+                    'entrySymbol': opTriple[2],
+                    'dstOffsetSymbol': dstOffsetSymbol,
+                    'dstOffset': this.versionControl.ontology.getData(dstOffsetSymbol),
+                    'lengthSymbol': lengthSymbol,
+                    'length': this.versionControl.ontology.getData(lengthSymbol)*((type === BasicBackend.symbolByName.DecreaseLength) ? -1 : 1)
+                });
+            }
+        operations.sort((a, b) => a.dstOffset-b.dstOffset);
+        for(let i = 0; i < operations.length; ++i) {
+            const operation = operations[i];
+            if(operation.length < 0)
+                offset -= operation.length;
+            if(offset < operation.dstOffset)
+                return [offset, operations, i];
+        }
+        return [offset, operations, operations.length];
+    }
+
     creaseLength(dstSymbol, dstOffset, length) {
+        if(length == 0)
+            return;
+        const [intermediateOffset, creaseLengthOperations, operationIndex] = this.getIntermediateOffset(dstSymbol, dstOffset);
         const entrySymbol = this.versionControl.ontology.createSymbol(this.versionControl.namespaceId);
         this.versionControl.ontology.setTriple([this.symbol, BasicBackend.symbolByName[(length > 0) ? 'IncreaseLength' : 'DecreaseLength'], entrySymbol], true);
         this.versionControl.ontology.setTriple([entrySymbol, BasicBackend.symbolByName.Destination, dstSymbol], true);
         const dstOffsetSymbol = this.versionControl.ontology.createSymbol(this.versionControl.namespaceId);
-        this.versionControl.ontology.setData(dstOffsetSymbol, dstOffset);
+        this.versionControl.ontology.setData(dstOffsetSymbol, intermediateOffset);
         this.versionControl.ontology.setTriple([entrySymbol, BasicBackend.symbolByName.DestinationOffset, dstOffsetSymbol], true);
         const lengthSymbol = this.versionControl.ontology.createSymbol(this.versionControl.namespaceId);
         this.versionControl.ontology.setData(lengthSymbol, Math.abs(length));
@@ -73,15 +103,19 @@ export class Differential {
     }
 
     replaceData(dstSymbol, dstOffset, srcSymbol, srcOffset, length) {
+        if(length == 0)
+            return;
+        const dstIntermediateOffset = this.getIntermediateOffset(dstSymbol, dstOffset)[0],
+              srcIntermediateOffset = this.getIntermediateOffset(srcSymbol, srcOffset)[0];
         const entrySymbol = this.versionControl.ontology.createSymbol(this.versionControl.namespaceId);
         this.versionControl.ontology.setTriple([this.symbol, BasicBackend.symbolByName.Replace, entrySymbol], true);
         this.versionControl.ontology.setTriple([entrySymbol, BasicBackend.symbolByName.Destination, dstSymbol], true);
         const dstOffsetSymbol = this.versionControl.ontology.createSymbol(this.versionControl.namespaceId);
-        this.versionControl.ontology.setData(dstOffsetSymbol, dstOffset);
+        this.versionControl.ontology.setData(dstOffsetSymbol, dstIntermediateOffset);
         this.versionControl.ontology.setTriple([entrySymbol, BasicBackend.symbolByName.DestinationOffset, dstOffsetSymbol], true);
         this.versionControl.ontology.setTriple([entrySymbol, BasicBackend.symbolByName.Source, srcSymbol], true);
         const srcOffsetSymbol = this.versionControl.ontology.createSymbol(this.versionControl.namespaceId);
-        this.versionControl.ontology.setData(srcOffsetSymbol, srcOffset);
+        this.versionControl.ontology.setData(srcOffsetSymbol, srcIntermediateOffset);
         this.versionControl.ontology.setTriple([entrySymbol, BasicBackend.symbolByName.SourceOffset, srcOffsetSymbol], true);
         const lengthSymbol = this.versionControl.ontology.createSymbol(this.versionControl.namespaceId);
         this.versionControl.ontology.setData(lengthSymbol, length);
@@ -161,9 +195,7 @@ export class Differential {
                 operations[dstSymbol].push({'dstSymbol': dstSymbol, 'dstOffset': dstOffset, 'length': (increase) ? length : -length});
             }
             for(const dstSymbol in operations) {
-                operations[dstSymbol].sort(function(a, b) {
-                    return b.dstOffset-a.dstOffset;
-                });
+                operations[dstSymbol].sort((!increase) ? (a, b) => a.dstOffset-b.dstOffset : (a, b) => b.dstOffset-a.dstOffset);
                 for(const operation of operations[dstSymbol])
                     console.log('CreaseLength', operation.dstSymbol, operation.dstOffset, operation.length);
                 //     this.versionControl.ontology.creaseLength(operation.dstSymbol, operation.dstOffset, operation.length);
