@@ -119,22 +119,21 @@ function* searchMVI(index, triple) {
 
 function* searchVII(index, triple) {
     let count = 0;
-    for(const [namespaceIdentity, namespace] of this.namespaces.entries()) {
-        for(const [alphaIdentity, alpha] of namespace.handles.entries()) {
+    for(const namespaceIdentity in this.namespaces)
+        for(const alphaIdentity in this.namespaces[namespaceIdentity].handles) {
             triple[0] = this.constructor.concatIntoSymbol(namespaceIdentity, alphaIdentity);
             yield reorderTriple(tripleNormalized, index, triple);
             ++count;
         }
-    }
     return count;
 }
 
 function* searchVVI(index, triple) {
     let count = 0;
-    for(const [namespaceIdentity, namespace] of this.namespaces.entries())
-        for(const [alphaIdentity, alpha] of namespace.handles.entries()) {
+    for(const namespaceIdentity in this.namespaces)
+        for(const alphaIdentity in this.namespaces[namespaceIdentity].handles) {
             triple[0] = this.constructor.concatIntoSymbol(namespaceIdentity, alphaIdentity);
-            const subIndex = alpha.subIndices[index];
+            const subIndex = this.namespaces[namespaceIdentity].handles[alphaIdentity].subIndices[index];
             for(triple[1] in subIndex) {
                 yield reorderTriple(tripleNormalized, index, triple);
                 ++count;
@@ -145,10 +144,10 @@ function* searchVVI(index, triple) {
 
 function* searchVVV(index, triple) {
     let count = 0;
-    for(const [namespaceIdentity, namespace] of this.namespaces.entries())
-        for(const [alphaIdentity, alpha] of namespace.handles.entries()) {
+    for(const namespaceIdentity in this.namespaces)
+        for(const alphaIdentity in this.namespaces[namespaceIdentity].handles) {
             triple[0] = this.constructor.concatIntoSymbol(namespaceIdentity, alphaIdentity);
-            const subIndex = alpha.subIndices[index];
+            const subIndex = this.namespaces[namespaceIdentity].handles[alphaIdentity].subIndices[index];
             for(triple[1] in subIndex) {
                 const set = subIndex[triple[1]];
                 for(triple[2] in set) {
