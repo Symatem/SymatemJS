@@ -12,6 +12,21 @@ export class Differential {
     }
 
     releaseSymbol(symbol) {
+        for(const opTriple of this.versionControl.ontology.queryTriples(BasicBackend.queryMask.MMV, [this.symbol, BasicBackend.symbolByName.Rename, BasicBackend.symbolByName.Void]))
+            if(this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.Destination) == symbol) {
+                symbol = this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.Source);
+                break;
+            }
+        for(const type of [BasicBackend.symbolByName.IncreaseLength, BasicBackend.symbolByName.DecreaseLength, BasicBackend.symbolByName.Replace])
+            for(const opTriple of this.versionControl.ontology.queryTriples(BasicBackend.queryMask.MMV, [this.symbol, type, BasicBackend.symbolByName.Void]))
+                if(this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.Destination) == symbol)
+                    this.versionControl.ontology.unlinkSymbol(opTriple[2]);
+        for(const type of [BasicBackend.symbolByName.Link, BasicBackend.symbolByName.Unlink])
+            for(const opTriple of this.versionControl.ontology.queryTriples(BasicBackend.queryMask.MMV, [this.symbol, type, BasicBackend.symbolByName.Void]))
+                if(this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.Entity) == triple[0] &&
+                   this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.Attribute) == triple[1] &&
+                   this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.Value) == triple[2])
+                    this.versionControl.ontology.unlinkSymbol(opTriple[2]);
         if(this.versionControl.ontology.getTriple([this.symbol, BasicBackend.symbolByName.Create, symbol]))
             this.versionControl.ontology.setTriple([this.symbol, BasicBackend.symbolByName.Create, symbol], false);
         else
