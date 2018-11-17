@@ -137,6 +137,71 @@ export class Differential {
         return preOffset;
     }
 
+    shiftIntermediateOffsets(symbol, creaseLengthOperations, operationIndex, offset, shift) {
+        for(let i = operationIndex; i < creaseLengthOperations.length; ++i) {
+            const operation = creaseLengthOperations[operationIndex];
+            this.versionControl.ontology.setData(operation.dstOffsetSymbol, operation.dstOffset+shift);
+        }
+        let operationAtBegin, operationAtEnd;
+        for(const opTriple of this.versionControl.ontology.queryTriples(BasicBackend.queryMask.MMV, [this.symbol, BasicBackend.symbolByName.Replace, BasicBackend.symbolByName.Void])) {
+            if(this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.Destination) !== symbol)
+                continue;
+            const srcSymbol = this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.Source),
+                  dstOffsetSymbol = this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.DestinationOffset),
+                  srcOffsetSymbol = this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.SourceOffset),
+                  lengthSymbol = this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.Length),
+                  dstOffset = this.versionControl.ontology.getData(dstOffsetSymbol),
+                  srcOffset = this.versionControl.ontology.getData(srcOffsetSymbol),
+                  length = this.versionControl.ontology.getData(lengthSymbol);
+            if(length > 0) {
+                if(dstOffset < offset && offset < dstOffset+length) {
+                    this.versionControl.ontology.setData(lengthSymbol, offset-dstOffset);
+                    this.addReplaceOperation(symbol, offset+shift, srcSymbol, srcOffset+offset-dstOffset, dstOffset+length-offset);
+                } else if(offset <= dstOffset)
+                    this.versionControl.ontology.setData(dstOffsetSymbol, dstOffset+shift);
+            } else {
+                if(dstOffset < offset && offset-shift < dstOffset+length) {
+                    this.versionControl.ontology.setData(lengthSymbol, offset-dstOffset);
+                    this.addReplaceOperation(symbol, offset-shift, srcSymbol, srcOffset+offset-dstOffset-shift, dstOffset+length-offset+shift);
+                    continue;
+                }
+                const beginIsInside = (offset <= dstOffset+length && dstOffset+length <= offset-length),
+                      endIsInside = (offset <= dstOffset && dstOffset <= offset-length);
+                if(beginIsInside || endIsInside) {
+                    if(beginIsInside) {
+                        if(endIsInside)
+                            this.versionControl.ontology.unlinkSymbol(opTriple[2]);
+                        else {
+                            operationAtEnd = opTriple[2];
+                            this.versionControl.ontology.setData(dstOffsetSymbol, offset-shift);
+                            this.versionControl.ontology.setData(lengthSymbol, dstOffset+length-offset+shift);
+                        }
+                    } else {
+                        operationAtBegin = opTriple[2];
+                        this.versionControl.ontology.setData(lengthSymbol, offset-dstOffset);
+                    }
+                } else if(offset-shift <= dstOffset)
+                    this.versionControl.ontology.setData(dstOffsetSymbol, dstOffset+shift);
+            }
+        }
+        if(operationAtBegin && operationAtEnd) {
+            const operationAtBeginSrcSymbol = this.versionControl.ontology.getSolitary(operationAtBegin, BasicBackend.symbolByName.Source),
+                  operationAtEndSrcSymbol = this.versionControl.ontology.getSolitary(operationAtEnd, BasicBackend.symbolByName.Source),
+                  operationAtBeginSrcOffsetSymbol = this.versionControl.ontology.getSolitary(operationAtBegin, BasicBackend.symbolByName.SourceOffset),
+                  operationAtEndSrcOffsetSymbol = this.versionControl.ontology.getSolitary(operationAtEnd, BasicBackend.symbolByName.SourceOffset),
+                  operationAtBeginLengthSymbol = this.versionControl.ontology.getSolitary(operationAtBegin, BasicBackend.symbolByName.Length),
+                  operationAtEndLengthSymbol = this.versionControl.ontology.getSolitary(operationAtEnd, BasicBackend.symbolByName.Length),
+                  operationAtBeginSrcOffset = this.versionControl.ontology.getData(operationAtBeginSrcOffsetSymbol),
+                  operationAtEndSrcOffset = this.versionControl.ontology.getData(operationAtEndSrcOffsetSymbol),
+                  operationAtBeginLength = this.versionControl.ontology.getData(operationAtBeginLengthSymbol),
+                  operationAtEndLength = this.versionControl.ontology.getData(operationAtEndLengthSymbol);
+            if(operationAtBeginSrcSymbol == operationAtEndSrcSymbol && operationAtBeginSrcOffset+operationAtBeginLength == operationAtEndSrcOffset) {
+                this.versionControl.ontology.setData(operationAtBeginLengthSymbol, operationAtBeginLength+operationAtEndLength);
+                this.versionControl.ontology.unlinkSymbol(operationAtEnd);
+            }
+        }
+    }
+
     creaseLength(dstSymbol, dstOffset, length) {
         if(length == 0)
             return;
