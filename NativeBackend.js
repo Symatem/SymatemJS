@@ -248,7 +248,7 @@ export default class NativeBackend extends BasicBackend {
         if(Object.keys(namespace.freeIdentities).length == 0)
             identity = namespace.nextIdentity++;
         else {
-            identity = namespace.freeIdentities.keys().next().value;
+            identity = Object.keys(namespace.freeIdentities)[0];
             delete namespace.freeIdentities[identity];
         }
         return this.manifestSymbol(this.constructor.concatIntoSymbol(namespaceIdentity, identity));
