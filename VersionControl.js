@@ -137,7 +137,7 @@ export class Differential {
         return preOffset;
     }
 
-    shiftIntermediateOffsets(symbol, creaseLengthOperations, operationIndex, offset, shift) {
+    shiftIntermediateOffsets(symbol, creaseLengthOperations, operationIndex, offset, shift, decreaseLength) {
         for(let i = operationIndex; i < creaseLengthOperations.length; ++i) {
             const operation = creaseLengthOperations[operationIndex];
             this.versionControl.ontology.setData(operation.dstOffsetSymbol, operation.dstOffset+shift);
@@ -153,16 +153,17 @@ export class Differential {
                   dstOffset = this.versionControl.ontology.getData(dstOffsetSymbol),
                   srcOffset = this.versionControl.ontology.getData(srcOffsetSymbol),
                   length = this.versionControl.ontology.getData(lengthSymbol);
-            if(length > 0) {
+            if(decreaseLength == 0) {
                 if(dstOffset < offset && offset < dstOffset+length) {
                     this.versionControl.ontology.setData(lengthSymbol, offset-dstOffset);
                     this.addReplaceOperation(symbol, offset+shift, srcSymbol, srcOffset+offset-dstOffset, dstOffset+length-offset);
                 } else if(offset <= dstOffset)
                     this.versionControl.ontology.setData(dstOffsetSymbol, dstOffset+shift);
             } else {
-                if(dstOffset < offset && offset-shift < dstOffset+length) {
+                if(dstOffset < offset && offset+decreaseLength < dstOffset+length) {
+                    const endLength = offset+decreaseLength-dstOffset-length;
                     this.versionControl.ontology.setData(lengthSymbol, offset-dstOffset);
-                    this.addReplaceOperation(symbol, offset-shift, srcSymbol, srcOffset+offset-dstOffset-shift, dstOffset+length-offset+shift);
+                    this.addReplaceOperation(symbol, offset+decreaseLength+shift, srcSymbol, srcOffset+length-endLength, endLength);
                     continue;
                 }
                 const beginIsInside = (offset <= dstOffset+length && dstOffset+length <= offset-length),
@@ -173,14 +174,14 @@ export class Differential {
                             this.versionControl.ontology.unlinkSymbol(opTriple[2]);
                         else {
                             operationAtEnd = opTriple[2];
-                            this.versionControl.ontology.setData(dstOffsetSymbol, offset-shift);
-                            this.versionControl.ontology.setData(lengthSymbol, dstOffset+length-offset+shift);
+                            this.versionControl.ontology.setData(dstOffsetSymbol, offset+decreaseLength+shift);
+                            this.versionControl.ontology.setData(lengthSymbol, dstOffset+length-offset-decreaseLength);
                         }
                     } else {
                         operationAtBegin = opTriple[2];
                         this.versionControl.ontology.setData(lengthSymbol, offset-dstOffset);
                     }
-                } else if(offset-shift <= dstOffset)
+                } else if(offset+decreaseLength <= dstOffset)
                     this.versionControl.ontology.setData(dstOffsetSymbol, dstOffset+shift);
             }
         }
