@@ -113,10 +113,10 @@ export class Differential {
         let intermediateOffset = postOffset;
         for(let i = 0; i < creaseLengthOperations.length; ++i) {
             const operation = creaseLengthOperations[i];
-            if(operation.length < 0)
-                intermediateOffset -= operation.length;
             if(intermediateOffset < operation.dstOffset)
                 return [intermediateOffset, creaseLengthOperations, i];
+            if(operation.length < 0)
+                intermediateOffset -= operation.length;
         }
         return [intermediateOffset, creaseLengthOperations, creaseLengthOperations.length];
     }
@@ -208,7 +208,7 @@ export class Differential {
                     operationAtBegin = operation;
                     this.versionControl.ontology.setData(operation.lengthSymbol, intermediateOffset-operation.dstOffset);
                 }
-            } else if(intermediateEndOffset <= operation.dstOffset)
+            } else if(shift < 0 && intermediateEndOffset <= operation.dstOffset)
                 this.versionControl.ontology.setData(operation.dstOffsetSymbol, operation.dstOffset+shift);
         }
         if(operationAtBegin && operationAtEnd &&
@@ -242,9 +242,9 @@ export class Differential {
     replaceData(dstSymbol, dstOffset, srcSymbol, srcOffset, length) {
         if(length <= 0)
             return;
-        const dstIntermediateOffset = this.getIntermediateOffset(dstSymbol, dstOffset)[0],
-              srcPreOffset = this.getPreOffset(srcSymbol, srcOffset),
-              replaceOperations = this.getReplaceOperations(srcSymbol);
+        let [dstIntermediateOffset, creaseLengthOperations, operationIndex] = this.getIntermediateOffset(dstSymbol, dstOffset),
+            srcPreOffset = this.getPreOffset(srcSymbol, srcOffset),
+            replaceOperations = this.getReplaceOperations(srcSymbol);
         this.cutReplaceOperations(dstSymbol, dstIntermediateOffset, 0, length);
         this.addReplaceOperation(dstSymbol, dstIntermediateOffset, srcSymbol, srcPreOffset, length);
     }
