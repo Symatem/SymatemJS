@@ -150,7 +150,7 @@ export class Differential {
                 'srcSymbol': this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.Source),
                 'dstOffsetSymbol': dstOffsetSymbol,
                 'dstOffset': this.versionControl.ontology.getData(dstOffsetSymbol),
-                'srcOffsetSymbol': dstOffsetSymbol,
+                'srcOffsetSymbol': srcOffsetSymbol,
                 'srcOffset': this.versionControl.ontology.getData(srcOffsetSymbol),
                 'lengthSymbol': lengthSymbol,
                 'length': this.versionControl.ontology.getData(lengthSymbol)
@@ -201,8 +201,10 @@ export class Differential {
                         this.versionControl.ontology.unlinkSymbol(operation.entrySymbol);
                     else {
                         operationAtEnd = operation;
+                        const newLength = operationEndOffset-intermediateEndOffset;
                         this.versionControl.ontology.setData(operation.dstOffsetSymbol, intermediateEndOffset+shift);
-                        this.versionControl.ontology.setData(operation.lengthSymbol, operationEndOffset-intermediateEndOffset);
+                        this.versionControl.ontology.setData(operation.srcOffsetSymbol, operation.srcOffset+operation.length-newLength);
+                        this.versionControl.ontology.setData(operation.lengthSymbol, newLength);
                     }
                 } else {
                     operationAtBegin = operation;
@@ -245,8 +247,35 @@ export class Differential {
         let [dstIntermediateOffset, creaseLengthOperations, operationIndex] = this.getIntermediateOffset(dstSymbol, dstOffset),
             srcPreOffset = this.getPreOffset(srcSymbol, srcOffset),
             replaceOperations = this.getReplaceOperations(srcSymbol);
-        this.cutReplaceOperations(dstSymbol, dstIntermediateOffset, 0, length);
-        this.addReplaceOperation(dstSymbol, dstIntermediateOffset, srcSymbol, srcPreOffset, length);
+        const cutReplaceOperations = [],
+              addReplaceOperations = [],
+              addReplaceOperation = (dstOffset, srcOffset, length) => {
+            cutReplaceOperations.push({'dstOffset': dstOffset, 'length': length});
+            addReplaceOperations.push({'dstOffset': dstOffset, 'srcSymbol': srcSymbol, 'srcOffset': srcOffset, 'length': length});
+            return true;
+        };
+        let overlappingDecrease = length;
+        for(; operationIndex < creaseLengthOperations.length && length > 0; ++operationIndex) {
+            const operation = creaseLengthOperations[operationIndex];
+            if(dstIntermediateOffset+overlappingDecrease < operation.dstOffset)
+                break;
+            if(operation.length < 0) {
+                const operationLength = Math.min(length, operation.dstOffset-dstIntermediateOffset);
+                if(!addReplaceOperation(dstIntermediateOffset, srcPreOffset, operationLength))
+                    return false;
+                length -= operationLength;
+                srcPreOffset += operationLength;
+                dstIntermediateOffset = operation.dstOffset-operation.length;
+                overlappingDecrease -= operation.length;
+            }
+        }
+        if(length > 0 && !addReplaceOperation(dstIntermediateOffset, srcPreOffset, length))
+            return false;
+        for(const operation of cutReplaceOperations)
+            this.cutReplaceOperations(dstSymbol, operation.dstOffset, 0, operation.length);
+        for(const operation of addReplaceOperations)
+            this.addReplaceOperation(dstSymbol, operation.dstOffset, operation.srcSymbol, operation.srcOffset, operation.length);
+        return true;
     }
 
     writeData(dstSymbol, offset, length, dataBytes) {
