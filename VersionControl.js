@@ -156,6 +156,7 @@ export class Differential {
                 'length': this.versionControl.ontology.getData(lengthSymbol)
             });
         }
+        replaceOperations.sort((a, b) => a.dstOffset-b.dstOffset);
         return replaceOperations;
     }
 
@@ -173,6 +174,7 @@ export class Differential {
             return;
         const replaceOperations = this.getReplaceOperations(symbol);
         for(const operation of replaceOperations) {
+            const operationEndOffset = operation.dstOffset+operation.length;
             if(operation.dstOffset < intermediateOffset && intermediateOffset < operationEndOffset) {
                 this.versionControl.ontology.setData(operation.lengthSymbol, offset-operation.dstOffset);
                 this.addReplaceOperation(symbol, offset+shift, operation.srcSymbol, operation.srcOffset+intermediateOffset-operation.dstOffset, operationEndOffset-intermediateOffset);
@@ -184,11 +186,10 @@ export class Differential {
     cutReplaceOperations(symbol, intermediateOffset, shift, decreaseLength) {
         const replaceOperations = this.getReplaceOperations(symbol),
               intermediateEndOffset = intermediateOffset+decreaseLength;
-        let operationAtBegin, operationAtEnd;
         for(const operation of replaceOperations) {
-            const operationEndOffset = operation.dstOffset+operation.length;
+            const operationEndOffset = operation.dstOffset+operation.length,
+                  endLength = operationEndOffset-intermediateEndOffset;
             if(operation.dstOffset < intermediateOffset && intermediateEndOffset < operationEndOffset) {
-                const endLength = operationEndOffset-intermediateEndOffset;
                 this.versionControl.ontology.setData(operation.lengthSymbol, intermediateOffset-operation.dstOffset);
                 this.addReplaceOperation(symbol, intermediateEndOffset+shift, operation.srcSymbol, operation.srcOffset+operation.length-endLength, endLength);
                 continue;
@@ -200,23 +201,32 @@ export class Differential {
                     if(operationsEndIsInside)
                         this.versionControl.ontology.unlinkSymbol(operation.entrySymbol);
                     else {
-                        operationAtEnd = operation;
-                        const newLength = operationEndOffset-intermediateEndOffset;
                         this.versionControl.ontology.setData(operation.dstOffsetSymbol, intermediateEndOffset+shift);
-                        this.versionControl.ontology.setData(operation.srcOffsetSymbol, operation.srcOffset+operation.length-newLength);
-                        this.versionControl.ontology.setData(operation.lengthSymbol, newLength);
+                        this.versionControl.ontology.setData(operation.srcOffsetSymbol, operation.srcOffset+operation.length-endLength);
+                        this.versionControl.ontology.setData(operation.lengthSymbol, endLength);
                     }
-                } else {
-                    operationAtBegin = operation;
+                } else
                     this.versionControl.ontology.setData(operation.lengthSymbol, intermediateOffset-operation.dstOffset);
-                }
             } else if(shift < 0 && intermediateEndOffset <= operation.dstOffset)
                 this.versionControl.ontology.setData(operation.dstOffsetSymbol, operation.dstOffset+shift);
         }
-        if(operationAtBegin && operationAtEnd &&
-           operationAtBegin.srcSymbol == operationAtEnd.srcSymbol && operationAtBegin.srcOffset+operationAtBegin.length == operationAtEnd.srcOffset) {
-            this.versionControl.ontology.setData(operationAtBegin.lengthSymbol, operationAtBegin.length+operationAtEnd.length);
-            this.versionControl.ontology.unlinkSymbol(operationAtEnd.entrySymbol);
+    }
+
+    mergeReplaceOperations(symbol, intermediateOffset) {
+        const replaceOperations = this.getReplaceOperations(symbol);
+        for(let operationIndex = 1; operationIndex < replaceOperations.length; ++operationIndex) {
+            const secondOperation = replaceOperations[operationIndex];
+            if(secondOperation.dstOffset < intermediateOffset)
+                continue;
+            const firstOperation = replaceOperations[operationIndex-1];
+            if(secondOperation.dstOffset == intermediateOffset &&
+               firstOperation.dstOffset+firstOperation.length == secondOperation.dstOffset &&
+               firstOperation.srcOffset+firstOperation.length == secondOperation.srcOffset &&
+               firstOperation.srcSymbol == secondOperation.srcSymbol) {
+                this.versionControl.ontology.setData(firstOperation.lengthSymbol, firstOperation.length+secondOperation.length);
+                this.versionControl.ontology.unlinkSymbol(secondOperation.entrySymbol);
+            }
+            break;
         }
     }
 
@@ -260,11 +270,11 @@ export class Differential {
             if(dstIntermediateOffset+overlappingDecrease < operation.dstOffset)
                 break;
             if(operation.length < 0) {
-                const operationLength = Math.min(length, operation.dstOffset-dstIntermediateOffset);
-                if(!addReplaceOperation(dstIntermediateOffset, srcPreOffset, operationLength))
+                const sliceLength = Math.min(length, operation.dstOffset-dstIntermediateOffset);
+                if(!addReplaceOperation(dstIntermediateOffset, srcPreOffset, sliceLength))
                     return false;
-                length -= operationLength;
-                srcPreOffset += operationLength;
+                length -= sliceLength;
+                srcPreOffset += sliceLength;
                 dstIntermediateOffset = operation.dstOffset-operation.length;
                 overlappingDecrease -= operation.length;
             }
@@ -275,6 +285,8 @@ export class Differential {
             this.cutReplaceOperations(dstSymbol, operation.dstOffset, 0, operation.length);
         for(const operation of addReplaceOperations)
             this.addReplaceOperation(dstSymbol, operation.dstOffset, operation.srcSymbol, operation.srcOffset, operation.length);
+        this.mergeReplaceOperations(dstSymbol, dstIntermediateOffset);
+        this.mergeReplaceOperations(dstSymbol, dstIntermediateOffset+overlappingDecrease);
         return true;
     }
 
