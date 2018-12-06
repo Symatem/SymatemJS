@@ -121,7 +121,7 @@ export class Differential {
         return [intermediateOffset, creaseLengthOperations, creaseLengthOperations.length];
     }
 
-    getPreOffset(symbol, postOffset) {
+    /*getPreOffset(symbol, postOffset) {
         const [intermediateOffset, creaseLengthOperations, operationIndex] = this.getIntermediateOffset(symbol, postOffset);
         let preOffset = intermediateOffset;
         if(operationIndex > 0) {
@@ -135,7 +135,7 @@ export class Differential {
                 preOffset -= operation.length;
         }
         return preOffset;
-    }
+    }*/
 
     getReplaceOperations(symbol) {
         const replaceOperations = [];
@@ -175,6 +175,8 @@ export class Differential {
         const replaceOperations = this.getReplaceOperations(symbol);
         for(const operation of replaceOperations) {
             const operationEndOffset = operation.dstOffset+operation.length;
+            if(operationEndOffset <= intermediateOffset)
+                continue;
             if(operation.dstOffset < intermediateOffset && intermediateOffset < operationEndOffset) {
                 this.versionControl.ontology.setData(operation.lengthSymbol, offset-operation.dstOffset);
                 this.addReplaceOperation(symbol, offset+shift, operation.srcSymbol, operation.srcOffset+intermediateOffset-operation.dstOffset, operationEndOffset-intermediateOffset);
@@ -187,8 +189,10 @@ export class Differential {
         const replaceOperations = this.getReplaceOperations(symbol),
               intermediateEndOffset = intermediateOffset+decreaseLength;
         for(const operation of replaceOperations) {
-            const operationEndOffset = operation.dstOffset+operation.length,
-                  endLength = operationEndOffset-intermediateEndOffset;
+            const operationEndOffset = operation.dstOffset+operation.length;
+            if(operationEndOffset <= intermediateOffset)
+                continue;
+            const endLength = operationEndOffset-intermediateEndOffset;
             if(operation.dstOffset < intermediateOffset && intermediateEndOffset < operationEndOffset) {
                 this.versionControl.ontology.setData(operation.lengthSymbol, intermediateOffset-operation.dstOffset);
                 this.addReplaceOperation(symbol, intermediateEndOffset+shift, operation.srcSymbol, operation.srcOffset+operation.length-endLength, endLength);
@@ -255,13 +259,21 @@ export class Differential {
         if(length <= 0)
             return;
         let [dstIntermediateOffset, creaseLengthOperations, operationIndex] = this.getIntermediateOffset(dstSymbol, dstOffset),
-            srcPreOffset = this.getPreOffset(srcSymbol, srcOffset),
+            srcIntermediateOffset = this.getIntermediateOffset(srcSymbol, srcOffset)[0],
             replaceOperations = this.getReplaceOperations(srcSymbol);
+        let replaceOperationIndex = 0;
         const cutReplaceOperations = [],
               addReplaceOperations = [],
-              addReplaceOperation = (dstOffset, srcOffset, length) => {
-            cutReplaceOperations.push({'dstOffset': dstOffset, 'length': length});
-            addReplaceOperations.push({'dstOffset': dstOffset, 'srcSymbol': srcSymbol, 'srcOffset': srcOffset, 'length': length});
+              addSlice = (sliceLength) => {
+            cutReplaceOperations.push({'dstOffset': dstIntermediateOffset, 'length': sliceLength});
+            for(; replaceOperationIndex < replaceOperations.length; ++replaceOperationIndex) {
+                const operation = replaceOperations[replaceOperationIndex];
+                if(operation.dstOffset+operation.length >= srcIntermediateOffset)
+                    break;
+            }
+            addReplaceOperations.push({'dstOffset': dstIntermediateOffset, 'srcSymbol': srcSymbol, 'srcOffset': srcIntermediateOffset, 'length': sliceLength});
+            length -= sliceLength;
+            srcIntermediateOffset += sliceLength;
             return true;
         };
         let overlappingDecrease = length;
@@ -270,16 +282,13 @@ export class Differential {
             if(dstIntermediateOffset+overlappingDecrease < operation.dstOffset)
                 break;
             if(operation.length < 0) {
-                const sliceLength = Math.min(length, operation.dstOffset-dstIntermediateOffset);
-                if(!addReplaceOperation(dstIntermediateOffset, srcPreOffset, sliceLength))
+                if(!addSlice(Math.min(length, operation.dstOffset-dstIntermediateOffset)))
                     return false;
-                length -= sliceLength;
-                srcPreOffset += sliceLength;
                 dstIntermediateOffset = operation.dstOffset-operation.length;
                 overlappingDecrease -= operation.length;
             }
         }
-        if(length > 0 && !addReplaceOperation(dstIntermediateOffset, srcPreOffset, length))
+        if(length > 0 && !addSlice(length))
             return false;
         for(const operation of cutReplaceOperations)
             this.cutReplaceOperations(dstSymbol, operation.dstOffset, 0, operation.length);
@@ -306,8 +315,10 @@ export class Differential {
                     return opTriple[2];
         };
         const entry = findEntry(!linked);
-        if(entry !== undefined)
+        if(entry !== undefined) {
             this.versionControl.ontology.unlinkSymbol(entry);
+            return;
+        }
         if(findEntry(linked) !== undefined)
             return;
         const entrySymbol = this.versionControl.ontology.createSymbol(this.versionControl.namespaceId);
