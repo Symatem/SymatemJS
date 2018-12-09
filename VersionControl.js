@@ -93,7 +93,7 @@ export class Differential {
         this.versionControl.ontology.setTriple([entrySymbol, BasicBackend.symbolByName.Length, lengthSymbol], true);
     }
 
-    getIntermediateOffset(symbol, postOffset) {
+    getCreaseLengthOperations(symbol, postOffset) {
         const creaseLengthOperations = [];
         for(const type of [BasicBackend.symbolByName.DecreaseLength, BasicBackend.symbolByName.IncreaseLength])
             for(const opTriple of this.versionControl.ontology.queryTriples(BasicBackend.queryMask.MMV, [this.symbol, type, BasicBackend.symbolByName.Void])) {
@@ -122,7 +122,7 @@ export class Differential {
     }
 
     /*getPreOffset(symbol, postOffset) {
-        const creaseLength = this.getIntermediateOffset(symbol, postOffset);
+        const creaseLength = this.getCreaseLengthOperations(symbol, postOffset);
         let preOffset = creaseLength.offset;
         if(creaseLength.operationIndex > 0) {
             const operationAtIntermediateOffset = creaseLength.operations[creaseLength.operationIndex-1];
@@ -237,7 +237,7 @@ export class Differential {
     creaseLength(dstSymbol, dstOffset, length) {
         if(length == 0)
             return;
-        const creaseLengthOperations = this.getIntermediateOffset(dstSymbol, dstOffset);
+        const creaseLengthOperations = this.getCreaseLengthOperations(dstSymbol, dstOffset);
         const entrySymbol = this.versionControl.ontology.createSymbol(this.versionControl.namespaceId);
         this.versionControl.ontology.setTriple([this.symbol, BasicBackend.symbolByName[(length > 0) ? 'IncreaseLength' : 'DecreaseLength'], entrySymbol], true);
         this.versionControl.ontology.setTriple([entrySymbol, BasicBackend.symbolByName.Destination, dstSymbol], true);
@@ -253,16 +253,43 @@ export class Differential {
         if(length <= 0)
             return;
         let dstIntermediateEndOffset, replaceOperationIndex = 0;
-        const dstCreaseLengthOperations = this.getIntermediateOffset(dstSymbol, dstOffset),
-              srcCreaseLengthOperations = this.getIntermediateOffset(srcSymbol, srcOffset),
+        const dstCreaseLengthOperations = this.getCreaseLengthOperations(dstSymbol, dstOffset),
+              srcCreaseLengthOperations = this.getCreaseLengthOperations(srcSymbol, srcOffset),
               replaceOperations = this.getReplaceOperations(srcSymbol),
               beginDstIntermediateOffset = dstCreaseLengthOperations.offset,
               cutReplaceOperations = [], addReplaceOperations = [],
-              backTrackSrc = (sliceLength) => {
-            cutReplaceOperations.push({'dstOffset': dstCreaseLengthOperations.offset, 'length': sliceLength});
-            addReplaceOperations.push({'dstOffset': dstCreaseLengthOperations.offset, 'srcSymbol': srcSymbol, 'srcOffset': srcCreaseLengthOperations.offset, 'length': sliceLength});
-            srcCreaseLengthOperations.offset += sliceLength;
-            dstCreaseLengthOperations.offset += sliceLength;
+              addSlice = (srcSymbol, srcOffset, length) => {
+                  addReplaceOperations.push({'dstOffset': dstCreaseLengthOperations.offset, 'srcSymbol': srcSymbol, 'srcOffset': srcOffset, 'length': length});
+                  srcCreaseLengthOperations.offset += length;
+                  dstCreaseLengthOperations.offset += length;
+              },
+              backTrackSrc = (length) => {
+            cutReplaceOperations.push({'dstOffset': dstCreaseLengthOperations.offset, 'length': length});
+            for(; replaceOperationIndex < replaceOperations.length; ++replaceOperationIndex) {
+                const operation = replaceOperations[replaceOperationIndex];
+                if(srcCreaseLengthOperations.offset <= operation.dstOffset+operation.length)
+                    break;
+            }
+            while(length > 0 && replaceOperationIndex < replaceOperations.length) {
+                const operation = replaceOperations[replaceOperationIndex];
+                if(srcCreaseLengthOperations.offset+length <= operation.dstOffset)
+                    break;
+                if(srcCreaseLengthOperations.offset < operation.dstOffset) {
+                    const sliceLength = operation.dstOffset-srcCreaseLengthOperations.offset;
+                    addSlice(srcSymbol, srcCreaseLengthOperations.offset, sliceLength);
+                    length -= sliceLength;
+                }
+                const sliceEndOffset = Math.min(srcCreaseLengthOperations.offset+length, operation.dstOffset+operation.length);
+                if(operation.dstOffset < sliceEndOffset) {
+                    const sliceLength = sliceEndOffset-operation.dstOffset;
+                    addSlice(operation.srcSymbol, operation.srcOffset+srcCreaseLengthOperations.offset-operation.dstOffset, sliceLength);
+                    length -= sliceLength;
+                }
+                if(operation.dstOffset+operation.length <= srcCreaseLengthOperations.offset)
+                    ++replaceOperationIndex;
+            }
+            if(length > 0)
+                addSlice(srcSymbol, srcCreaseLengthOperations.offset, length);
             return true;
         }, skipDecreaseOperations = (creaseLengthOperations, handleSlice, length) => {
             let overlappingDecrease = length;
