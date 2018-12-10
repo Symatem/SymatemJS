@@ -262,6 +262,7 @@ export class Differential {
                   addReplaceOperations.push({'dstOffset': dstCreaseLengthOperations.offset, 'srcSymbol': srcSymbol, 'srcOffset': srcOffset, 'length': length});
                   srcCreaseLengthOperations.offset += length;
                   dstCreaseLengthOperations.offset += length;
+                  return true;
               },
               backTrackSrc = (length) => {
             cutReplaceOperations.push({'dstOffset': dstCreaseLengthOperations.offset, 'length': length});
@@ -276,21 +277,22 @@ export class Differential {
                     break;
                 if(srcCreaseLengthOperations.offset < operation.dstOffset) {
                     const sliceLength = operation.dstOffset-srcCreaseLengthOperations.offset;
-                    addSlice(srcSymbol, srcCreaseLengthOperations.offset, sliceLength);
+                    if(!addSlice(srcSymbol, srcCreaseLengthOperations.offset, sliceLength))
+                        return false;
                     length -= sliceLength;
                 }
-                const sliceEndOffset = Math.min(srcCreaseLengthOperations.offset+length, operation.dstOffset+operation.length);
-                if(operation.dstOffset < sliceEndOffset) {
-                    const sliceLength = sliceEndOffset-operation.dstOffset;
-                    addSlice(operation.srcSymbol, operation.srcOffset+srcCreaseLengthOperations.offset-operation.dstOffset, sliceLength);
+                const sliceStartOffset = Math.max(srcCreaseLengthOperations.offset, operation.dstOffset),
+                      sliceEndOffset = Math.min(srcCreaseLengthOperations.offset+length, operation.dstOffset+operation.length);
+                if(sliceStartOffset < sliceEndOffset) {
+                    const sliceLength = sliceEndOffset-sliceStartOffset;
+                    if(!addSlice(operation.srcSymbol, operation.srcOffset+srcCreaseLengthOperations.offset-operation.dstOffset, sliceLength))
+                        return false;
                     length -= sliceLength;
                 }
                 if(operation.dstOffset+operation.length <= srcCreaseLengthOperations.offset)
                     ++replaceOperationIndex;
             }
-            if(length > 0)
-                addSlice(srcSymbol, srcCreaseLengthOperations.offset, length);
-            return true;
+            return length == 0 || addSlice(srcSymbol, srcCreaseLengthOperations.offset, length);
         }, skipDecreaseOperations = (creaseLengthOperations, handleSlice, length) => {
             let overlappingDecrease = length;
             for(; creaseLengthOperations.operationIndex < creaseLengthOperations.operations.length && length > 0; ++creaseLengthOperations.operationIndex) {
