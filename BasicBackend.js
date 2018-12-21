@@ -49,7 +49,7 @@ const symbolByName = {
     'Count': 0,
     'Dynamic': 0,
 
-    'Create': 0,
+    'Manifest': 0,
     'Release': 0,
     'Rename': 0,
     'IncreaseLength': 0,
@@ -71,8 +71,8 @@ const symbolByName = {
 
 /**
  * @typedef {Object} Symbol
- * @property {number} namespaceIdentity
- * @property {number} identity
+ * @property {Number} namespaceIdentity
+ * @property {Number} identity
  */
 
 /**
@@ -94,7 +94,7 @@ export default class BasicBackend {
     /**
      * Saves dataBytes as download file in browsers
      * @param {Uint8Array} dataBytes
-     * @param {string} fileName
+     * @param {String} fileName
      */
     static downloadAsFile(dataBytes, fileName) {
         const file = new Blob([dataBytes], {type: 'octet/stream'}),
@@ -111,7 +111,7 @@ export default class BasicBackend {
     /**
      * Converts UTF8 encoded Uint8Array to text
      * @param {Uint8Array} utf8
-     * @return {string} text
+     * @return {String} text
      */
     static utf8ArrayToText(utf8) {
         // return new TextDecoder('utf8').decode(utf8);
@@ -129,7 +129,7 @@ export default class BasicBackend {
 
     /**
      * Converts text to UTF8 encoded Uint8Array
-     * @param {string} text
+     * @param {String} text
      * @return {Uint8Array} utf8
      */
     static textToUtf8Array(text) {
@@ -149,7 +149,7 @@ export default class BasicBackend {
     /**
      * Converts JS native data types to text
      * @param {Object} dataValue
-     * @return {string} text
+     * @return {String} text
      */
     static encodeText(dataValue) {
         switch(typeof dataValue) {
@@ -171,7 +171,7 @@ export default class BasicBackend {
 
     /**
      * Converts text to JS native data types
-     * @param {string} text
+     * @param {String} text
      * @return {Object} dataValue
      */
     static decodeText(text) {
@@ -195,8 +195,8 @@ export default class BasicBackend {
 
     /**
      * Concats namespaceIdentity and identity into a symbol
-     * @param {number} namespaceIdentity
-     * @param {number} identity
+     * @param {Number} namespaceIdentity
+     * @param {Number} identity
      * @return {Symbol} symbol
      */
     static concatIntoSymbol(namespaceIdentity, identity) {
@@ -205,8 +205,8 @@ export default class BasicBackend {
 
     /**
      * Same as concatIntoSymbol but resolves the namespaceIdentity by name
-     * @param {number} namespaceName
-     * @param {number} identity
+     * @param {Number} namespaceName
+     * @param {Number} identity
      * @return {Symbol} symbol
      */
     static symbolInNamespace(namespaceName, identity) {
@@ -216,7 +216,7 @@ export default class BasicBackend {
     /**
      * Extracts the namespaceIdentity of a symbol
      * @param {Symbol} symbol
-     * @return {number} namespaceIdentity
+     * @return {Number} namespaceIdentity
      */
     static namespaceOfSymbol(symbol) {
         return parseInt(symbol.split(':')[0]);
@@ -225,7 +225,7 @@ export default class BasicBackend {
     /**
      * Extracts the identity of a symbol
      * @param {Symbol} symbol
-     * @return {number} identity
+     * @return {Number} identity
      */
     static identityOfSymbol(symbol) {
         return parseInt(symbol.split(':')[1]);
@@ -234,7 +234,7 @@ export default class BasicBackend {
     /**
      * Relocates a symbol into another namespace according to a lookup table
      * @param {Symbol} symbol
-     * @param {Map} namespaces relocation table
+     * @param {Object} namespaces relocation table
      * @return {Symbol} relocated symbol
      */
     static relocateSymbol(symbol, namespaces) {
@@ -258,7 +258,7 @@ export default class BasicBackend {
      * Creates a new namespace with the given symbols and adds them to symbolByName
      * @param {Array} namespaceName
      * @param {Array} symbolNames
-     * @return {number} identity of the new namespace
+     * @return {Number} identity of the new namespace
      */
     registerAdditionalSymbols(namespaceName, symbolNames) {
         const namespace = this.createSymbol(BasicBackend.identityOfSymbol(BasicBackend.symbolByName.Namespaces)),
@@ -278,7 +278,7 @@ export default class BasicBackend {
      * @param {Symbol} encoding
      * @param {Uint8Array} dataBytes
      * @param {Object} feedback Used to control the length (input and output)
-     * @param {number} feedback.length in bits
+     * @param {Number} feedback.length in bits
      * @return {Object} dataValue
      */
     decodeBinary(encoding, dataBytes, feedback) {
@@ -408,7 +408,7 @@ export default class BasicBackend {
      * Returns a symbols entire data converted to JS native data types
      * @param {Symbol} symbol
      * @param {Uint8Array} dataBytes
-     * @param {number} dataLength in bits
+     * @param {Number} dataLength in bits
      * @return {Object} dataValue
      */
     getData(symbol, dataBytes, dataLength) {
@@ -486,9 +486,22 @@ export default class BasicBackend {
     }
 
     /**
+     * Replaces a slice of a symbols data by another symbols data
+     * @param {Symbol} dstOffset
+     * @param {number} dstOffset in bits
+     * @param {Symbol} srcSymbol
+     * @param {number} srcOffset in bits
+     * @param {number} length in bits
+     */
+    replaceData(dstSymbol, dstOffset, srcSymbol, srcOffset, length) {
+        const dataBytes = this.readData(srcSymbol, srcOffset, length);
+        this.writeData(dstSymbol, dstOffset, length, dataBytes);
+    }
+
+    /**
      * Increases or deceases the length of a symbols virtual space at the end
      * @param {Symbol} symbol
-     * @param {number} newLength in bits
+     * @param {Number} newLength in bits
      */
     setLength(symbol, newLength) {
         const length = this.getLength(symbol);
@@ -513,7 +526,7 @@ export default class BasicBackend {
     /**
      * Tests if the given Triple exists
      * @param {Triple} triple
-     * @return {boolean} linked
+     * @return {Boolean} linked
      */
     getTriple(triple) {
         const iterator = this.queryTriples(queryMask.MMM, triple);
@@ -564,7 +577,7 @@ export default class BasicBackend {
 
     /**
      * Stores the ontology as JSON format
-     * @return {string} json
+     * @return {String} json
      */
     encodeJson() {
         const entities = [];
@@ -595,7 +608,7 @@ export default class BasicBackend {
 
     /**
      * Loads the ontology from JSON format
-     * @param {string} json
+     * @param {String} json
      */
     decodeJson(json) {
         const entities = new Set();
