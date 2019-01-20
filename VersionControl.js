@@ -126,22 +126,6 @@ export class Differential {
         return {'offset': intermediateOffset, 'operations': creaseLengthOperations, 'operationIndex': creaseLengthOperations.length};
     }
 
-    /*getPreOffset(symbol, postOffset) {
-        const creaseLength = this.getCreaseLengthOperations(symbol, postOffset);
-        let preOffset = creaseLength.offset;
-        if(creaseLength.operationIndex > 0) {
-            const operationAtIntermediateOffset = creaseLength.operations[creaseLength.operationIndex-1];
-            if(operationAtIntermediateOffset.length > 0)
-                preOffset -= Math.min(operationAtIntermediateOffset.length, creaseLength.offset-operationAtIntermediateOffset.dstOffset);
-        }
-        for(let i = 0; i < creaseLength.operationIndex-1; ++i) {
-            const operation = creaseLength.operations[i];
-            if(operation.length > 0)
-                preOffset -= operation.length;
-        }
-        return preOffset;
-    }*/
-
     getReplaceOperations(symbol) {
         const replaceOperations = [];
         for(const opTriple of this.versionControl.ontology.queryTriples(BasicBackend.queryMask.MMV, [this.symbol, BasicBackend.symbolByName.Replace, BasicBackend.symbolByName.Void])) {
@@ -174,8 +158,8 @@ export class Differential {
             if(operationEndOffset <= intermediateOffset)
                 continue;
             if(operation.dstOffset < intermediateOffset && intermediateOffset < operationEndOffset) {
-                this.versionControl.ontology.setData(operation.lengthSymbol, offset-operation.dstOffset);
-                this.addReplaceOperation(symbol, offset+shift, operation.srcSymbol, operation.srcOffset+intermediateOffset-operation.dstOffset, operationEndOffset-intermediateOffset);
+                this.versionControl.ontology.setData(operation.lengthSymbol, intermediateOffset-operation.dstOffset);
+                this.addReplaceOperation(symbol, intermediateOffset+shift, operation.srcSymbol, operation.srcOffset+intermediateOffset-operation.dstOffset, operationEndOffset-intermediateOffset);
             } else if(intermediateOffset <= operation.dstOffset)
                 this.versionControl.ontology.setData(operation.dstOffsetSymbol, dstOffset+shift);
         }
@@ -233,8 +217,8 @@ export class Differential {
     shiftIntermediateOffsets(creaseLengthOperations, shift) {
         if(shift <= 0)
             return;
-        for(let i = operationIndex; i < creaseLengthOperations.operations.length; ++i) {
-            const operation = creaseLengthOperations.operations[creaseLengthOperations.operationIndex];
+        for(let i = creaseLengthOperations.operationIndex; i < creaseLengthOperations.operations.length; ++i) {
+            const operation = creaseLengthOperations.operations[i];
             this.versionControl.ontology.setData(operation.dstOffsetSymbol, operation.dstOffset+shift);
         }
     }
@@ -362,13 +346,14 @@ export class Differential {
             'Manifest': [],
             'Release': [],
             'Rename': {},
-            'CreaseLength': {},
+            'IncreaseLength': {},
+            'DecreaseLength': {},
             'Replace': {},
             'Link': [],
             'Unlink': []
         };
         for(const opTriple of this.versionControl.ontology.queryTriples(BasicBackend.queryMask.MMV, [this.symbol, BasicBackend.symbolByName.Draft, BasicBackend.symbolByName.Void]))
-            operations.Draft[opTriple[2]] = this.versionControl.ontology.getRawData(opTriple[2]);
+            operations.Draft[BasicBackend.identityOfSymbol(opTriple[2])] = this.versionControl.ontology.getRawData(opTriple[2]);
         for(const type of ['Manifest', 'Release'])
             for(const opTriple of this.versionControl.ontology.queryTriples(BasicBackend.queryMask.MMV, [this.symbol, BasicBackend.symbolByName[type], BasicBackend.symbolByName.Void]))
                 operations[type].push(opTriple[2]);
@@ -387,18 +372,20 @@ export class Differential {
             operations.Rename[srcSymbol] = dstSymbol;
         }
         for(const increase of [true, false]) {
-            for(const opTriple of this.versionControl.ontology.queryTriples(BasicBackend.queryMask.MMV, [this.symbol, BasicBackend.symbolByName[(increase) ? 'IncreaseLength' : 'DecreaseLength'], BasicBackend.symbolByName.Void])) {
+            const type = (increase) ? 'IncreaseLength' : 'DecreaseLength',
+                  creaseLengthOperations = operations[type];
+            for(const opTriple of this.versionControl.ontology.queryTriples(BasicBackend.queryMask.MMV, [this.symbol, BasicBackend.symbolByName[type], BasicBackend.symbolByName.Void])) {
                 const dstSymbol = BasicBackend.relocateSymbol(this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.Destination), relocationTable),
                       dstOffsetSymbol = this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.DestinationOffset),
                       dstOffset = this.versionControl.ontology.getData(dstOffsetSymbol),
                       lengthSymbol = this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.Length),
                       length = this.versionControl.ontology.getData(lengthSymbol);
-                if(!operations.CreaseLength[dstSymbol])
-                    operations.CreaseLength[dstSymbol] = [];
-                operations.CreaseLength[dstSymbol].push({'dstSymbol': dstSymbol, 'dstOffset': dstOffset, 'length': (increase) ? length : -length});
+                if(!creaseLengthOperations[dstSymbol])
+                    creaseLengthOperations[dstSymbol] = [];
+                creaseLengthOperations[dstSymbol].push({'dstOffset': dstOffset, 'length': (increase) ? length : -length});
             }
-            for(const dstSymbol in operations.CreaseLength)
-                operations.CreaseLength[dstSymbol].sort((increase) ? (a, b) => b.dstOffset-a.dstOffset : (a, b) => a.dstOffset-b.dstOffset);
+            for(const dstSymbol in creaseLengthOperations)
+                creaseLengthOperations[dstSymbol].sort((increase) ? (a, b) => b.dstOffset-a.dstOffset : (a, b) => a.dstOffset-b.dstOffset);
         }
         for(const opTriple of this.versionControl.ontology.queryTriples(BasicBackend.queryMask.MMV, [this.symbol, BasicBackend.symbolByName.Replace, BasicBackend.symbolByName.Void])) {
             const dstSymbol = BasicBackend.relocateSymbol(this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.Destination), relocationTable),
@@ -411,7 +398,7 @@ export class Differential {
                   length = this.versionControl.ontology.getData(lengthSymbol);
             if(!operations.Replace[dstSymbol])
                 operations.Replace[dstSymbol] = [];
-            operations.Replace[dstSymbol].push({'dstSymbol': dstSymbol, 'dstOffset': dstOffset, 'srcSymbol': srcSymbol, 'srcOffset': srcOffset, 'length': length});
+            operations.Replace[dstSymbol].push({'dstOffset': dstOffset, 'srcSymbol': srcSymbol, 'srcOffset': srcOffset, 'length': length});
         }
         return operations;
     }
