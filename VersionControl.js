@@ -149,22 +149,6 @@ export class Differential {
         return replaceOperations;
     }
 
-    splitReplaceOperations(symbol, intermediateOffset, shift) {
-        if(shift <= 0)
-            return;
-        const replaceOperations = this.getReplaceOperations(symbol);
-        for(const operation of replaceOperations) {
-            const operationEndOffset = operation.dstOffset+operation.length;
-            if(operationEndOffset <= intermediateOffset)
-                continue;
-            if(operation.dstOffset < intermediateOffset && intermediateOffset < operationEndOffset) {
-                this.versionControl.ontology.setData(operation.lengthSymbol, intermediateOffset-operation.dstOffset);
-                this.addReplaceOperation(symbol, intermediateOffset+shift, operation.srcSymbol, operation.srcOffset+intermediateOffset-operation.dstOffset, operationEndOffset-intermediateOffset);
-            } else if(intermediateOffset <= operation.dstOffset)
-                this.versionControl.ontology.setData(operation.dstOffsetSymbol, dstOffset+shift);
-        }
-    }
-
     cutReplaceOperations(symbol, intermediateOffset, shift, decreaseLength) {
         const replaceOperations = this.getReplaceOperations(symbol),
               intermediateEndOffset = intermediateOffset+decreaseLength;
@@ -227,6 +211,47 @@ export class Differential {
         if(length == 0)
             return;
         const creaseLengthOperations = this.getCreaseLengthOperations(dstSymbol, dstOffset);
+        let operationAtIntermediateOffset;
+        if(creaseLengthOperations.operationIndex > 0) {
+            operationAtIntermediateOffset = creaseLengthOperations.operations[creaseLengthOperations.operationIndex-1];
+            if(creaseLengthOperations.offset > operationAtIntermediateOffset.dstOffset+Math.abs(operationAtIntermediateOffset.length))
+                operationAtIntermediateOffset = undefined;
+        }
+        if(length < 0) {
+            // TODO
+        } else {
+            let shift = length;
+            if(operationAtIntermediateOffset) {
+                if(operationAtIntermediateOffset.length < 0) {
+                    const subtract = Math.min(-operationAtIntermediateOffset.length, length);
+                    if(subtract === -operationAtIntermediateOffset.length)
+                        this.versionControl.ontology.unlinkSymbol(operationAtIntermediateOffset.entrySymbol);
+                    else
+                        this.versionControl.ontology.setData(operationAtIntermediateOffset.lengthSymbol, -operationAtIntermediateOffset.length-subtract);
+                    length -= subtract;
+                    if(length == 0)
+                        return;
+                    shift = length;
+                } else {
+                    this.versionControl.ontology.setData(operationAtIntermediateOffset.lengthSymbol, operationAtIntermediateOffset.length+length);
+                    length = 0;
+                }
+            }
+            this.shiftIntermediateOffsets(creaseLengthOperations, shift);
+            const replaceOperations = this.getReplaceOperations(dstSymbol);
+            for(const operation of replaceOperations) {
+                const operationEndOffset = operation.dstOffset+operation.length;
+                if(operationEndOffset <= creaseLengthOperations.offset)
+                    continue;
+                if(operation.dstOffset < creaseLengthOperations.offset && creaseLengthOperations.offset < operationEndOffset) {
+                    this.versionControl.ontology.setData(operation.lengthSymbol, creaseLengthOperations.offset-operation.dstOffset);
+                    this.addReplaceOperation(dstSymbol, creaseLengthOperations.offset+shift, operation.srcSymbol, operation.srcOffset+creaseLengthOperations.offset-operation.dstOffset, operationEndOffset-creaseLengthOperations.offset);
+                } else if(creaseLengthOperations.offset <= operation.dstOffset)
+                    this.versionControl.ontology.setData(operation.dstOffsetSymbol, operation.dstOffset+shift);
+            }
+            if(length == 0)
+                return;
+        }
         const entrySymbol = this.versionControl.ontology.createSymbol(this.versionControl.namespaceId);
         this.versionControl.ontology.setTriple([this.symbol, BasicBackend.symbolByName[(length > 0) ? 'IncreaseLength' : 'DecreaseLength'], entrySymbol], true);
         this.versionControl.ontology.setTriple([entrySymbol, BasicBackend.symbolByName.Destination, dstSymbol], true);
