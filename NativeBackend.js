@@ -293,15 +293,18 @@ export default class NativeBackend extends BasicBackend {
      */
     creaseLength(symbol, offset, length) {
         const handle = this.getHandle(symbol);
-        if(length < 0) {
-            handle.dataBytes.copyWithin(Math.ceil(offset / 8), Math.ceil((offset - length) / 8));
-            handle.dataBytes = handle.dataBytes.slice(0, Math.ceil((handle.dataLength + length) / 8));
-        } else {
-            const dataBytes = new Uint8Array(Math.ceil((handle.dataLength + length) / 8));
-            dataBytes.set(handle.dataBytes, 0);
-            dataBytes.copyWithin(Math.ceil((offset + length) / 8), Math.ceil(offset / 8));
-            handle.dataBytes = dataBytes;
-        }
+        if(offset%8 == 0 && length%8 == 0 && handle.dataLength%8 == 0) {
+            if(length < 0) {
+                handle.dataBytes.copyWithin(offset/8, (offset-length)/8);
+                handle.dataBytes = handle.dataBytes.slice(0, (handle.dataLength+length)/8);
+            } else {
+                const dataBytes = new Uint8Array((handle.dataLength+length)/8);
+                dataBytes.set(handle.dataBytes.subarray(0, offset/8), 0);
+                dataBytes.copyWithin((offset+length)/8, offset/8);
+                handle.dataBytes = dataBytes;
+            }
+        } else
+            console.warn('Offset or length is not byte (8 bit) aligned!');
         handle.dataLength += length;
     }
 
@@ -316,7 +319,9 @@ export default class NativeBackend extends BasicBackend {
         const handle = this.getHandle(symbol);
         if(offset == 0 && length == handle.dataLength)
             return handle.dataBytes;
-        return handle.dataBytes.slice(Math.ceil(offset / 8), Math.ceil((offset + length) / 8));
+        if(offset%8 == 0 && length%8 == 0)
+            return handle.dataBytes.subarray(offset/8, (offset+length)/8);
+        console.warn('Offset or length is not byte (8 bit) aligned!');
     }
 
     /**
@@ -331,8 +336,27 @@ export default class NativeBackend extends BasicBackend {
         if(offset == 0 && length == handle.dataLength) {
             handle.dataBytes = dataBytes;
             handle.dataLength = length;
-        } else
-            handle.dataBytes.set(dataBytes, Math.ceil(offset / 8));
+        } else if(offset%8 == 0 && length%8 == 0)
+            handle.dataBytes.set(dataBytes, offset/8);
+        else
+            console.warn('Offset or length is not byte (8 bit) aligned!');
+    }
+
+    /**
+     * Replaces a slice of a symbols data by another symbols data
+     * @param {Symbol} dstOffset
+     * @param {number} dstOffset in bits
+     * @param {Symbol} srcSymbol
+     * @param {number} srcOffset in bits
+     * @param {number} length in bits
+     */
+    replaceData(dstSymbol, dstOffset, srcSymbol, srcOffset, length) {
+        const dstHandle = this.getHandle(dstSymbol),
+              srcHandle = this.getHandle(srcSymbol);
+        if(dstOffset%8 == 0 && srcOffset%8 == 0 && length%8 == 0)
+            dstHandle.dataBytes.set(srcHandle.dataBytes.subarray(srcOffset/8, (srcOffset+length)/8), dstOffset/8);
+        else
+            console.warn('Offset or length is not byte (8 bit) aligned!');
     }
 
 
