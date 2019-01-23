@@ -183,6 +183,41 @@ const searchLookup = [
     searchMII, searchVII, searchIII
 ];
 
+function bitwiseCopy(destination, destinationOffset, source, sourceOffset, length) {
+    if(length == 0)
+        return;
+    if(destinationOffset%8 == 0 && sourceOffset%8 == 0 && length%8 == 0) {
+        destination.set(source.subarray(sourceOffset/8, (sourceOffset+length)/8), destinationOffset/8);
+        return;
+    }
+    if(destination == source && sourceOffset < destinationOffset && sourceOffset+length > destinationOffset)
+        console.error('bitwiseCopy with destination == source is not implemented yet'); // TODO
+    const elementLength = 32;
+    destination = new DataView(destination.buffer);
+    source = new DataView(source.buffer);
+    let sourceIndex = Math.floor(sourceOffset/elementLength)*elementLength/8,
+        destinationIndex = Math.floor(destinationOffset/elementLength)*elementLength/8;
+    const sourceShift = sourceOffset%elementLength,
+          destinationShift = destinationOffset%elementLength;
+    while(true) {
+        const mask = (length < elementLength) ? ~((-1)<<length) : -1,
+              nextSourceIndex = sourceIndex+elementLength/8,
+              nextDestinationIndex = destinationIndex+elementLength/8;
+        let element = source.getUint32(sourceIndex, true)>>>sourceShift;
+        if(nextSourceIndex < source.byteLength && sourceShift > 0)
+            element |= source.getUint32(nextSourceIndex, true)<<(elementLength-sourceShift);
+        element &= mask;
+        destination.setUint32(destinationIndex, destination.getUint32(destinationIndex, true)&(~(mask<<destinationShift))|(element<<destinationShift), true);
+        if(nextDestinationIndex < destination.byteLength && destinationShift > 0)
+            destination.setUint32(nextDestinationIndex, destination.getUint32(nextDestinationIndex, true)&(~(mask>>>(elementLength-destinationShift)))|(element>>>(elementLength-destinationShift)), true);
+        length -= elementLength;
+        if(length <= 0)
+            break;
+        sourceIndex = nextSourceIndex;
+        destinationIndex = nextDestinationIndex;
+    }
+}
+
 import BasicBackend from './BasicBackend.js';
 export default class NativeBackend extends BasicBackend {
     constructor() {
@@ -292,13 +327,14 @@ export default class NativeBackend extends BasicBackend {
      * @param {number} length in bits (positive=insert, negative=erase)
      */
     creaseLength(symbol, offset, length) {
-        const handle = this.getHandle(symbol);
+        const handle = this.getHandle(symbol),
+              newLengthInBytes = Math.ceil((handle.dataLength+length)/32)*4;
         if(offset%8 == 0 && length%8 == 0 && handle.dataLength%8 == 0) {
             if(length < 0) {
                 handle.dataBytes.copyWithin(offset/8, (offset-length)/8);
-                handle.dataBytes = handle.dataBytes.slice(0, (handle.dataLength+length)/8);
+                handle.dataBytes = handle.dataBytes.slice(0, newLengthInBytes);
             } else {
-                const dataBytes = new Uint8Array((handle.dataLength+length)/8);
+                const dataBytes = new Uint8Array(newLengthInBytes);
                 dataBytes.set(handle.dataBytes.subarray(0, offset/8), 0);
                 dataBytes.copyWithin((offset+length)/8, offset/8);
                 handle.dataBytes = dataBytes;
@@ -317,10 +353,10 @@ export default class NativeBackend extends BasicBackend {
      */
     readData(symbol, offset, length) {
         const handle = this.getHandle(symbol);
-        if(offset == 0 && length == handle.dataLength)
-            return handle.dataBytes;
         if(offset%8 == 0 && length%8 == 0)
-            return handle.dataBytes.subarray(offset/8, (offset+length)/8);
+            return (offset == 0 && length == handle.dataLength)
+                   ? handle.dataBytes
+                   : handle.dataBytes.subarray(offset/8, (offset+length)/8);
         console.warn('Offset or length is not byte (8 bit) aligned!');
     }
 
@@ -356,7 +392,7 @@ export default class NativeBackend extends BasicBackend {
         if(dstOffset%8 == 0 && srcOffset%8 == 0 && length%8 == 0)
             dstHandle.dataBytes.set(srcHandle.dataBytes.subarray(srcOffset/8, (srcOffset+length)/8), dstOffset/8);
         else
-            console.warn('Offset or length is not byte (8 bit) aligned!');
+            bitwiseCopy(dstHandle.dataBytes, dstOffset, srcHandle.dataBytes, srcOffset, length);
     }
 
 
