@@ -506,7 +506,7 @@ export default class BasicBackend {
     setLength(symbol, newLength) {
         const length = this.getLength(symbol);
         if(newLength != length)
-            this.creaseLength(symbol, length, newLength-length);
+            this.creaseLength(symbol, Math.min(length, newLength), newLength-length);
     }
 
     /**

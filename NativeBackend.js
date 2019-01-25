@@ -328,20 +328,27 @@ export default class NativeBackend extends BasicBackend {
      */
     creaseLength(symbol, offset, length) {
         const handle = this.getHandle(symbol),
-              newLengthInBytes = Math.ceil((handle.dataLength+length)/32)*4;
+              newDataBytes = new Uint8Array(Math.ceil((handle.dataLength+length)/32)*4);
+        if(length < 0)
+            console.assert(offset-length <= handle.dataLength);
+        else
+            console.assert(offset <= handle.dataLength);
+        newDataBytes.set(handle.dataBytes.subarray(0, Math.ceil(offset/8)), 0);
         if(offset%8 == 0 && length%8 == 0 && handle.dataLength%8 == 0) {
-            if(length < 0) {
-                handle.dataBytes.copyWithin(offset/8, (offset-length)/8);
-                handle.dataBytes = handle.dataBytes.slice(0, newLengthInBytes);
-            } else {
-                const dataBytes = new Uint8Array(newLengthInBytes);
-                dataBytes.set(handle.dataBytes.subarray(0, offset/8), 0);
-                dataBytes.copyWithin((offset+length)/8, offset/8);
-                handle.dataBytes = dataBytes;
+            if(length < 0)
+                newDataBytes.set(handle.dataBytes.subarray((offset-length)/8, handle.dataLength/8), offset/8);
+            else
+                newDataBytes.set(handle.dataBytes.subarray(offset/8, handle.dataLength/8), (offset+length)/8);
+        } else {
+            if(length < 0)
+                bitwiseCopy(newDataBytes, offset, handle.dataBytes, offset-length, handle.dataLength-offset+length);
+            else {
+                newDataBytes[Math.floor(offset/8)] &= ~((-1)<<(offset%8));
+                bitwiseCopy(newDataBytes, offset+length, handle.dataBytes, offset, handle.dataLength-offset);
             }
-        } else
-            console.warn('Offset or length is not byte (8 bit) aligned!');
+        }
         handle.dataLength += length;
+        handle.dataBytes = newDataBytes;
     }
 
     /**
@@ -353,11 +360,14 @@ export default class NativeBackend extends BasicBackend {
      */
     readData(symbol, offset, length) {
         const handle = this.getHandle(symbol);
+        console.assert(offset+length <= handle.dataLength);
         if(offset%8 == 0 && length%8 == 0)
             return (offset == 0 && length == handle.dataLength)
                    ? handle.dataBytes
                    : handle.dataBytes.subarray(offset/8, (offset+length)/8);
-        console.warn('Offset or length is not byte (8 bit) aligned!');
+        const dataBytes = new Uint8Array(Math.ceil(length/32)*4);
+        bitwiseCopy(dataBytes, 0, handle.dataBytes, offset, length);
+        return dataBytes;
     }
 
     /**
@@ -369,13 +379,16 @@ export default class NativeBackend extends BasicBackend {
      */
     writeData(symbol, offset, length, dataBytes) {
         const handle = this.getHandle(symbol);
+        console.assert(offset+length <= handle.dataLength);
         if(offset == 0 && length == handle.dataLength) {
             handle.dataBytes = dataBytes;
             handle.dataLength = length;
         } else if(offset%8 == 0 && length%8 == 0)
-            handle.dataBytes.set(dataBytes, offset/8);
-        else
-            console.warn('Offset or length is not byte (8 bit) aligned!');
+            handle.dataBytes.set(dataBytes.subarray(0, length/8), offset/8);
+        else {
+            console.assert(dataBytes.byteLength%4 == 0);
+            bitwiseCopy(handle.dataBytes, offset, dataBytes, 0, length);
+        }
     }
 
     /**
@@ -389,6 +402,7 @@ export default class NativeBackend extends BasicBackend {
     replaceData(dstSymbol, dstOffset, srcSymbol, srcOffset, length) {
         const dstHandle = this.getHandle(dstSymbol),
               srcHandle = this.getHandle(srcSymbol);
+        console.assert(dstOffset+length <= dstHandle.dataLength && srcOffset+length <= srcHandle.dataLength);
         if(dstOffset%8 == 0 && srcOffset%8 == 0 && length%8 == 0)
             dstHandle.dataBytes.set(srcHandle.dataBytes.subarray(srcOffset/8, (srcOffset+length)/8), dstOffset/8);
         else
