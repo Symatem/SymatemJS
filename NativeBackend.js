@@ -52,6 +52,11 @@ function* searchMII(index, triple) {
 }
 
 function* searchIII(index, triple) {
+    for(const namespaceIdentity in this.namespaces)
+        for(const alphaIdentity in this.namespaces[namespaceIdentity].handles) {
+            yield reorderTriple(tripleNormalized, index, triple);
+            return 1;
+        }
     return 0;
 }
 
