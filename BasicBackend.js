@@ -289,10 +289,9 @@ export default class BasicBackend {
             case symbolByName.BinaryNumber:
             case symbolByName.TwosComplement:
             case symbolByName.IEEE754:
-                if(feedback.length === 1 && encoding === symbolByName.BinaryNumber)
+                if(length === 1 && encoding === symbolByName.BinaryNumber)
                     return (dataView.getUint8(0) === 1);
-                if(feedback.length < 32)
-                    return;
+                console.assert(feedback.length >= 32);
                 feedback.length = 32;
                 switch(encoding) {
                     case symbolByName.BinaryNumber:
@@ -317,7 +316,7 @@ export default class BasicBackend {
 
         let offset = 0, count = this.getSolitary(encoding, symbolByName.Count);
         if(count === symbolByName.Dynamic)
-            count = dataView.getUint32(offset++, true);
+            count = dataView.getUint32((offset++)*4, true);
         else if(count !== symbolByName.Void)
             count = this.getData(count);
 
@@ -326,7 +325,7 @@ export default class BasicBackend {
             let childEncoding = this.getSolitary(encoding, this.constructor.symbolInNamespace('Index', i));
             if(childEncoding === symbolByName.Void)
                 childEncoding = defaultEncoding;
-            const childFeedback = {'length': (slotSize === symbolByName.Dynamic) ? dataView.getUint32(offset+i, true) : slotSize};
+            const childFeedback = {'length': (slotSize === symbolByName.Dynamic) ? dataView.getUint32((offset+i)*4, true) : slotSize};
             let childDataBytes;
             if(childFeedback.length === symbolByName.Void) {
                 childDataBytes = dataBytes.slice(feedback.length/8);
@@ -334,7 +333,7 @@ export default class BasicBackend {
             } else if(feedback.length < dataBytes.length*8)
                 childDataBytes = dataBytes.slice(feedback.length/8, (feedback.length+childFeedback.length)/8);
             else
-                childFeedback.length = 0;
+                throw new Error('Expected more children but dataBytes is too short');
             const childDataValue = this.decodeBinary(childEncoding, childDataBytes, childFeedback);
             dataValue.push(childDataValue);
             feedback.length += childFeedback.length;
