@@ -54,6 +54,9 @@ function* searchMII(index, triple) {
 function* searchIII(index, triple) {
     for(const namespaceIdentity in this.namespaces)
         for(const alphaIdentity in this.namespaces[namespaceIdentity].handles) {
+            const subIndex = this.namespaces[namespaceIdentity].handles[alphaIdentity].subIndices[index];
+            if(Object.keys(subIndex).length == 0)
+                continue;
             yield reorderTriple(tripleNormalized, index, triple);
             return 1;
         }
@@ -126,6 +129,9 @@ function* searchVII(index, triple) {
     let count = 0;
     for(const namespaceIdentity in this.namespaces)
         for(const alphaIdentity in this.namespaces[namespaceIdentity].handles) {
+            const subIndex = this.namespaces[namespaceIdentity].handles[alphaIdentity].subIndices[index];
+            if(Object.keys(subIndex).length == 0)
+                continue;
             triple[0] = this.constructor.concatIntoSymbol(namespaceIdentity, alphaIdentity);
             yield reorderTriple(tripleNormalized, index, triple);
             ++count;
@@ -137,8 +143,8 @@ function* searchVVI(index, triple) {
     let count = 0;
     for(const namespaceIdentity in this.namespaces)
         for(const alphaIdentity in this.namespaces[namespaceIdentity].handles) {
-            triple[0] = this.constructor.concatIntoSymbol(namespaceIdentity, alphaIdentity);
             const subIndex = this.namespaces[namespaceIdentity].handles[alphaIdentity].subIndices[index];
+            triple[0] = this.constructor.concatIntoSymbol(namespaceIdentity, alphaIdentity);
             for(triple[1] in subIndex) {
                 yield reorderTriple(tripleNormalized, index, triple);
                 ++count;
@@ -151,8 +157,8 @@ function* searchVVV(index, triple) {
     let count = 0;
     for(const namespaceIdentity in this.namespaces)
         for(const alphaIdentity in this.namespaces[namespaceIdentity].handles) {
-            triple[0] = this.constructor.concatIntoSymbol(namespaceIdentity, alphaIdentity);
             const subIndex = this.namespaces[namespaceIdentity].handles[alphaIdentity].subIndices[index];
+            triple[0] = this.constructor.concatIntoSymbol(namespaceIdentity, alphaIdentity);
             for(triple[1] in subIndex) {
                 const set = subIndex[triple[1]];
                 for(triple[2] in set) {
@@ -228,7 +234,6 @@ export default class NativeBackend extends BasicBackend {
     constructor() {
         super();
         this.namespaces = {};
-        this.initBasicOntology();
     }
 
     getHandle(symbol) {
