@@ -327,7 +327,7 @@ export default class NativeBackend extends BasicBackend {
      */
     getLength(symbol) {
         const handle = this.getHandle(symbol);
-        return handle.dataLength;
+        return (handle) ? handle.dataLength : 0;
     }
 
     /**
@@ -370,6 +370,8 @@ export default class NativeBackend extends BasicBackend {
      */
     readData(symbol, offset, length) {
         const handle = this.getHandle(symbol);
+        if(!handle)
+            return new Uint8Array();
         console.assert(offset+length <= handle.dataLength);
         if(offset%8 == 0 && length%8 == 0)
             return (offset == 0 && length == handle.dataLength)
