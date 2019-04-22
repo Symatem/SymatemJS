@@ -464,7 +464,8 @@ export default class BasicBackend {
      * @return {Uint8Array} dataBytes
      */
     getRawData(symbol) {
-        return this.readData(symbol, 0, this.getLength(symbol));
+        const length = this.getLength(symbol);
+        return (length == 0) ? new Uint8Array() : this.readData(symbol, 0, length);
     }
 
     /**
