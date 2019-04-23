@@ -218,7 +218,25 @@ export class Differential {
                 operationAtIntermediateOffset = undefined;
         }
         if(length < 0) {
-            // TODO
+            let decreaseAccumulator = -length, increaseAccumulator = 0;
+            if(operationAtIntermediateOffset) {
+                intermediateOffset = operationAtIntermediateOffset.dstOffset;
+                --creaseLengthOperations.operationIndex;
+            }
+            for(; creaseLengthOperations.operationIndex < creaseLengthOperations.operations.length; ++creaseLengthOperations.operationIndex) {
+                const operation = creaseLengthOperations.operations[creaseLengthOperations.operationIndex];
+                if(creaseLengthOperations.offset+decreaseAccumulator < operation.dstOffset)
+                    break;
+                if(operation.length < 0)
+                    decreaseAccumulator -= operation.length;
+                else
+                    increaseAccumulator += operation.length;
+                this.versionControl.ontology.unlinkSymbol(operation.entrySymbol);
+            }
+            this.shiftIntermediateOffsets(creaseLengthOperations, length);
+            this.cutReplaceOperations(dstSymbol, creaseLengthOperations.offset, length, decreaseAccumulator);
+            this.mergeReplaceOperations(dstSymbol, creaseLengthOperations.offset);
+            length = increaseAccumulator-decreaseAccumulator;
         } else {
             let mergeAccumulator = 0;
             if(operationAtIntermediateOffset) {
