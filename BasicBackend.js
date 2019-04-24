@@ -82,6 +82,15 @@ const symbolByName = {
  * @property {Symbol} value
  */
 
+/**
+ * @typedef {Object} ReplaceDataOperation
+ * @property {Symbol} dstOffset
+ * @property {Number} dstOffset in bits
+ * @property {Symbol} srcSymbol
+ * @property {Number} srcOffset in bits
+ * @property {Number} length in bits
+ */
+
 export default class BasicBackend {
     static get queryMask() {
         return queryMask;
@@ -256,8 +265,8 @@ export default class BasicBackend {
 
     /**
      * Creates a new namespace with the given symbols and adds them to symbolByName
-     * @param {Array} namespaceName
-     * @param {Array} symbolNames
+     * @param {String} namespaceName
+     * @param {String[]} symbolNames
      * @return {Number} identity of the new namespace
      */
     registerAdditionalSymbols(namespaceName, symbolNames) {
@@ -496,6 +505,20 @@ export default class BasicBackend {
     replaceData(dstSymbol, dstOffset, srcSymbol, srcOffset, length) {
         const dataBytes = this.readData(srcSymbol, srcOffset, length);
         this.writeData(dstSymbol, dstOffset, length, dataBytes);
+        return true;
+    }
+
+    /**
+     * Multiple independent calls to replaceData() without influencing each other
+     * @param {ReplaceDataOperation[]} operations
+     */
+    replaceDataSimultaneously(operations) {
+        for(const operation of operations)
+            operation.dataBytes = this.readData(operation.srcSymbol, operation.srcOffset, operation.length);
+        for(const operation of operations)
+            if(!this.writeData(operation.dstSymbol, operation.dstOffset, operation.length, operation.dataBytes))
+                return false;
+        return true;
     }
 
     /**
