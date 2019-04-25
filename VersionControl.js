@@ -102,12 +102,14 @@ export class Differential {
         const creaseLengthOperations = [];
         for(const type of [BasicBackend.symbolByName.DecreaseLength, BasicBackend.symbolByName.IncreaseLength])
             for(const opTriple of this.versionControl.ontology.queryTriples(BasicBackend.queryMask.MMV, [this.symbol, type, BasicBackend.symbolByName.Void])) {
-                if(this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.Destination) !== symbol)
+                const dstSymbol = this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.Destination);
+                if(dstSymbol !== symbol)
                     continue;
                 const dstOffsetSymbol = this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.DestinationOffset),
                       lengthSymbol = this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.Length);
                 creaseLengthOperations.push({
                     'entrySymbol': opTriple[2],
+                    'dstSymbol': dstSymbol,
                     'dstOffsetSymbol': dstOffsetSymbol,
                     'dstOffset': this.versionControl.ontology.getData(dstOffsetSymbol),
                     'lengthSymbol': lengthSymbol,
@@ -129,13 +131,15 @@ export class Differential {
     getReplaceOperations(symbol) {
         const replaceOperations = [];
         for(const opTriple of this.versionControl.ontology.queryTriples(BasicBackend.queryMask.MMV, [this.symbol, BasicBackend.symbolByName.Replace, BasicBackend.symbolByName.Void])) {
-            if(this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.Destination) !== symbol)
+            const dstSymbol = this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.Destination);
+            if(dstSymbol !== symbol)
                 continue;
             const dstOffsetSymbol = this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.DestinationOffset),
                   srcOffsetSymbol = this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.SourceOffset),
                   lengthSymbol = this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.Length);
             replaceOperations.push({
                 'entrySymbol': opTriple[2],
+                'dstSymbol': dstSymbol,
                 'srcSymbol': this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.Source),
                 'dstOffsetSymbol': dstOffsetSymbol,
                 'dstOffset': this.versionControl.ontology.getData(dstOffsetSymbol),
@@ -281,53 +285,47 @@ export class Differential {
         this.versionControl.ontology.setTriple([entrySymbol, BasicBackend.symbolByName.Length, lengthSymbol], true);
     }
 
-    replaceData(dstSymbol, dstOffset, srcSymbol, srcOffset, length) {
-        if(length <= 0)
-            return;
-        let dstIntermediateEndOffset, replaceOperationIndex = 0;
-        const dstCreaseLengthOperations = this.getCreaseLengthOperations(dstSymbol, dstOffset),
-              srcCreaseLengthOperations = this.getCreaseLengthOperations(srcSymbol, srcOffset),
-              replaceOperations = this.getReplaceOperations(srcSymbol),
-              beginDstIntermediateOffset = dstCreaseLengthOperations.offset,
-              cutReplaceOperations = [], addReplaceOperations = [],
+    replaceDataSimultaneously(replaceOperations) {
+        const context = {},
+              cutReplaceOperations = [], addReplaceOperations = [], mergeReplaceOperations = [],
               addSlice = (srcSymbol, srcOffset, length) => {
-                  addReplaceOperations.push({'dstOffset': dstCreaseLengthOperations.offset, 'srcSymbol': srcSymbol, 'srcOffset': srcOffset, 'length': length});
-                  srcCreaseLengthOperations.offset += length;
-                  dstCreaseLengthOperations.offset += length;
-                  return true;
-              },
-              backTrackSrc = (length) => {
-            cutReplaceOperations.push({'dstOffset': dstCreaseLengthOperations.offset, 'length': length});
-            for(; replaceOperationIndex < replaceOperations.length; ++replaceOperationIndex) {
-                const operation = replaceOperations[replaceOperationIndex];
-                if(srcCreaseLengthOperations.offset <= operation.dstOffset+operation.length)
+            if(context.dstSymbol != srcSymbol || context.dstCreaseLengthOperations.offset != srcOffset)
+                addReplaceOperations.push({'dstSymbol': context.dstSymbol, 'dstOffset': context.dstCreaseLengthOperations.offset, 'srcSymbol': srcSymbol, 'srcOffset': srcOffset, 'length': length});
+            context.srcCreaseLengthOperations.offset += length;
+            context.dstCreaseLengthOperations.offset += length;
+            return true;
+        }, backTrackSrc = (length) => {
+            cutReplaceOperations.push({'dstSymbol': context.dstSymbol, 'dstOffset': context.dstCreaseLengthOperations.offset, 'length': length});
+            for(; context.replaceOperationsAtSrcSymbolIndex < context.replaceOperationsAtSrcSymbol.length; ++context.replaceOperationsAtSrcSymbolIndex) {
+                const operation = context.replaceOperationsAtSrcSymbol[context.replaceOperationsAtSrcSymbolIndex];
+                if(context.srcCreaseLengthOperations.offset <= operation.dstOffset+operation.length)
                     break;
             }
-            while(length > 0 && replaceOperationIndex < replaceOperations.length) {
-                const operation = replaceOperations[replaceOperationIndex];
-                if(srcCreaseLengthOperations.offset+length <= operation.dstOffset)
+            while(length > 0 && context.replaceOperationsAtSrcSymbolIndex < context.replaceOperationsAtSrcSymbol.length) {
+                const operation = context.replaceOperationsAtSrcSymbol[context.replaceOperationsAtSrcSymbolIndex];
+                if(context.srcCreaseLengthOperations.offset+length <= operation.dstOffset)
                     break;
-                if(srcCreaseLengthOperations.offset < operation.dstOffset) {
-                    const sliceLength = operation.dstOffset-srcCreaseLengthOperations.offset;
-                    if(!addSlice(srcSymbol, srcCreaseLengthOperations.offset, sliceLength))
+                if(context.srcCreaseLengthOperations.offset < operation.dstOffset) {
+                    const sliceLength = operation.dstOffset-context.srcCreaseLengthOperations.offset;
+                    if(!addSlice(context.srcSymbol, context.srcCreaseLengthOperations.offset, sliceLength))
                         return false;
                     length -= sliceLength;
                 }
-                const sliceStartOffset = Math.max(srcCreaseLengthOperations.offset, operation.dstOffset),
-                      sliceEndOffset = Math.min(srcCreaseLengthOperations.offset+length, operation.dstOffset+operation.length);
+                const sliceStartOffset = Math.max(context.srcCreaseLengthOperations.offset, operation.dstOffset),
+                      sliceEndOffset = Math.min(context.srcCreaseLengthOperations.offset+length, operation.dstOffset+operation.length);
                 if(sliceStartOffset < sliceEndOffset) {
                     const sliceLength = sliceEndOffset-sliceStartOffset;
-                    if(!addSlice(operation.srcSymbol, operation.srcOffset+srcCreaseLengthOperations.offset-operation.dstOffset, sliceLength))
+                    if(!addSlice(operation.srcSymbol, operation.srcOffset+context.srcCreaseLengthOperations.offset-operation.dstOffset, sliceLength))
                         return false;
                     length -= sliceLength;
                 }
-                if(operation.dstOffset+operation.length <= srcCreaseLengthOperations.offset)
-                    ++replaceOperationIndex;
+                if(operation.dstOffset+operation.length <= context.srcCreaseLengthOperations.offset)
+                    ++context.replaceOperationsAtSrcSymbolIndex;
             }
-            return length == 0 || addSlice(srcSymbol, srcCreaseLengthOperations.offset, length);
-        }, skipDecreaseOperations = (creaseLengthOperations, handleSlice, length) => {
+            return length == 0 || addSlice(context.srcSymbol, context.srcCreaseLengthOperations.offset, length);
+        }, skipDecreaseOperations = (contextSlot, handleSlice, length) => {
             let range = length;
-            for(; creaseLengthOperations.operationIndex < creaseLengthOperations.operations.length && length > 0; ++creaseLengthOperations.operationIndex) {
+            for(const creaseLengthOperations = context[contextSlot]; creaseLengthOperations.operationIndex < creaseLengthOperations.operations.length && length > 0; ++creaseLengthOperations.operationIndex) {
                 const operation = creaseLengthOperations.operations[creaseLengthOperations.operationIndex];
                 if(creaseLengthOperations.offset+range < operation.dstOffset)
                     break;
@@ -341,16 +339,33 @@ export class Differential {
                 }
             }
             return length == 0 || handleSlice(length);
-        }, skipSrcDecreaseOperations = skipDecreaseOperations.bind(this, srcCreaseLengthOperations, backTrackSrc),
-           skipDstDecreaseOperations = skipDecreaseOperations.bind(this, dstCreaseLengthOperations, skipSrcDecreaseOperations);
-        skipDstDecreaseOperations(length);
+        }, skipSrcDecreaseOperations = skipDecreaseOperations.bind(this, 'srcCreaseLengthOperations', backTrackSrc),
+           skipDstDecreaseOperations = skipDecreaseOperations.bind(this, 'dstCreaseLengthOperations', skipSrcDecreaseOperations);
+        for(const operation of replaceOperations) {
+            if(operation.length <= 0 || (operation.dstSymbol == operation.srcSymbol && operation.dstOffset == operation.srcOffset))
+                continue;
+            context.dstSymbol = operation.dstSymbol;
+            context.srcSymbol = operation.srcSymbol;
+            context.dstCreaseLengthOperations = this.getCreaseLengthOperations(context.dstSymbol, operation.dstOffset);
+            context.srcCreaseLengthOperations = this.getCreaseLengthOperations(context.srcSymbol, operation.srcOffset);
+            context.replaceOperationsAtSrcSymbol = this.getReplaceOperations(context.srcSymbol);
+            context.replaceOperationsAtSrcSymbolIndex = 0;
+            mergeReplaceOperations.push({'dstSymbol': context.dstSymbol, 'dstOffset': context.dstCreaseLengthOperations.offset});
+            if(!skipDstDecreaseOperations(operation.length))
+                return false;
+            mergeReplaceOperations.push({'dstSymbol': context.dstSymbol, 'dstOffset': context.dstCreaseLengthOperations.offset});
+        }
         for(const operation of cutReplaceOperations)
-            this.cutReplaceOperations(dstSymbol, operation.dstOffset, 0, operation.length);
+            this.cutReplaceOperations(operation.dstSymbol, operation.dstOffset, 0, operation.length);
         for(const operation of addReplaceOperations)
-            this.addReplaceOperation(dstSymbol, operation.dstOffset, operation.srcSymbol, operation.srcOffset, operation.length);
-        this.mergeReplaceOperations(dstSymbol, beginDstIntermediateOffset);
-        this.mergeReplaceOperations(dstSymbol, dstCreaseLengthOperations.offset);
+            this.addReplaceOperation(operation.dstSymbol, operation.dstOffset, operation.srcSymbol, operation.srcOffset, operation.length);
+        for(const operation of mergeReplaceOperations)
+            this.mergeReplaceOperations(operation.dstSymbol, operation.dstOffset);
         return true;
+    }
+
+    replaceData(dstSymbol, dstOffset, srcSymbol, srcOffset, length) {
+        return this.replaceDataSimultaneously([{'dstSymbol': dstSymbol, 'dstOffset': dstOffset, 'srcSymbol': srcSymbol, 'srcOffset': srcOffset, 'length': length}]);
     }
 
     writeData(dstSymbol, offset, length, dataBytes) {
@@ -425,7 +440,7 @@ export class Differential {
                       length = this.versionControl.ontology.getData(lengthSymbol);
                 if(!creaseLengthOperations[dstSymbol])
                     creaseLengthOperations[dstSymbol] = [];
-                creaseLengthOperations[dstSymbol].push({'dstOffset': dstOffset, 'length': (increase) ? length : -length});
+                creaseLengthOperations[dstSymbol].push({'dstSymbol': dstSymbol, 'dstOffset': dstOffset, 'length': (increase) ? length : -length});
             }
             for(const dstSymbol in creaseLengthOperations)
                 creaseLengthOperations[dstSymbol].sort((increase) ? (a, b) => b.dstOffset-a.dstOffset : (a, b) => a.dstOffset-b.dstOffset);
@@ -441,7 +456,7 @@ export class Differential {
                   length = this.versionControl.ontology.getData(lengthSymbol);
             if(!operations.Replace[dstSymbol])
                 operations.Replace[dstSymbol] = [];
-            operations.Replace[dstSymbol].push({'dstOffset': dstOffset, 'srcSymbol': srcSymbol, 'srcOffset': srcOffset, 'length': length});
+            operations.Replace[dstSymbol].push({'dstSymbol': dstSymbol, 'dstOffset': dstOffset, 'srcSymbol': srcSymbol, 'srcOffset': srcOffset, 'length': length});
         }
         return operations;
     }
