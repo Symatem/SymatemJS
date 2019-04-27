@@ -47,6 +47,9 @@ function* searchMII(index, triple) {
     const handle = this.getHandle(triple[0]);
     if(!handle)
         return 0;
+    const subIndex = handle.subIndices[index];
+    if(Object.keys(subIndex).length == 0)
+        return 0;
     yield reorderTriple(tripleNormalized, index, triple);
     return 1;
 }
@@ -264,13 +267,14 @@ export default class NativeBackend extends BasicBackend {
         const namespaceIdentity = this.constructor.namespaceOfSymbol(symbol),
               namespace = this.manifestNamespace(namespaceIdentity),
               identity = this.constructor.identityOfSymbol(symbol);
-        if(namespace.handles[identity])
-            return symbol;
+        let handle = namespace.handles[identity];
+        if(handle)
+            return handle;
         delete namespace.freeIdentities[identity];
         while(namespace.nextIdentity < identity)
             namespace.freeIdentities[namespace.nextIdentity++] = true;
         namespace.nextIdentity = Math.max(namespace.nextIdentity, identity+1);
-        const handle = namespace.handles[identity] = {
+        handle = namespace.handles[identity] = {
             // namespace: namespace,
             // identity: identity,
             dataLength: 0,
@@ -279,7 +283,7 @@ export default class NativeBackend extends BasicBackend {
         };
         for(let i = 0; i < 6; ++i)
             handle.subIndices.push({});
-        return symbol;
+        return handle;
     }
 
     /**
@@ -296,7 +300,9 @@ export default class NativeBackend extends BasicBackend {
             identity = Object.keys(namespace.freeIdentities)[0];
             delete namespace.freeIdentities[identity];
         }
-        return this.manifestSymbol(this.constructor.concatIntoSymbol(namespaceIdentity, identity));
+        const symbol = this.constructor.concatIntoSymbol(namespaceIdentity, identity);
+        this.manifestSymbol(symbol);
+        return symbol;
     }
 
     /**
@@ -337,8 +343,9 @@ export default class NativeBackend extends BasicBackend {
      * @param {number} length in bits (positive=insert, negative=erase)
      */
     creaseLength(symbol, offset, length) {
-        const handle = this.getHandle(symbol),
+        const handle = (offset == 0 && length > 0) ? this.manifestSymbol(symbol) : this.getHandle(symbol),
               newDataBytes = new Uint8Array(Math.ceil((handle.dataLength+length)/32)*4);
+        console.assert(handle);
         if(length < 0)
             console.assert(offset-length <= handle.dataLength);
         else
@@ -388,7 +395,7 @@ export default class NativeBackend extends BasicBackend {
      * @param {Uint8Array} dataBytes
      */
     writeData(symbol, offset, length, dataBytes) {
-        const handle = this.getHandle(symbol);
+        const handle = this.manifestSymbol(symbol);
         console.assert(offset+length <= handle.dataLength);
         if(offset == 0 && length == handle.dataLength) {
             handle.dataBytes = dataBytes;
