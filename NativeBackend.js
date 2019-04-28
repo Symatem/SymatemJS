@@ -15,6 +15,10 @@ const tripleNormalized = [
     [2, 1, 0, 1, 2, 0]
 ];
 
+const remapSubindexInverse = [3, 4, 5, 0, 1, 2],
+      remapSubindexKey = [4, 5, 3, 2, 0, 1];
+//    remapSubindexValue = [2, 4, 0, 5, 1, 3];
+
 function reorderTriple(order, index, triple) {
     return [triple[order[0][index]], triple[order[1][index]], triple[order[2][index]]];
 }
@@ -56,8 +60,8 @@ function* searchMII(index, triple) {
 
 function* searchIII(index, triple) {
     for(const namespaceIdentity in this.namespaces)
-        for(const alphaIdentity in this.namespaces[namespaceIdentity].handles) {
-            const subIndex = this.namespaces[namespaceIdentity].handles[alphaIdentity].subIndices[index];
+        for(const handleIdentity in this.namespaces[namespaceIdentity].handles) {
+            const subIndex = this.namespaces[namespaceIdentity].handles[handleIdentity].subIndices[index];
             if(Object.keys(subIndex).length == 0)
                 continue;
             yield reorderTriple(tripleNormalized, index, triple);
@@ -131,11 +135,11 @@ function* searchMVI(index, triple) {
 function* searchVII(index, triple) {
     let count = 0;
     for(const namespaceIdentity in this.namespaces)
-        for(const alphaIdentity in this.namespaces[namespaceIdentity].handles) {
-            const subIndex = this.namespaces[namespaceIdentity].handles[alphaIdentity].subIndices[index];
+        for(const handleIdentity in this.namespaces[namespaceIdentity].handles) {
+            const subIndex = this.namespaces[namespaceIdentity].handles[handleIdentity].subIndices[index];
             if(Object.keys(subIndex).length == 0)
                 continue;
-            triple[0] = this.constructor.concatIntoSymbol(namespaceIdentity, alphaIdentity);
+            triple[0] = this.constructor.concatIntoSymbol(namespaceIdentity, handleIdentity);
             yield reorderTriple(tripleNormalized, index, triple);
             ++count;
         }
@@ -145,9 +149,9 @@ function* searchVII(index, triple) {
 function* searchVVI(index, triple) {
     let count = 0;
     for(const namespaceIdentity in this.namespaces)
-        for(const alphaIdentity in this.namespaces[namespaceIdentity].handles) {
-            const subIndex = this.namespaces[namespaceIdentity].handles[alphaIdentity].subIndices[index];
-            triple[0] = this.constructor.concatIntoSymbol(namespaceIdentity, alphaIdentity);
+        for(const handleIdentity in this.namespaces[namespaceIdentity].handles) {
+            const subIndex = this.namespaces[namespaceIdentity].handles[handleIdentity].subIndices[index];
+            triple[0] = this.constructor.concatIntoSymbol(namespaceIdentity, handleIdentity);
             for(triple[1] in subIndex) {
                 yield reorderTriple(tripleNormalized, index, triple);
                 ++count;
@@ -159,9 +163,9 @@ function* searchVVI(index, triple) {
 function* searchVVV(index, triple) {
     let count = 0;
     for(const namespaceIdentity in this.namespaces)
-        for(const alphaIdentity in this.namespaces[namespaceIdentity].handles) {
-            const subIndex = this.namespaces[namespaceIdentity].handles[alphaIdentity].subIndices[index];
-            triple[0] = this.constructor.concatIntoSymbol(namespaceIdentity, alphaIdentity);
+        for(const handleIdentity in this.namespaces[namespaceIdentity].handles) {
+            const subIndex = this.namespaces[namespaceIdentity].handles[handleIdentity].subIndices[index];
+            triple[0] = this.constructor.concatIntoSymbol(namespaceIdentity, handleIdentity);
             for(triple[1] in subIndex) {
                 const set = subIndex[triple[1]];
                 for(triple[2] in set) {
@@ -258,25 +262,20 @@ export default class NativeBackend extends BasicBackend {
         return namespace;
     }
 
-    /**
-     * Reserves the identity of a symbol in its namespace
-     * @param {Symbol} symbol
-     * @return {Symbol} symbol
-     */
     manifestSymbol(symbol) {
         const namespaceIdentity = this.constructor.namespaceOfSymbol(symbol),
               namespace = this.manifestNamespace(namespaceIdentity),
-              identity = this.constructor.identityOfSymbol(symbol);
-        let handle = namespace.handles[identity];
+              handleIdentity = this.constructor.identityOfSymbol(symbol);
+        let handle = namespace.handles[handleIdentity];
         if(handle)
             return handle;
-        delete namespace.freeIdentities[identity];
-        while(namespace.nextIdentity < identity)
+        delete namespace.freeIdentities[handleIdentity];
+        while(namespace.nextIdentity < handleIdentity)
             namespace.freeIdentities[namespace.nextIdentity++] = true;
-        namespace.nextIdentity = Math.max(namespace.nextIdentity, identity+1);
-        handle = namespace.handles[identity] = {
+        namespace.nextIdentity = Math.max(namespace.nextIdentity, handleIdentity+1);
+        handle = namespace.handles[handleIdentity] = {
             // namespace: namespace,
-            // identity: identity,
+            // handleIdentity: handleIdentity,
             dataLength: 0,
             dataBytes: new Uint8Array(),
             subIndices: []
@@ -293,34 +292,34 @@ export default class NativeBackend extends BasicBackend {
      */
     createSymbol(namespaceIdentity) {
         const namespace = this.manifestNamespace(namespaceIdentity);
-        let identity;
+        let handleIdentity;
         if(Object.keys(namespace.freeIdentities).length == 0)
-            identity = namespace.nextIdentity++;
+            handleIdentity = namespace.nextIdentity++;
         else {
-            identity = Object.keys(namespace.freeIdentities)[0];
-            delete namespace.freeIdentities[identity];
+            handleIdentity = Object.keys(namespace.freeIdentities)[0];
+            delete namespace.freeIdentities[handleIdentity];
         }
-        const symbol = this.constructor.concatIntoSymbol(namespaceIdentity, identity);
+        const symbol = this.constructor.concatIntoSymbol(namespaceIdentity, handleIdentity);
         this.manifestSymbol(symbol);
         return symbol;
     }
 
     /**
-     * Releases the identity of a symbol in its namespace
+     * Deletes a symbol
      * @param {Symbol} symbol
      */
     releaseSymbol(symbol) {
         const namespaceIdentity = this.constructor.namespaceOfSymbol(symbol),
               namespace = this.namespaces[namespaceIdentity],
-              identity = this.constructor.identityOfSymbol(symbol);
-        delete namespace.handles[identity];
+              handleIdentity = this.constructor.identityOfSymbol(symbol);
+        delete namespace.handles[handleIdentity];
         if(Object.keys(namespace.handles).length == 0)
             delete this.namespaces[namespaceIdentity];
         else {
-            if(identity == namespace.nextIdentity - 1)
+            if(handleIdentity == namespace.nextIdentity - 1)
                 --namespace.nextIdentity;
-            else if(identity < namespace.nextIdentity - 1)
-                namespace.freeIdentities[identity] = true;
+            else if(handleIdentity < namespace.nextIdentity - 1)
+                namespace.freeIdentities[handleIdentity] = true;
         }
     }
 
@@ -431,8 +430,8 @@ export default class NativeBackend extends BasicBackend {
     /**
      * Links or unlinks a triple
      * @param {Triple} triple
-     * @param {boolean} linked
-     * @return {boolean} success Returns false if no changes were made
+     * @param {Boolean} linked
+     * @return {Boolean} success Returns false if no changes were made
      */
     setTriple(triple, linked) {
         function operateSubIndex(subIndex, beta, gamma) {
@@ -484,5 +483,46 @@ export default class NativeBackend extends BasicBackend {
     queryTriples(mask, triple) {
         const index = indexLookup[mask];
         return searchLookup[mask].call(this, index, reorderTriple(triplePrioritized, index, triple));
+    }
+
+    /**
+     * Scan through all internal structures and check their integrity
+     * @return {Boolean} success
+     */
+    validateIntegrity() {
+        for(const namespaceIdentity in this.namespaces) {
+            const namespace = this.namespaces[namespaceIdentity],
+                  freeIdentities = {};
+            for(let i = 0; i < namespace.nextIdentity; ++i)
+                freeIdentities[i] = true;
+            for(const handleIdentity in namespace.handles) {
+                if(namespace.freeIdentities[handleIdentity])
+                    return false;
+                delete freeIdentities[handleIdentity];
+                const handle = namespace.handles[handleIdentity];
+                if(handle.subIndices.length != 6)
+                    return false;
+                const symbol = this.constructor.concatIntoSymbol(namespaceIdentity, handleIdentity);
+                for(let i = 0; i < 6; ++i) {
+                    const subIndex = handle.subIndices[i],
+                          invertedSubIndex = handle.subIndices[remapSubindexInverse[i]],
+                          betaIndex = remapSubindexKey[i];
+                    for(const beta in subIndex) {
+                        if(!this.getHandle(beta).subIndices[betaIndex][symbol])
+                            return false;
+                        const set = subIndex[beta];
+                        if(set.size == 0)
+                            return false;
+                        for(const gamma in set)
+                            if(!invertedSubIndex[gamma] || !invertedSubIndex[gamma][beta])
+                                return false;
+                    }
+                }
+            }
+            for(const handleIdentity in freeIdentities)
+                if(!namespace.freeIdentities[handleIdentity])
+                    return false;
+        }
+        return true;
     }
 };

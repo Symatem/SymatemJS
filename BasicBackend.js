@@ -258,7 +258,7 @@ export default class BasicBackend {
      */
     initBasicOntology() {
         for(const name of Object.getOwnPropertyNames(symbolByName))
-            this.setData(this.manifestSymbol(symbolByName[name]), name);
+            this.setData(symbolByName[name], name);
         for(const entity of [symbolByName.BinaryNumber, symbolByName.TwosComplement, symbolByName.IEEE754, symbolByName.UTF8, symbolByName.Composite])
             this.setTriple([entity, symbolByName.Type, symbolByName.Encoding], true);
     }
@@ -637,7 +637,6 @@ export default class BasicBackend {
         const entities = new Set();
         for(const entity of JSON.parse(json).symbols) {
             const entitySymbol = entity[0];
-            this.manifestSymbol(entitySymbol);
             entities.add(entitySymbol);
             this.setLength(entitySymbol, entity[1]);
             if(entity[1] > 0)
