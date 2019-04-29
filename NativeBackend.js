@@ -287,7 +287,7 @@ export default class NativeBackend extends BasicBackend {
 
     /**
      * Creates a new symbol
-     * @param {number} namespaceIdentity Identity of the namespace to create the symbol in
+     * @param {Number} namespaceIdentity Identity of the namespace to create the symbol in
      * @return {Symbol} symbol
      */
     createSymbol(namespaceIdentity) {
@@ -323,12 +323,91 @@ export default class NativeBackend extends BasicBackend {
         }
     }
 
+    /**
+     * Moves the triples of the given source symbols to the destination symbols simultaneously.
+     * The symbols data has to be moved using replaceDataSimultaneously().
+     * @param {Object.<Symbol, Symbol>} translationTable Dictionary: key=source, value=destination
+     */
+    renameSymbols(translationTable) {
+        const dstSymbols = {}, subIndexUpdatesBySymbol = {};
+        for(const srcSymbol in translationTable) {
+            const dstSymbol = translationTable[srcSymbol],
+                  handle = this.getHandle(srcSymbol);
+            dstSymbols[dstSymbol] = true;
+            for(let i = 0; i < 6; ++i) {
+                const subIndex = handle.subIndices[i];
+                for(const beta in subIndex) {
+                    let subIndexUpdates = subIndexUpdatesBySymbol[beta];
+                    if(!subIndexUpdates)
+                        subIndexUpdates = subIndexUpdatesBySymbol[beta] = [];
+                    subIndexUpdates.push({'srcSymbol': srcSymbol, 'alphaIndex': i});
+                }
+            }
+        }
+        for(const symbol in subIndexUpdatesBySymbol) {
+            const updates = subIndexUpdatesBySymbol[symbol],
+                  handle = this.getHandle(symbol);
+            for(const update of updates) {
+                update.betaIndex = remapSubindexKey[update.alphaIndex];
+                update.gammaIndex = remapSubindexInverse[update.betaIndex];
+                update.betaSubIndex = handle.subIndices[update.betaIndex];
+                update.gammaSubIndex = handle.subIndices[update.gammaIndex];
+                update.betaSet = update.betaSubIndex[update.srcSymbol];
+                update.gammaSets = [];
+                for(const gamma in update.betaSet)
+                    update.gammaSets.push(update.gammaSubIndex[gamma]);
+            }
+            for(const update of updates) {
+                for(const gammaSet of update.gammaSets)
+                    delete gammaSet[update.srcSymbol];
+                delete update.betaSubIndex[update.srcSymbol];
+            }
+            for(const update of updates) {
+                const dstSymbol = translationTable[update.srcSymbol];
+                for(const gammaSet of update.gammaSets)
+                    gammaSet[dstSymbol] = true;
+                update.betaSubIndex[dstSymbol] = update.betaSet;
+            }
+            delete subIndexUpdatesBySymbol[symbol];
+        }
+        const subIndicesToMerge = {};
+        for(const srcSymbol in translationTable) {
+            const dstSymbol = translationTable[srcSymbol],
+                  srcHandle = this.getHandle(srcSymbol);
+            subIndicesToMerge[srcSymbol] = srcHandle.subIndices;
+            if(dstSymbols[srcSymbol]) {
+                srcHandle.subIndices = [];
+                for(let i = 0; i < 6; ++i)
+                    srcHandle.subIndices.push({});
+            } else
+                this.releaseSymbol(srcSymbol);
+        }
+        for(const srcSymbol in subIndicesToMerge) {
+            const srcSubIndices = subIndicesToMerge[srcSymbol],
+                  dstHandle = this.manifestSymbol(translationTable[srcSymbol]);
+            for(let i = 0; i < 6; ++i) {
+                const srcSubIndex = srcSubIndices[i],
+                      dstSubIndex = dstHandle.subIndices[i];
+                for(const beta in srcSubIndex) {
+                    const srcSet = srcSubIndex[beta],
+                          dstSet = dstSubIndex[beta];
+                    if(!dstSet) {
+                        dstSubIndex[beta] = srcSet;
+                        continue;
+                    }
+                    for(const gamma in srcSet)
+                        dstSet[gamma] = true;
+                }
+            }
+        }
+    }
+
 
 
     /**
      * Returns the length of the symbols virtual space
      * @param {Symbol} symbol
-     * @return {number} length in bits
+     * @return {Number} length in bits
      */
     getLength(symbol) {
         const handle = this.getHandle(symbol);
@@ -338,8 +417,8 @@ export default class NativeBackend extends BasicBackend {
     /**
      * Inserts or erases a slice of a symbols virtual space at the given offset and with the given length
      * @param {Symbol} symbol
-     * @param {number} offset in bits
-     * @param {number} length in bits (positive=insert, negative=erase)
+     * @param {Number} offset in bits
+     * @param {Number} length in bits (positive=insert, negative=erase)
      */
     creaseLength(symbol, offset, length) {
         const handle = (offset == 0 && length > 0) ? this.manifestSymbol(symbol) : this.getHandle(symbol),
@@ -370,8 +449,8 @@ export default class NativeBackend extends BasicBackend {
     /**
      * Returns a slice of data starting at the given offset and with the given length
      * @param {Symbol} symbol
-     * @param {number} offset in bits
-     * @param {number} length in bits
+     * @param {Number} offset in bits
+     * @param {Number} length in bits
      * @return {Uint8Array} dataSlice Do not modify the return value as it might be used internally
      */
     readData(symbol, offset, length) {
@@ -389,8 +468,8 @@ export default class NativeBackend extends BasicBackend {
     /**
      * Replaces a slice of data starting at the given offset and with the given length by dataBytes
      * @param {Symbol} symbol
-     * @param {number} offset in bits
-     * @param {number} length in bits
+     * @param {Number} offset in bits
+     * @param {Number} length in bits
      * @param {Uint8Array} dataBytes
      */
     writeData(symbol, offset, length, dataBytes) {
@@ -410,10 +489,10 @@ export default class NativeBackend extends BasicBackend {
     /**
      * Replaces a slice of a symbols data by another symbols data
      * @param {Symbol} dstOffset
-     * @param {number} dstOffset in bits
+     * @param {Number} dstOffset in bits
      * @param {Symbol} srcSymbol
-     * @param {number} srcOffset in bits
-     * @param {number} length in bits
+     * @param {Number} srcOffset in bits
+     * @param {Number} length in bits
      */
     replaceData(dstSymbol, dstOffset, srcSymbol, srcOffset, length) {
         const dstHandle = this.getHandle(dstSymbol),
