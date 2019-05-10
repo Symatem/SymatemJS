@@ -7,17 +7,12 @@ export class Differential {
     }
 
     manifestSymbol(symbol) {
-        this.versionControl.ontology.setTriple([this.symbol, BasicBackend.symbolByName.Release, symbol], false);
-        this.versionControl.ontology.setTriple([this.symbol, BasicBackend.symbolByName.Manifest, symbol], true);
+        this.versionControl.ontology.setTriple([this.symbol, BasicBackend.symbolByName.UnlinkSymbol, symbol], false);
+        this.versionControl.ontology.setTriple([this.symbol, BasicBackend.symbolByName.ManifestSymbol, symbol], true);
     }
 
-    releaseSymbol(symbol) {
-        for(const opTriple of this.versionControl.ontology.queryTriples(BasicBackend.queryMask.MMV, [this.symbol, BasicBackend.symbolByName.Rename, BasicBackend.symbolByName.Void]))
-            if(this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.Destination) == symbol) {
-                symbol = this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.Source);
-                break;
-            }
-        for(const type of [BasicBackend.symbolByName.IncreaseLength, BasicBackend.symbolByName.DecreaseLength, BasicBackend.symbolByName.Replace])
+    unlinkSymbol(symbol) {
+        for(const type of [BasicBackend.symbolByName.IncreaseLength, BasicBackend.symbolByName.DecreaseLength, BasicBackend.symbolByName.ReplaceData])
             for(const opTriple of this.versionControl.ontology.queryTriples(BasicBackend.queryMask.MMV, [this.symbol, type, BasicBackend.symbolByName.Void]))
                 if(this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.Destination) == symbol)
                     this.versionControl.ontology.unlinkSymbol(opTriple[2]);
@@ -27,75 +22,52 @@ export class Differential {
                    this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.Attribute) == symbol ||
                    this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.Value) == symbol)
                     this.versionControl.ontology.unlinkSymbol(opTriple[2]);
-        if(this.versionControl.ontology.getTriple([this.symbol, BasicBackend.symbolByName.Manifest, symbol]))
-            this.versionControl.ontology.setTriple([this.symbol, BasicBackend.symbolByName.Manifest, symbol], false);
+        if(this.versionControl.ontology.getTriple([this.symbol, BasicBackend.symbolByName.ManifestSymbol, symbol]))
+            this.versionControl.ontology.setTriple([this.symbol, BasicBackend.symbolByName.ManifestSymbol, symbol], false);
         else
-            this.versionControl.ontology.setTriple([this.symbol, BasicBackend.symbolByName.Release, symbol], true);
+            this.versionControl.ontology.setTriple([this.symbol, BasicBackend.symbolByName.UnlinkSymbol, symbol], true);
+        for(const opTriple of this.versionControl.ontology.queryTriples(BasicBackend.queryMask.MMV, [this.symbol, BasicBackend.symbolByName.MoveTriples, BasicBackend.symbolByName.Void]))
+            if(this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.Destination) == symbol) {
+                symbol = this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.Source);
+                break;
+            }
     }
 
-    renameSymbols(renamingTable) {
+    moveTriples(translationTable) {
         const rename = (entity, attribute, value = null) => {
             if(!value)
                 value = this.versionControl.ontology.getSolitary(entity, attribute);
-            if(renamingTable[value]) {
+            if(translationTable[value]) {
                 this.versionControl.ontology.setTriple([entity, attribute, value], false);
-                this.versionControl.ontology.setTriple([entity, attribute, renamingTable[value]], true);
+                this.versionControl.ontology.setTriple([entity, attribute, translationTable[value]], true);
                 return true;
             }
             return false;
         };
-        for(const type of [BasicBackend.symbolByName.Manifest, BasicBackend.symbolByName.Release])
-            for(const opTriple of this.versionControl.ontology.queryTriples(BasicBackend.queryMask.MMV, [this.symbol, type, BasicBackend.symbolByName.Void]))
-                rename(this.symbol, type, opTriple[2]);
-        for(const type of [BasicBackend.symbolByName.IncreaseLength, BasicBackend.symbolByName.DecreaseLength])
-            for(const opTriple of this.versionControl.ontology.queryTriples(BasicBackend.queryMask.MMV, [this.symbol, type, BasicBackend.symbolByName.Void]))
-                rename(opTriple[2], BasicBackend.symbolByName.Destination);
-        for(const opTriple of this.versionControl.ontology.queryTriples(BasicBackend.queryMask.MMV, [this.symbol, BasicBackend.symbolByName.Replace, BasicBackend.symbolByName.Void])) {
-            rename(opTriple[2], BasicBackend.symbolByName.Destination);
-            rename(opTriple[2], BasicBackend.symbolByName.Source);
-        }
-        for(const type of [BasicBackend.symbolByName.Link, BasicBackend.symbolByName.Unlink])
+        for(const type of [BasicBackend.symbolByName.LinkTriple, BasicBackend.symbolByName.UnlinkTriple])
             for(const opTriple of this.versionControl.ontology.queryTriples(BasicBackend.queryMask.MMV, [this.symbol, type, BasicBackend.symbolByName.Void])) {
                 rename(opTriple[2], BasicBackend.symbolByName.Entity);
                 rename(opTriple[2], BasicBackend.symbolByName.Attribute);
                 rename(opTriple[2], BasicBackend.symbolByName.Value);
             }
-        for(const opTriple of this.versionControl.ontology.queryTriples(BasicBackend.queryMask.MMV, [this.symbol, BasicBackend.symbolByName.Rename, BasicBackend.symbolByName.Void])) {
+        for(const opTriple of this.versionControl.ontology.queryTriples(BasicBackend.queryMask.MMV, [this.symbol, BasicBackend.symbolByName.MoveTriples, BasicBackend.symbolByName.Void])) {
             const dstSymbol = this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.Destination),
                   srcSymbol = this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.Source);
-            if(renamingTable[srcSymbol] && !this.versionControl.ontology.getTriple([this.symbol, BasicBackend.symbolByName.Manifest, dstSymbol]))
+            if(translationTable[srcSymbol] && !this.versionControl.ontology.getTriple([this.symbol, BasicBackend.symbolByName.ManifestSymbol, dstSymbol]))
                 return false;
             if(rename(opTriple[2], BasicBackend.symbolByName.Destination))
-                delete renamingTable[dstSymbol];
+                delete translationTable[dstSymbol];
         }
-        for(const srcSymbol in renamingTable) {
-            const dstSymbol = renamingTable[srcSymbol];
-            if(this.versionControl.ontology.getTriple([this.symbol, BasicBackend.symbolByName.Manifest, dstSymbol]))
+        for(const srcSymbol in translationTable) {
+            const dstSymbol = translationTable[srcSymbol];
+            if(this.versionControl.ontology.getTriple([this.symbol, BasicBackend.symbolByName.ManifestSymbol, dstSymbol]))
                 continue;
             const entrySymbol = this.versionControl.ontology.createSymbol(this.versionControl.namespaceId);
-            this.versionControl.ontology.setTriple([this.symbol, BasicBackend.symbolByName.Rename, entrySymbol], true);
+            this.versionControl.ontology.setTriple([this.symbol, BasicBackend.symbolByName.MoveTriples, entrySymbol], true);
             this.versionControl.ontology.setTriple([entrySymbol, BasicBackend.symbolByName.Destination, dstSymbol], true);
             this.versionControl.ontology.setTriple([entrySymbol, BasicBackend.symbolByName.Source, srcSymbol], true);
         }
         return true;
-    }
-
-    addReplaceOperation(dstSymbol, dstOffset, srcSymbol, srcOffset, length) {
-        if(length == 0)
-            return;
-        const entrySymbol = this.versionControl.ontology.createSymbol(this.versionControl.namespaceId);
-        this.versionControl.ontology.setTriple([this.symbol, BasicBackend.symbolByName.Replace, entrySymbol], true);
-        this.versionControl.ontology.setTriple([entrySymbol, BasicBackend.symbolByName.Destination, dstSymbol], true);
-        const dstOffsetSymbol = this.versionControl.ontology.createSymbol(this.versionControl.namespaceId);
-        this.versionControl.ontology.setData(dstOffsetSymbol, dstOffset);
-        this.versionControl.ontology.setTriple([entrySymbol, BasicBackend.symbolByName.DestinationOffset, dstOffsetSymbol], true);
-        this.versionControl.ontology.setTriple([entrySymbol, BasicBackend.symbolByName.Source, srcSymbol], true);
-        const srcOffsetSymbol = this.versionControl.ontology.createSymbol(this.versionControl.namespaceId);
-        this.versionControl.ontology.setData(srcOffsetSymbol, srcOffset);
-        this.versionControl.ontology.setTriple([entrySymbol, BasicBackend.symbolByName.SourceOffset, srcOffsetSymbol], true);
-        const lengthSymbol = this.versionControl.ontology.createSymbol(this.versionControl.namespaceId);
-        this.versionControl.ontology.setData(lengthSymbol, length);
-        this.versionControl.ontology.setTriple([entrySymbol, BasicBackend.symbolByName.Length, lengthSymbol], true);
     }
 
     getCreaseLengthOperations(symbol, postOffset) {
@@ -128,9 +100,27 @@ export class Differential {
         return {'offset': intermediateOffset, 'operations': creaseLengthOperations, 'operationIndex': creaseLengthOperations.length};
     }
 
-    getReplaceOperations(symbol) {
+    addReplaceDataOperation(dstSymbol, dstOffset, srcSymbol, srcOffset, length) {
+        if(length == 0)
+            return;
+        const entrySymbol = this.versionControl.ontology.createSymbol(this.versionControl.namespaceId);
+        this.versionControl.ontology.setTriple([this.symbol, BasicBackend.symbolByName.ReplaceData, entrySymbol], true);
+        this.versionControl.ontology.setTriple([entrySymbol, BasicBackend.symbolByName.Destination, dstSymbol], true);
+        const dstOffsetSymbol = this.versionControl.ontology.createSymbol(this.versionControl.namespaceId);
+        this.versionControl.ontology.setData(dstOffsetSymbol, dstOffset);
+        this.versionControl.ontology.setTriple([entrySymbol, BasicBackend.symbolByName.DestinationOffset, dstOffsetSymbol], true);
+        this.versionControl.ontology.setTriple([entrySymbol, BasicBackend.symbolByName.Source, srcSymbol], true);
+        const srcOffsetSymbol = this.versionControl.ontology.createSymbol(this.versionControl.namespaceId);
+        this.versionControl.ontology.setData(srcOffsetSymbol, srcOffset);
+        this.versionControl.ontology.setTriple([entrySymbol, BasicBackend.symbolByName.SourceOffset, srcOffsetSymbol], true);
+        const lengthSymbol = this.versionControl.ontology.createSymbol(this.versionControl.namespaceId);
+        this.versionControl.ontology.setData(lengthSymbol, length);
+        this.versionControl.ontology.setTriple([entrySymbol, BasicBackend.symbolByName.Length, lengthSymbol], true);
+    }
+
+    getReplaceDataOperations(symbol) {
         const replaceOperations = [];
-        for(const opTriple of this.versionControl.ontology.queryTriples(BasicBackend.queryMask.MMV, [this.symbol, BasicBackend.symbolByName.Replace, BasicBackend.symbolByName.Void])) {
+        for(const opTriple of this.versionControl.ontology.queryTriples(BasicBackend.queryMask.MMV, [this.symbol, BasicBackend.symbolByName.ReplaceData, BasicBackend.symbolByName.Void])) {
             const dstSymbol = this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.Destination);
             if(dstSymbol !== symbol)
                 continue;
@@ -153,8 +143,8 @@ export class Differential {
         return replaceOperations;
     }
 
-    cutReplaceOperations(symbol, intermediateOffset, shift, decreaseLength) {
-        const replaceOperations = this.getReplaceOperations(symbol),
+    cutReplaceDataOperations(symbol, intermediateOffset, shift, decreaseLength) {
+        const replaceOperations = this.getReplaceDataOperations(symbol),
               intermediateEndOffset = intermediateOffset+decreaseLength;
         for(const operation of replaceOperations) {
             const operationEndOffset = operation.dstOffset+operation.length;
@@ -163,7 +153,7 @@ export class Differential {
             const endLength = operationEndOffset-intermediateEndOffset;
             if(operation.dstOffset < intermediateOffset && intermediateEndOffset < operationEndOffset) {
                 this.versionControl.ontology.setData(operation.lengthSymbol, intermediateOffset-operation.dstOffset);
-                this.addReplaceOperation(symbol, intermediateEndOffset+shift, operation.srcSymbol, operation.srcOffset+operation.length-endLength, endLength);
+                this.addReplaceDataOperation(symbol, intermediateEndOffset+shift, operation.srcSymbol, operation.srcOffset+operation.length-endLength, endLength);
                 continue;
             }
             const operationsBeginIsInside = (intermediateOffset <= operation.dstOffset && operation.dstOffset <= intermediateEndOffset),
@@ -184,8 +174,8 @@ export class Differential {
         }
     }
 
-    mergeReplaceOperations(symbol, intermediateOffset) {
-        const replaceOperations = this.getReplaceOperations(symbol);
+    mergeReplaceDataOperations(symbol, intermediateOffset) {
+        const replaceOperations = this.getReplaceDataOperations(symbol);
         for(let operationIndex = 1; operationIndex < replaceOperations.length; ++operationIndex) {
             const secondOperation = replaceOperations[operationIndex];
             if(secondOperation.dstOffset < intermediateOffset)
@@ -238,8 +228,8 @@ export class Differential {
                 this.versionControl.ontology.unlinkSymbol(operation.entrySymbol);
             }
             this.shiftIntermediateOffsets(creaseLengthOperations, length);
-            this.cutReplaceOperations(dstSymbol, creaseLengthOperations.offset, length, decreaseAccumulator);
-            this.mergeReplaceOperations(dstSymbol, creaseLengthOperations.offset);
+            this.cutReplaceDataOperations(dstSymbol, creaseLengthOperations.offset, length, decreaseAccumulator);
+            this.mergeReplaceDataOperations(dstSymbol, creaseLengthOperations.offset);
             length = increaseAccumulator-decreaseAccumulator;
         } else {
             let mergeAccumulator = 0;
@@ -259,14 +249,14 @@ export class Differential {
                 }
             }
             this.shiftIntermediateOffsets(creaseLengthOperations, length);
-            const replaceOperations = this.getReplaceOperations(dstSymbol);
+            const replaceOperations = this.getReplaceDataOperations(dstSymbol);
             for(const operation of replaceOperations) {
                 const operationEndOffset = operation.dstOffset+operation.length;
                 if(operationEndOffset <= creaseLengthOperations.offset)
                     continue;
                 if(operation.dstOffset < creaseLengthOperations.offset && creaseLengthOperations.offset < operationEndOffset) {
                     this.versionControl.ontology.setData(operation.lengthSymbol, creaseLengthOperations.offset-operation.dstOffset);
-                    this.addReplaceOperation(dstSymbol, creaseLengthOperations.offset+length, operation.srcSymbol, operation.srcOffset+creaseLengthOperations.offset-operation.dstOffset, operationEndOffset-creaseLengthOperations.offset);
+                    this.addReplaceDataOperation(dstSymbol, creaseLengthOperations.offset+length, operation.srcSymbol, operation.srcOffset+creaseLengthOperations.offset-operation.dstOffset, operationEndOffset-creaseLengthOperations.offset);
                 } else if(creaseLengthOperations.offset <= operation.dstOffset)
                     this.versionControl.ontology.setData(operation.dstOffsetSymbol, operation.dstOffset+length);
             }
@@ -287,15 +277,15 @@ export class Differential {
 
     replaceDataSimultaneously(replaceOperations) {
         const context = {},
-              cutReplaceOperations = [], addReplaceOperations = [], mergeReplaceOperations = [],
+              cutReplaceDataOperations = [], addReplaceDataOperations = [], mergeReplaceDataOperations = [],
               addSlice = (srcSymbol, srcOffset, length) => {
             if(context.dstSymbol != srcSymbol || context.dstCreaseLengthOperations.offset != srcOffset)
-                addReplaceOperations.push({'dstSymbol': context.dstSymbol, 'dstOffset': context.dstCreaseLengthOperations.offset, 'srcSymbol': srcSymbol, 'srcOffset': srcOffset, 'length': length});
+                addReplaceDataOperations.push({'dstSymbol': context.dstSymbol, 'dstOffset': context.dstCreaseLengthOperations.offset, 'srcSymbol': srcSymbol, 'srcOffset': srcOffset, 'length': length});
             context.srcCreaseLengthOperations.offset += length;
             context.dstCreaseLengthOperations.offset += length;
             return true;
         }, backTrackSrc = (length) => {
-            cutReplaceOperations.push({'dstSymbol': context.dstSymbol, 'dstOffset': context.dstCreaseLengthOperations.offset, 'length': length});
+            cutReplaceDataOperations.push({'dstSymbol': context.dstSymbol, 'dstOffset': context.dstCreaseLengthOperations.offset, 'length': length});
             for(; context.replaceOperationsAtSrcSymbolIndex < context.replaceOperationsAtSrcSymbol.length; ++context.replaceOperationsAtSrcSymbolIndex) {
                 const operation = context.replaceOperationsAtSrcSymbol[context.replaceOperationsAtSrcSymbolIndex];
                 if(context.srcCreaseLengthOperations.offset <= operation.dstOffset+operation.length)
@@ -348,19 +338,19 @@ export class Differential {
             context.srcSymbol = operation.srcSymbol;
             context.dstCreaseLengthOperations = this.getCreaseLengthOperations(context.dstSymbol, operation.dstOffset);
             context.srcCreaseLengthOperations = this.getCreaseLengthOperations(context.srcSymbol, operation.srcOffset);
-            context.replaceOperationsAtSrcSymbol = this.getReplaceOperations(context.srcSymbol);
+            context.replaceOperationsAtSrcSymbol = this.getReplaceDataOperations(context.srcSymbol);
             context.replaceOperationsAtSrcSymbolIndex = 0;
-            mergeReplaceOperations.push({'dstSymbol': context.dstSymbol, 'dstOffset': context.dstCreaseLengthOperations.offset});
+            mergeReplaceDataOperations.push({'dstSymbol': context.dstSymbol, 'dstOffset': context.dstCreaseLengthOperations.offset});
             if(!skipDstDecreaseOperations(operation.length))
                 return false;
-            mergeReplaceOperations.push({'dstSymbol': context.dstSymbol, 'dstOffset': context.dstCreaseLengthOperations.offset});
+            mergeReplaceDataOperations.push({'dstSymbol': context.dstSymbol, 'dstOffset': context.dstCreaseLengthOperations.offset});
         }
-        for(const operation of cutReplaceOperations)
-            this.cutReplaceOperations(operation.dstSymbol, operation.dstOffset, 0, operation.length);
-        for(const operation of addReplaceOperations)
-            this.addReplaceOperation(operation.dstSymbol, operation.dstOffset, operation.srcSymbol, operation.srcOffset, operation.length);
-        for(const operation of mergeReplaceOperations)
-            this.mergeReplaceOperations(operation.dstSymbol, operation.dstOffset);
+        for(const operation of cutReplaceDataOperations)
+            this.cutReplaceDataOperations(operation.dstSymbol, operation.dstOffset, 0, operation.length);
+        for(const operation of addReplaceDataOperations)
+            this.addReplaceDataOperation(operation.dstSymbol, operation.dstOffset, operation.srcSymbol, operation.srcOffset, operation.length);
+        for(const operation of mergeReplaceDataOperations)
+            this.mergeReplaceDataOperations(operation.dstSymbol, operation.dstOffset);
         return true;
     }
 
@@ -377,7 +367,7 @@ export class Differential {
 
     setTriple(triple, linked) {
         const findEntry = (linked) => {
-            for(const opTriple of this.versionControl.ontology.queryTriples(BasicBackend.queryMask.MMV, [this.symbol, BasicBackend.symbolByName[(linked) ? 'Link' : 'Unlink'], BasicBackend.symbolByName.Void]))
+            for(const opTriple of this.versionControl.ontology.queryTriples(BasicBackend.queryMask.MMV, [this.symbol, BasicBackend.symbolByName[(linked) ? 'LinkTriple' : 'UnlinkTriple'], BasicBackend.symbolByName.Void]))
                 if(this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.Entity) == triple[0] &&
                    this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.Attribute) == triple[1] &&
                    this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.Value) == triple[2])
@@ -391,7 +381,7 @@ export class Differential {
         if(findEntry(linked) !== undefined)
             return false;
         const entrySymbol = this.versionControl.ontology.createSymbol(this.versionControl.namespaceId);
-        this.versionControl.ontology.setTriple([this.symbol, BasicBackend.symbolByName[(linked) ? 'Link' : 'Unlink'], entrySymbol], true);
+        this.versionControl.ontology.setTriple([this.symbol, BasicBackend.symbolByName[(linked) ? 'LinkTriple' : 'UnlinkTriple'], entrySymbol], true);
         this.versionControl.ontology.setTriple([entrySymbol, BasicBackend.symbolByName.Entity, triple[0]], true);
         this.versionControl.ontology.setTriple([entrySymbol, BasicBackend.symbolByName.Attribute, triple[1]], true);
         this.versionControl.ontology.setTriple([entrySymbol, BasicBackend.symbolByName.Value, triple[2]], true);
@@ -401,34 +391,20 @@ export class Differential {
     getOperations(relocationTable = {}) {
         const operations = {
             'Draft': {},
-            'Manifest': [],
-            'Release': [],
-            'Rename': {},
+            'ManifestSymbol': [],
+            'UnlinkSymbol': [],
             'IncreaseLength': {},
             'DecreaseLength': {},
-            'Replace': {},
-            'Link': [],
-            'Unlink': []
+            'ReplaceData': {},
+            'MoveTriples': {},
+            'LinkTriple': [],
+            'UnlinkTriple': []
         };
         for(const opTriple of this.versionControl.ontology.queryTriples(BasicBackend.queryMask.MMV, [this.symbol, BasicBackend.symbolByName.Draft, BasicBackend.symbolByName.Void]))
             operations.Draft[BasicBackend.identityOfSymbol(opTriple[2])] = this.versionControl.ontology.getRawData(opTriple[2]);
-        for(const type of ['Manifest', 'Release'])
+        for(const type of ['ManifestSymbol', 'UnlinkSymbol'])
             for(const opTriple of this.versionControl.ontology.queryTriples(BasicBackend.queryMask.MMV, [this.symbol, BasicBackend.symbolByName[type], BasicBackend.symbolByName.Void]))
                 operations[type].push(opTriple[2]);
-        for(const type of ['Link', 'Unlink'])
-            for(const opTriple of this.versionControl.ontology.queryTriples(BasicBackend.queryMask.MMV, [this.symbol, BasicBackend.symbolByName[type], BasicBackend.symbolByName.Void])) {
-                const triple = [
-                    BasicBackend.relocateSymbol(this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.Entity), relocationTable),
-                    BasicBackend.relocateSymbol(this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.Attribute), relocationTable),
-                    BasicBackend.relocateSymbol(this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.Value), relocationTable)
-                ];
-                operations[type].push(triple);
-            }
-        for(const opTriple of this.versionControl.ontology.queryTriples(BasicBackend.queryMask.MMV, [this.symbol, BasicBackend.symbolByName.Rename, BasicBackend.symbolByName.Void])) {
-            const dstSymbol = BasicBackend.relocateSymbol(this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.Destination), relocationTable),
-                  srcSymbol = BasicBackend.relocateSymbol(this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.Source), relocationTable);
-            operations.Rename[srcSymbol] = dstSymbol;
-        }
         for(const increase of [true, false]) {
             const type = (increase) ? 'IncreaseLength' : 'DecreaseLength',
                   creaseLengthOperations = operations[type];
@@ -454,10 +430,24 @@ export class Differential {
                   srcOffset = this.versionControl.ontology.getData(srcOffsetSymbol),
                   lengthSymbol = this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.Length),
                   length = this.versionControl.ontology.getData(lengthSymbol);
-            if(!operations.Replace[dstSymbol])
-                operations.Replace[dstSymbol] = [];
-            operations.Replace[dstSymbol].push({'dstSymbol': dstSymbol, 'dstOffset': dstOffset, 'srcSymbol': srcSymbol, 'srcOffset': srcOffset, 'length': length});
+            if(!operations.ReplaceData[dstSymbol])
+                operations.ReplaceData[dstSymbol] = [];
+            operations.ReplaceData[dstSymbol].push({'dstSymbol': dstSymbol, 'dstOffset': dstOffset, 'srcSymbol': srcSymbol, 'srcOffset': srcOffset, 'length': length});
         }
+        for(const opTriple of this.versionControl.ontology.queryTriples(BasicBackend.queryMask.MMV, [this.symbol, BasicBackend.symbolByName.MoveTriples, BasicBackend.symbolByName.Void])) {
+            const dstSymbol = BasicBackend.relocateSymbol(this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.Destination), relocationTable),
+                  srcSymbol = BasicBackend.relocateSymbol(this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.Source), relocationTable);
+            operations.MoveTriples[srcSymbol] = dstSymbol;
+        }
+        for(const type of ['LinkTriple', 'UnlinkTriple'])
+            for(const opTriple of this.versionControl.ontology.queryTriples(BasicBackend.queryMask.MMV, [this.symbol, BasicBackend.symbolByName[type], BasicBackend.symbolByName.Void])) {
+                const triple = [
+                    BasicBackend.relocateSymbol(this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.Entity), relocationTable),
+                    BasicBackend.relocateSymbol(this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.Attribute), relocationTable),
+                    BasicBackend.relocateSymbol(this.versionControl.ontology.getSolitary(opTriple[2], BasicBackend.symbolByName.Value), relocationTable)
+                ];
+                operations[type].push(triple);
+            }
         return operations;
     }
 };

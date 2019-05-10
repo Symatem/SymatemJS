@@ -323,85 +323,6 @@ export default class NativeBackend extends BasicBackend {
         }
     }
 
-    /**
-     * Moves the triples of the given source symbols to the destination symbols simultaneously.
-     * The symbols data has to be moved using replaceDataSimultaneously().
-     * @param {Object.<Symbol, Symbol>} translationTable Dictionary: key=source, value=destination
-     */
-    renameSymbols(translationTable) {
-        const dstSymbols = {}, subIndexUpdatesBySymbol = {};
-        for(const srcSymbol in translationTable) {
-            const dstSymbol = translationTable[srcSymbol],
-                  handle = this.getHandle(srcSymbol);
-            dstSymbols[dstSymbol] = true;
-            for(let i = 0; i < 6; ++i) {
-                const subIndex = handle.subIndices[i];
-                for(const beta in subIndex) {
-                    let subIndexUpdates = subIndexUpdatesBySymbol[beta];
-                    if(!subIndexUpdates)
-                        subIndexUpdates = subIndexUpdatesBySymbol[beta] = [];
-                    subIndexUpdates.push({'srcSymbol': srcSymbol, 'alphaIndex': i});
-                }
-            }
-        }
-        for(const symbol in subIndexUpdatesBySymbol) {
-            const updates = subIndexUpdatesBySymbol[symbol],
-                  handle = this.getHandle(symbol);
-            for(const update of updates) {
-                update.betaIndex = remapSubindexKey[update.alphaIndex];
-                update.gammaIndex = remapSubindexInverse[update.betaIndex];
-                update.betaSubIndex = handle.subIndices[update.betaIndex];
-                update.gammaSubIndex = handle.subIndices[update.gammaIndex];
-                update.betaSet = update.betaSubIndex[update.srcSymbol];
-                update.gammaSets = [];
-                for(const gamma in update.betaSet)
-                    update.gammaSets.push(update.gammaSubIndex[gamma]);
-            }
-            for(const update of updates) {
-                for(const gammaSet of update.gammaSets)
-                    delete gammaSet[update.srcSymbol];
-                delete update.betaSubIndex[update.srcSymbol];
-            }
-            for(const update of updates) {
-                const dstSymbol = translationTable[update.srcSymbol];
-                for(const gammaSet of update.gammaSets)
-                    gammaSet[dstSymbol] = true;
-                update.betaSubIndex[dstSymbol] = update.betaSet;
-            }
-            delete subIndexUpdatesBySymbol[symbol];
-        }
-        const subIndicesToMerge = {};
-        for(const srcSymbol in translationTable) {
-            const dstSymbol = translationTable[srcSymbol],
-                  srcHandle = this.getHandle(srcSymbol);
-            subIndicesToMerge[srcSymbol] = srcHandle.subIndices;
-            if(dstSymbols[srcSymbol]) {
-                srcHandle.subIndices = [];
-                for(let i = 0; i < 6; ++i)
-                    srcHandle.subIndices.push({});
-            } else
-                this.releaseSymbol(srcSymbol);
-        }
-        for(const srcSymbol in subIndicesToMerge) {
-            const srcSubIndices = subIndicesToMerge[srcSymbol],
-                  dstHandle = this.manifestSymbol(translationTable[srcSymbol]);
-            for(let i = 0; i < 6; ++i) {
-                const srcSubIndex = srcSubIndices[i],
-                      dstSubIndex = dstHandle.subIndices[i];
-                for(const beta in srcSubIndex) {
-                    const srcSet = srcSubIndex[beta],
-                          dstSet = dstSubIndex[beta];
-                    if(!dstSet) {
-                        dstSubIndex[beta] = srcSet;
-                        continue;
-                    }
-                    for(const gamma in srcSet)
-                        dstSet[gamma] = true;
-                }
-            }
-        }
-    }
-
 
 
     /**
@@ -551,6 +472,82 @@ export default class NativeBackend extends BasicBackend {
         operateSubIndex(entityHandle.subIndices[indexByName.EVA], triple[2], triple[1]);
         operateSubIndex(attributeHandle.subIndices[indexByName.AEV], triple[0], triple[2]);
         return operateSubIndex(valueHandle.subIndices[indexByName.VAE], triple[1], triple[0]);
+    }
+
+    /**
+     * Moves the triples of the given source symbols to the destination symbols simultaneously.
+     * The symbols data has to be moved using replaceDataSimultaneously().
+     * @param {Object.<Symbol, Symbol>} translationTable Dictionary: key=source, value=destination
+     */
+    moveTriples(translationTable) {
+        const dstSymbols = {}, subIndexUpdatesBySymbol = {};
+        for(const srcSymbol in translationTable) {
+            const dstSymbol = translationTable[srcSymbol],
+                  handle = this.getHandle(srcSymbol);
+            dstSymbols[dstSymbol] = true;
+            for(let i = 0; i < 6; ++i) {
+                const subIndex = handle.subIndices[i];
+                for(const beta in subIndex) {
+                    let subIndexUpdates = subIndexUpdatesBySymbol[beta];
+                    if(!subIndexUpdates)
+                        subIndexUpdates = subIndexUpdatesBySymbol[beta] = [];
+                    subIndexUpdates.push({'srcSymbol': srcSymbol, 'alphaIndex': i});
+                }
+            }
+        }
+        for(const symbol in subIndexUpdatesBySymbol) {
+            const updates = subIndexUpdatesBySymbol[symbol],
+                  handle = this.getHandle(symbol);
+            for(const update of updates) {
+                update.betaIndex = remapSubindexKey[update.alphaIndex];
+                update.gammaIndex = remapSubindexInverse[update.betaIndex];
+                update.betaSubIndex = handle.subIndices[update.betaIndex];
+                update.gammaSubIndex = handle.subIndices[update.gammaIndex];
+                update.betaSet = update.betaSubIndex[update.srcSymbol];
+                update.gammaSets = [];
+                for(const gamma in update.betaSet)
+                    update.gammaSets.push(update.gammaSubIndex[gamma]);
+            }
+            for(const update of updates) {
+                for(const gammaSet of update.gammaSets)
+                    delete gammaSet[update.srcSymbol];
+                delete update.betaSubIndex[update.srcSymbol];
+            }
+            for(const update of updates) {
+                const dstSymbol = translationTable[update.srcSymbol];
+                for(const gammaSet of update.gammaSets)
+                    gammaSet[dstSymbol] = true;
+                update.betaSubIndex[dstSymbol] = update.betaSet;
+            }
+            delete subIndexUpdatesBySymbol[symbol];
+        }
+        const subIndicesToMerge = {};
+        for(const srcSymbol in translationTable) {
+            const dstSymbol = translationTable[srcSymbol],
+                  srcHandle = this.getHandle(srcSymbol);
+            subIndicesToMerge[srcSymbol] = srcHandle.subIndices;
+            srcHandle.subIndices = [];
+            for(let i = 0; i < 6; ++i)
+                srcHandle.subIndices.push({});
+        }
+        for(const srcSymbol in subIndicesToMerge) {
+            const srcSubIndices = subIndicesToMerge[srcSymbol],
+                  dstHandle = this.manifestSymbol(translationTable[srcSymbol]);
+            for(let i = 0; i < 6; ++i) {
+                const srcSubIndex = srcSubIndices[i],
+                      dstSubIndex = dstHandle.subIndices[i];
+                for(const beta in srcSubIndex) {
+                    const srcSet = srcSubIndex[beta],
+                          dstSet = dstSubIndex[beta];
+                    if(!dstSet) {
+                        dstSubIndex[beta] = srcSet;
+                        continue;
+                    }
+                    for(const gamma in srcSet)
+                        dstSet[gamma] = true;
+                }
+            }
+        }
     }
 
     /**
