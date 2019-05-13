@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8"/>
+        <title>Symatem Fuzzy Tests</title>
+        <script type='module'>
+            import BasicBackend from '../BasicBackend.js';
+            import NativeBackend from '../NativeBackend.js';
+            import PRNG from './PRNG.js';
+
+            const testBundles = [];
+
+            const seed = document.createElement('input');
+            document.body.appendChild(seed);
+            seed.value = Math.floor(Math.random()*(0x80000000-1));
+            seed.onblur = () => {
+                const ontology = new NativeBackend(),
+                      rand = new PRNG(seed.value),
+                      tests = {},
+                      progressBars = {};
+
+                document.body.innerHTML = '';
+                const table = document.createElement('table');
+                document.body.appendChild(table);
+                for(let testBundle of testBundles) {
+                    testBundle = testBundle(ontology, rand);
+                    for(const name in testBundle) {
+                        tests[name] = testBundle[name];
+                        const row = document.createElement('tr');
+                        table.appendChild(row);
+                        let cell = document.createElement('td');
+                        row.appendChild(cell);
+                        cell.innerText = name;
+                        cell = document.createElement('td');
+                        row.appendChild(cell);
+                        const progressBar = document.createElement('progress');
+                        cell.appendChild(progressBar);
+                        progressBar.setAttribute('value', 0);
+                        progressBar.setAttribute('max', 100);
+                        progressBars[name] = progressBar;
+                    }
+                }
+
+                let queue = Object.keys(tests), current;
+                function animate() {
+                    if(!current) {
+                        if(queue.length == 0)
+                            return;
+                        current = queue.shift();
+                    }
+                    const progressBar = progressBars[current];
+                    for(let i = 0; i < 10; ++i)
+                        if(!tests[current]())
+                            throw new Error('Test case failed');
+                    ++progressBar.value;
+                    if(progressBar.value >= progressBar.max)
+                        current = undefined;
+                    window.requestAnimationFrame(animate);
+                }
+                animate();
+            };
+        </script>
+    </head>
+    <body>
+
+    </body>
+</html>
