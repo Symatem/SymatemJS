@@ -8,7 +8,12 @@
             import NativeBackend from '../NativeBackend.js';
             import PRNG from './PRNG.js';
 
-            const testBundles = [];
+            import SymbolDataTests from './SymbolDataTests.js';
+            import TripleAndQueryTests from './TripleAndQueryTests.js';
+            const testBundles = [
+                SymbolDataTests,
+                TripleAndQueryTests
+            ];
 
             const seed = document.createElement('input');
             document.body.appendChild(seed);

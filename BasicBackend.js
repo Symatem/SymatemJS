@@ -50,10 +50,11 @@ const symbolByName = {
     'Dynamic': 0,
 
     'ManifestSymbol': 0,
-    'UnlinkSymbol': 0,
+    'ReleaseSymbol': 0,
     'IncreaseLength': 0,
     'DecreaseLength': 0,
-    'Draft': 0,
+    'DataSource': 0,
+    'DataDrain': 0,
     'ReplaceData': 0,
     'MoveTriples': 0,
     'LinkTriple': 0,
@@ -296,10 +297,10 @@ export default class BasicBackend {
             case symbolByName.Void:
                 return dataBytes;
             case symbolByName.BinaryNumber:
+            if(feedback.length === 1)
+                return (dataView.getUint8(0) === 1);
             case symbolByName.TwosComplement:
             case symbolByName.IEEE754:
-                if(length === 1 && encoding === symbolByName.BinaryNumber)
-                    return (dataView.getUint8(0) === 1);
                 console.assert(feedback.length >= 32);
                 feedback.length = 32;
                 switch(encoding) {
@@ -486,12 +487,13 @@ export default class BasicBackend {
     setRawData(symbol, dataBytes, dataLength) {
         if(!dataBytes) {
             this.setLength(symbol, 0);
-            return;
+            return true;
         }
         if(!dataLength)
             dataLength = dataBytes.byteLength * 8;
         this.setLength(symbol, dataLength);
         this.writeData(symbol, 0, dataLength, dataBytes);
+        return true;
     }
 
     /**
@@ -530,6 +532,7 @@ export default class BasicBackend {
         const length = this.getLength(symbol);
         if(newLength != length)
             this.creaseLength(symbol, Math.min(length, newLength), newLength-length);
+        return true;
     }
 
     /**
@@ -543,7 +546,9 @@ export default class BasicBackend {
             this.setTriple(triple, false);
         for(const triple of this.queryTriples(queryMask.VVM, [0, 0, symbol]))
             this.setTriple(triple, false);
+        this.setLength(symbol, 0);
         this.releaseSymbol(symbol);
+        return true;
     }
 
     /**
@@ -570,6 +575,7 @@ export default class BasicBackend {
         }
         if(needsToBeLinked)
             this.setTriple(triple, true);
+        return true;
     }
 
     /**
@@ -606,9 +612,9 @@ export default class BasicBackend {
         const entities = [];
         for(const tripleE of this.queryTriples(queryMask.VII, [0, 0, 0])) {
             const length = this.getLength(tripleE[0]),
-                  data = this.readData(tripleE[0], 0, length),
+                  data = this.getData(tripleE[0]),
                   attributes = [];
-            if(symbolByName[this.constructor.utf8ArrayToText(data)] === tripleE[0])
+            if(symbolByName[data] === tripleE[0])
                 continue;
             for(const tripleA of this.queryTriples(queryMask.MVI, tripleE)) {
                 const values = [];
@@ -620,7 +626,7 @@ export default class BasicBackend {
             entities.push([
                 tripleE[0],
                 length,
-                this.constructor.encodeText(data),
+                data,
                 attributes
             ]);
         }
@@ -638,9 +644,9 @@ export default class BasicBackend {
         for(const entity of JSON.parse(json).symbols) {
             const entitySymbol = entity[0];
             entities.add(entitySymbol);
-            this.setLength(entitySymbol, entity[1]);
             if(entity[1] > 0)
-                this.writeData(entitySymbol, 0, entity[1], this.constructor.decodeText(entity[2]));
+                this.setData(entitySymbol, entity[2]);
+            this.setLength(entitySymbol, entity[1]);
             const attributes = entity[3];
             for(let i = 0; i < attributes.length; i += 2) {
                 const attribute = attributes[i];

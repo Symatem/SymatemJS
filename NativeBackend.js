@@ -312,6 +312,11 @@ export default class NativeBackend extends BasicBackend {
         const namespaceIdentity = this.constructor.namespaceOfSymbol(symbol),
               namespace = this.namespaces[namespaceIdentity],
               handleIdentity = this.constructor.identityOfSymbol(symbol);
+        if(!namespace || !namespace.handles[handleIdentity])
+            return false;
+        for(let i = 0; i < 3; ++i)
+            if(Object.keys(namespace.handles[handleIdentity].subIndices[i]) > 0)
+                return false;
         delete namespace.handles[handleIdentity];
         if(Object.keys(namespace.handles).length == 0)
             delete this.namespaces[namespaceIdentity];
@@ -321,6 +326,7 @@ export default class NativeBackend extends BasicBackend {
             else if(handleIdentity < namespace.nextIdentity - 1)
                 namespace.freeIdentities[handleIdentity] = true;
         }
+        return true;
     }
 
 
@@ -342,13 +348,15 @@ export default class NativeBackend extends BasicBackend {
      * @param {Number} length in bits (positive=insert, negative=erase)
      */
     creaseLength(symbol, offset, length) {
-        const handle = (offset == 0 && length > 0) ? this.manifestSymbol(symbol) : this.getHandle(symbol),
-              newDataBytes = new Uint8Array(Math.ceil((handle.dataLength+length)/32)*4);
-        console.assert(handle);
-        if(length < 0)
-            console.assert(offset-length <= handle.dataLength);
-        else
-            console.assert(offset <= handle.dataLength);
+        const handle = (offset == 0 && length > 0) ? this.manifestSymbol(symbol) : this.getHandle(symbol);
+        if(!handle)
+            return false;
+        const newDataBytes = new Uint8Array(Math.ceil((handle.dataLength+length)/32)*4);
+        if(length < 0) {
+            if(offset-length > handle.dataLength)
+                return false;
+        } else if(offset > handle.dataLength)
+            return false;
         newDataBytes.set(handle.dataBytes.subarray(0, Math.ceil(offset/8)), 0);
         if(offset%8 == 0 && length%8 == 0 && handle.dataLength%8 == 0) {
             if(length < 0)
@@ -365,6 +373,7 @@ export default class NativeBackend extends BasicBackend {
         }
         handle.dataLength += length;
         handle.dataBytes = newDataBytes;
+        return true;
     }
 
     /**
@@ -376,7 +385,8 @@ export default class NativeBackend extends BasicBackend {
      */
     readData(symbol, offset, length) {
         const handle = this.getHandle(symbol);
-        console.assert(offset+length <= handle.dataLength);
+        if(!handle || offset+length > handle.dataLength)
+            return;
         if(offset%8 == 0 && length%8 == 0)
             return (offset == 0 && length == handle.dataLength)
                    ? handle.dataBytes
@@ -395,16 +405,19 @@ export default class NativeBackend extends BasicBackend {
      */
     writeData(symbol, offset, length, dataBytes) {
         const handle = this.manifestSymbol(symbol);
-        console.assert(offset+length <= handle.dataLength);
+        if(!handle || offset+length > handle.dataLength)
+            return false;
         if(offset == 0 && length == handle.dataLength) {
             handle.dataBytes = dataBytes;
             handle.dataLength = length;
         } else if(offset%8 == 0 && length%8 == 0)
             handle.dataBytes.set(dataBytes.subarray(0, length/8), offset/8);
         else {
-            console.assert(dataBytes.byteLength%4 == 0);
+            if(dataBytes.byteLength%4 != 0)
+                return false;
             bitwiseCopy(handle.dataBytes, offset, dataBytes, 0, length);
         }
+        return true;
     }
 
     /**
@@ -418,11 +431,13 @@ export default class NativeBackend extends BasicBackend {
     replaceData(dstSymbol, dstOffset, srcSymbol, srcOffset, length) {
         const dstHandle = this.getHandle(dstSymbol),
               srcHandle = this.getHandle(srcSymbol);
-        console.assert(dstOffset+length <= dstHandle.dataLength && srcOffset+length <= srcHandle.dataLength);
+        if(!dstHandle || !srcHandle || dstOffset+length > dstHandle.dataLength || srcOffset+length > srcHandle.dataLength)
+            return false;
         if(dstOffset%8 == 0 && srcOffset%8 == 0 && length%8 == 0)
             dstHandle.dataBytes.set(srcHandle.dataBytes.subarray(srcOffset/8, (srcOffset+length)/8), dstOffset/8);
         else
             bitwiseCopy(dstHandle.dataBytes, dstOffset, srcHandle.dataBytes, srcOffset, length);
+        return true;
     }
 
 
@@ -548,6 +563,7 @@ export default class NativeBackend extends BasicBackend {
                 }
             }
         }
+        return true;
     }
 
     /**
