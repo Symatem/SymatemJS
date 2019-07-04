@@ -5,10 +5,8 @@ export default class Differential extends BasicBackend {
         super();
         this.ontology = ontology;
         this.repositoryNamespace = repositoryNamespace;
-        this.nextOperationId = 0;
+        // Namespaces for: meta info (repositoryNamespace), abstract / coexistence / pushout, recording, checkouts
         this.operationsBySymbol = {};
-        this.dataSources = [];
-        this.dataDrains = [];
     }
 
     queryTriples(queryMask, triple) {
@@ -119,14 +117,14 @@ export default class Differential extends BasicBackend {
                 continue;
             const endLength = operationEndOffset-intermediateEndOffset;
             if(operation[offsetKey] < intermediateOffset && intermediateEndOffset < operationEndOffset) {
-                operation.length = intermediateOffset-operation[offsetKey];
                 this.addReplaceOperation({
                     'dstSymbol': operation.dstSymbol,
                     'srcSymbol': operation.srcSymbol,
                     'length': endLength,
                     [offsetKey]: intermediateEndOffset+shift,
-                    [otherOffsetKey]: operation.srcOffset+operation.length
+                    [otherOffsetKey]: operation[otherOffsetKey]+operation.length-endLength // +intermediateEndOffset-operation[offsetKey]
                 }, replaceOperations, ++operationIndex);
+                operation.length = intermediateOffset-operation[offsetKey];
             } else {
                 const operationsBeginIsInside = (intermediateOffset <= operation[offsetKey] && operation[offsetKey] <= intermediateEndOffset),
                       operationsEndIsInside = (intermediateOffset <= operationEndOffset && operationEndOffset <= intermediateEndOffset);
@@ -136,7 +134,7 @@ export default class Differential extends BasicBackend {
                             this.removeReplaceOperation(operation, replaceOperations, operationIndex--);
                         else {
                             operation[offsetKey] = intermediateEndOffset+shift;
-                            operation.srcOffset += operation.length-endLength;
+                            operation[otherOffsetKey] += operation.length-endLength;
                             operation.length = endLength;
                         }
                     } else
@@ -173,7 +171,7 @@ export default class Differential extends BasicBackend {
             creaseLengthOperations[i].dstOffset += shift;
     }
 
-    sendDataToDrain(srcSymbol, srcOffset, length) {
+    saveDataToRestore(srcSymbol, srcOffset, length) {
         // TODO
     }
 
@@ -181,11 +179,10 @@ export default class Differential extends BasicBackend {
         if(length == 0)
             return;
         if(length < 0)
-            this.sendDataToDrain(dstSymbol, dstOffset, -length);
-        if(!this.ontology.creaseLength(dstSymbol, dstOffset, length))
-            return false;
+            this.saveDataToRestore(dstSymbol, dstOffset, -length);
         const operationsOfSymbol = this.getOrCreateEntry(this.operationsBySymbol, dstSymbol),
-              creaseLengthOperations = this.getOrCreateEntry(operationsOfSymbol, 'creaseLengthOperations', []);
+              creaseLengthOperations = this.getOrCreateEntry(operationsOfSymbol, 'creaseLengthOperations', []),
+              originalLength = length;
         let operationAtIntermediateOffset,
             [intermediateOffset, operationIndex] = this.constructor.getIntermediateOffset(creaseLengthOperations, dstOffset);
         if(operationIndex > 0) {
@@ -194,29 +191,30 @@ export default class Differential extends BasicBackend {
                 operationAtIntermediateOffset = undefined;
         }
         if(length < 0) {
-            const prevIntermediateOffset = intermediateOffset;
-            let decreaseAccumulator = -length, increaseAccumulator = 0;
+            const originalIntermediateOffset = intermediateOffset;
+            let decreaseAccumulator = -length, increaseAccumulator = 0, increaseOverlap = 0;
             if(operationAtIntermediateOffset) {
                 intermediateOffset = operationAtIntermediateOffset.dstOffset;
                 --operationIndex;
             }
             for(; operationIndex < creaseLengthOperations.length;) {
                 const operation = creaseLengthOperations[operationIndex];
-                if(prevIntermediateOffset+decreaseAccumulator < operation.dstOffset)
+                if(originalIntermediateOffset+decreaseAccumulator < operation.dstOffset)
                     break;
                 if(operation.length < 0)
                     decreaseAccumulator -= operation.length;
                 else {
                     increaseAccumulator += operation.length;
-                    const overlap = Math.max(operation.dstOffset, prevIntermediateOffset)-Math.min(operation.dstOffset+operation.length, prevIntermediateOffset+decreaseAccumulator);
+                    const overlap = Math.max(operation.dstOffset, originalIntermediateOffset)-Math.min(operation.dstOffset+operation.length, originalIntermediateOffset+decreaseAccumulator);
                     this.cutAndShiftReplaceOperations(operationsOfSymbol.copyOperations, 'srcOffset', operation.dstOffset, 0, overlap);
+                    increaseOverlap += overlap;
                 }
                 this.removeCreaseLengthOperation(operation, creaseLengthOperations, operationIndex);
                 operationId = operation.id;
             }
             this.shiftIntermediateOffsets(creaseLengthOperations, operationIndex, length);
-            this.cutAndShiftReplaceOperations(operationsOfSymbol.replaceOperations, 'dstOffset', prevIntermediateOffset, decreaseAccumulator, -increaseAccumulator);
-            this.mergeReplaceOperations(operationsOfSymbol.replaceOperations, prevIntermediateOffset);
+            this.cutAndShiftReplaceOperations(operationsOfSymbol.replaceOperations, 'dstOffset', originalIntermediateOffset, decreaseAccumulator, increaseOverlap);
+            this.mergeReplaceOperations(operationsOfSymbol.replaceOperations, originalIntermediateOffset);
             length = increaseAccumulator-decreaseAccumulator;
         } else {
             let mergeAccumulator = 0;
@@ -246,14 +244,12 @@ export default class Differential extends BasicBackend {
                 'dstOffset': intermediateOffset,
                 'length': length
             });
+        return this.ontology.creaseLength(dstSymbol, dstOffset, originalLength);
     }
 
     replaceDataSimultaneously(replaceOperations) {
         for(const operation of replaceOperations)
-            this.sendDataToDrain(operation.dstSymbol, operation.dstOffset, operation.length);
-        // TODO
-        // if(!this.ontology.replaceDataSimultaneously(replaceOperations))
-        //     return false;
+            this.saveDataToRestore(operation.dstSymbol, operation.dstOffset, operation.length);
         const context = {},
               cutReplaceOperations = [], addReplaceOperations = [], mergeReplaceOperations = [],
               addSlice = (srcSymbol, srcOffset, length) => {
@@ -342,7 +338,7 @@ export default class Differential extends BasicBackend {
             this.addReplaceOperation(operation);
         for(const operation of mergeReplaceOperations)
             this.mergeReplaceOperations(this.getOrCreateEntry(this.operationsBySymbol, operation.dstSymbol).replaceOperations, operation.dstOffset);
-        return true;
+        return this.ontology.replaceDataSimultaneously(replaceOperations);
     }
 
     replaceData(dstSymbol, dstOffset, srcSymbol, srcOffset, length) {
@@ -350,8 +346,8 @@ export default class Differential extends BasicBackend {
     }
 
     writeData(dstSymbol, offset, length, dataBytes) {
-        const srcSymbol = this.ontology.createSymbol(this.repositoryNamespace); // TODO: Only allocate in commit()
-        this.dataSources.push({'symbol': srcSymbol, 'dataBytes': dataBytes, 'length': length});
+        const srcSymbol = this.ontology.createSymbol(this.repositoryNamespace);
+        this.ontology.setRawData(srcSymbol, dataBytes, length);
         return this.replaceData(dstSymbol, offset, srcSymbol, 0, length);
     }
 
@@ -360,6 +356,7 @@ export default class Differential extends BasicBackend {
             'manifestSymbols': [],
             'increaseLengthOperations': [],
             'replaceDataOperations': [],
+            'restoreDataOperations': [],
             'decreaseLengthOperations': [],
             'tripleOperations': [],
             'releaseSymbols': []
@@ -373,21 +370,21 @@ export default class Differential extends BasicBackend {
                     this.operationsByType[(operation.length < 0) ? 'decreaseLengthOperations' : 'increaseLengthOperations'].push(operation);
             if(operationsOfSymbol.replaceOperations)
                 for(const operation of operationsOfSymbol.replaceOperations)
-                    this.operationsByType.replaceDataOperations.push(operation);
+                    this.operationsByType[(this.operationsBySymbol[operation.srcSymbol].isDataRestore) ? 'restoreDataOperations' : 'replaceDataOperations'].push(operation);
             const triple = [symbol];
             if(operationsOfSymbol.tripleOperations)
                 for(triple[1] in operationsOfSymbol.tripleOperations)
                     for(triple[2] in operationsOfSymbol.tripleOperations[triple[1]])
-                        this.operationsByType.tripleOperations.push([triple, operationsOfSymbol.tripleOperations[triple[1]][triple[2]]]);
+                        this.operationsByType.tripleOperations.push([[...triple], operationsOfSymbol.tripleOperations[triple[1]][triple[2]]]);
         }
         delete this.operationsBySymbol;
         // TODO: Write to ontology
         // this.symbol = this.ontology.createSymbol(repositoryNamespace);
         // TODO: Optimize data source and data drain
-        for(const dataSource of this.dataSources)
-            this.ontology.setRawData(dataSource.symbol, dataSource.dataBytes, dataSource.length);
-        for(const dataDrain of this.dataDrains)
-            this.ontology.setRawData(dataDrain.symbol, dataDrain.dataBytes, dataDrain.length);
+    }
+
+    uncommit() {
+        // TODO: Unlink from ontology
     }
 
     apply(checkoutNamespace, reverse=false) {
@@ -396,8 +393,7 @@ export default class Differential extends BasicBackend {
             this.ontology.manifestSymbol(symbol);
         for(const operation of this.operationsByType[(reverse) ? 'decreaseLengthOperations' : 'increaseLengthOperations'])
             this.ontology.creaseLength(operation.dstSymbol, operation.dstOffset, (reverse) ? -operation.length : operation.length);
-        // TODO: Reverse replace operations
-        this.ontology.replaceDataSimultaneously(this.operationsByType.replaceDataOperations);
+        this.ontology.replaceDataSimultaneously(this.operationsByType[(reverse) ? 'restoreDataOperations' : 'replaceDataOperations']);
         for(const operation of this.operationsByType[(reverse) ? 'increaseLengthOperations' : 'decreaseLengthOperations'])
             this.ontology.creaseLength(operation.dstSymbol, operation.dstOffset, (reverse) ? -operation.length : operation.length);
         for(const [triple, linked] of this.operationsByType.tripleOperations)

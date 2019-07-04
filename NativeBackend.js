@@ -258,8 +258,32 @@ export default class NativeBackend extends BasicBackend {
                 'handles': {}
             };
             this.namespaces[namespaceIdentity] = namespace;
+            this.manifestSymbol(this.constructor.symbolInNamespace('Namespaces', namespaceIdentity));
         }
         return namespace;
+    }
+
+    unlinkNamespace(namespaceIdentity) {
+        const namespace = this.namespaces[namespaceIdentity];
+        if(!namespace)
+            return false;
+        const triple = [];
+        for(const handleIdentity in namespace.handles) {
+            triple[0] = this.constructor.concatIntoSymbol(namespaceIdentity, handleIdentity);
+            const handle = namespace.handles[handleIdentity];
+            for(let i = 0; i < 3; ++i) {
+                const subIndex = handle.subIndices[i];
+                for(triple[1] in subIndex)
+                    if(this.constructor.namespaceOfSymbol(triple[1]) != namespaceIdentity)
+                        for(triple[2] in subIndex[triple[1]])
+                            this.setTriple(triple, false);
+                    else for(triple[2] in subIndex[triple[1]])
+                        if(this.constructor.namespaceOfSymbol(triple[2]) != namespaceIdentity)
+                            this.setTriple(triple, false);
+            }
+        }
+        delete this.namespaces[namespaceIdentity];
+        return true;
     }
 
     manifestSymbol(symbol) {
@@ -326,7 +350,9 @@ export default class NativeBackend extends BasicBackend {
             else if(handleIdentity < namespace.nextIdentity - 1)
                 namespace.freeIdentities[handleIdentity] = true;
         }
-        return true;
+        return (namespaceIdentity == this.constructor.identityOfSymbol(this.constructor.symbolByName.Namespaces))
+            ? this.unlinkNamespace(handleIdentity)
+            : true;
     }
 
 

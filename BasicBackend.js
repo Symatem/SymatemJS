@@ -19,6 +19,10 @@ Map.prototype.sorted = function(callback) {
     return new Map(Array.from(this.entries()).sort(callback));
 };
 
+Object.sorted = function(src, callback) {
+    return Object.fromEntries(Array.from(Object.entries(src)).sort(callback));
+};
+
 DataView.prototype.djb2Hash = function() {
     let result = 5381;
     for(let i = 0; i < this.byteLength; ++i)
@@ -54,7 +58,7 @@ const symbolByName = {
     'IncreaseLength': 0,
     'DecreaseLength': 0,
     'DataSource': 0,
-    'DataDrain': 0,
+    'DataRestore': 0,
     'ReplaceData': 0,
     'MoveTriples': 0,
     'LinkTriple': 0,
@@ -271,10 +275,10 @@ export default class BasicBackend {
      * @return {Number} identity of the new namespace
      */
     registerAdditionalSymbols(namespaceName, symbolNames) {
-        const namespace = this.createSymbol(BasicBackend.identityOfSymbol(BasicBackend.symbolByName.Namespaces)),
+        const namespaceSymbol = this.createSymbol(BasicBackend.identityOfSymbol(BasicBackend.symbolByName.Namespaces)),
               namespaceIdentity = BasicBackend.identityOfSymbol(namespace);
-        symbolByName[namespaceName] = namespace;
-        this.setData(namespace, namespaceName);
+        symbolByName[namespaceName] = namespaceSymbol;
+        this.setData(namespaceSymbol, namespaceName);
         for(const name of symbolNames) {
             const symbol = this.createSymbol(namespaceIdentity);
             symbolByName[name] = symbol;

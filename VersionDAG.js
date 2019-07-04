@@ -27,14 +27,12 @@ export default class VersionDAG {
         delete this.versions[versionId];
     }
 
-    addCheckout(versionId, namespaceId) {
-        this.checkouts[versionId] = namespaceId;
-        // TODO
+    addCheckout(versionId, namespaceIdentity) {
+        this.checkouts[versionId] = namespaceIdentity;
     }
 
     removeCheckout(versionId) {
-        const namespaceId = this.checkouts[versionId];
-        // TODO: Ontology unlink namespace
+        this.ontology.unlinkSymbol(BasicBackend.symbolInNamespace('Namespaces', this.checkouts[versionId]));
         delete this.checkouts[versionId];
     }
 
