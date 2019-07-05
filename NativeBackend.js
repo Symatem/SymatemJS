@@ -390,16 +390,25 @@ export default class NativeBackend extends BasicBackend {
             else
                 newDataBytes.set(handle.dataBytes.subarray(offset/8, handle.dataLength/8), (offset+length)/8);
         } else {
+            newDataBytes[Math.floor(offset/8)] &= ~((-1)<<(offset%8));
             if(length < 0)
                 bitwiseCopy(newDataBytes, offset, handle.dataBytes, offset-length, handle.dataLength-offset+length);
-            else {
-                newDataBytes[Math.floor(offset/8)] &= ~((-1)<<(offset%8));
+            else
                 bitwiseCopy(newDataBytes, offset+length, handle.dataBytes, offset, handle.dataLength-offset);
-            }
         }
         handle.dataLength += length;
         handle.dataBytes = newDataBytes;
         return true;
+    }
+
+    /**
+     * Returns a symbols data binary string of '0's and '1's
+     * @param {Symbol} symbol
+     * @return {String} binary
+     */
+    getBitString(symbol) {
+        const handle = this.getHandle(symbol);
+        return this.constructor.bufferToBitString(handle.dataBytes, handle.dataLength);
     }
 
     /**
@@ -439,8 +448,11 @@ export default class NativeBackend extends BasicBackend {
         } else if(offset%8 == 0 && length%8 == 0)
             handle.dataBytes.set(dataBytes.subarray(0, length/8), offset/8);
         else {
-            if(dataBytes.byteLength%4 != 0)
-                return false;
+            if(dataBytes.byteLength%4 != 0) {
+                const prevDataBytes = dataBytes;
+                dataBytes = new Uint8Array(Math.ceil(length/32)*4);
+                dataBytes.set(prevDataBytes, 0);
+            }
             bitwiseCopy(handle.dataBytes, offset, dataBytes, 0, length);
         }
         return true;

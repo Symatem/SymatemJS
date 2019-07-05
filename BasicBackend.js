@@ -74,6 +74,11 @@ const symbolByName = {
     'Namespaces': 2,
 };
 
+function sortSymbolsArrayCallback(a, b) {
+    const namespaceIdDiff = BasicBackend.namespaceOfSymbol(a)-BasicBackend.namespaceOfSymbol(b);
+    return (namespaceIdDiff) ? namespaceIdDiff : BasicBackend.identityOfSymbol(a)-BasicBackend.identityOfSymbol(b);
+}
+
 /**
  * @typedef {Object} Symbol
  * @property {Number} namespaceIdentity
@@ -120,6 +125,18 @@ export default class BasicBackend {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
+    }
+
+    /**
+     * Converts Uint8Array to binary string of '0's and '1's
+     * @param {Uint8Array} buffer
+     * @return {String} binary
+     */
+    static bufferToBitString(buffer, length) {
+        const result = [];
+        for(let i = 0; i < length; ++i)
+            result.push(((buffer[Math.floor(i/8)]>>(i%8))&1) ? '1' : '0');
+        return result.join('');
     }
 
     /**
@@ -243,6 +260,23 @@ export default class BasicBackend {
      */
     static identityOfSymbol(symbol) {
         return parseInt(symbol.split(':')[1]);
+    }
+
+    /**
+     * Sorts an array of symbols in ascending order (the original is modified)
+     * @param {Symbol[]} symbols
+     */
+    static sortSymbolsArray(symbols) {
+        symbols.sort(sortSymbolsArrayCallback);
+    }
+
+    /**
+     * Sorts the symbol keys of a dict in ascending order
+     * @param {Symbol[]} symbols
+     * @return {Symbol[]} sorted symbols
+     */
+    static sortSymbolsDict(symbols) {
+        return Object.sorted(symbols, (a, b) => sortSymbolsArrayCallback(a[0], b[0]));
     }
 
     /**

@@ -1,17 +1,12 @@
+import BasicBackend from '../BasicBackend.js';
+
 export default function(ontology, rand) {
     const destination = ontology.createSymbol(4),
           source = ontology.createSymbol(4);
 
-    function bitStringOfBuffer(buffer, length) {
-        const result = [];
-        for(let i = 0; i < length; ++i)
-            result.push(((buffer[Math.floor(i/8)]>>(i%8))&1) ? '1' : '0');
-        return result.join('');
-    }
-
     function bitStringOfSymbol(symbol) {
         const handle = ontology.getHandle(symbol);
-        return bitStringOfBuffer(handle.dataBytes, handle.dataLength);
+        return BasicBackend.bufferToBitString(handle.dataBytes, handle.dataLength);
     }
 
     function fillSymbol(symbol) {
@@ -64,7 +59,7 @@ export default function(ontology, rand) {
             const [sourceString, sourceLength, sourceOffset] = fillSymbol(source),
                   length = rand.range(0, sourceLength-sourceOffset),
                   expectedString = sourceString.substr(sourceOffset, length);
-            const resultString = bitStringOfBuffer(ontology.readData(source, sourceOffset, length), length);
+            const resultString = BasicBackend.bufferToBitString(ontology.readData(source, sourceOffset, length), length);
             if(expectedString != resultString) {
                 console.error(
                     sourceOffset, sourceLength, length,
@@ -80,7 +75,7 @@ export default function(ontology, rand) {
             const [destinationString, destinationLength, destinationOffset] = fillSymbol(destination),
                   sourceLength = rand.range(0, Math.min(destinationLength-destinationOffset)),
                   sourceBuffer = rand.bytes(Math.ceil(sourceLength/32)*4),
-                  sourceString = bitStringOfBuffer(sourceBuffer, sourceLength),
+                  sourceString = BasicBackend.bufferToBitString(sourceBuffer, sourceLength),
                   expectedString = [destinationString.substr(0, destinationOffset), sourceString.substr(0, sourceLength), destinationString.substr(destinationOffset+sourceLength)].join('');
             ontology.writeData(destination, destinationOffset, sourceLength, sourceBuffer);
             const resultString = bitStringOfSymbol(destination);
