@@ -170,7 +170,7 @@ export default class Differential extends BasicBackend {
     }
 
     saveDataToRestore(srcSymbol, srcOffset, length) {
-        // TODO
+        // TODO: Save data if not newly increased or already replaced
     }
 
     creaseLength(dstSymbol, dstOffset, length) {
@@ -189,7 +189,6 @@ export default class Differential extends BasicBackend {
                 operationAtIntermediateOffset = undefined;
         }
         if(length < 0) {
-            const originalLength = length;
             let prevIntermediateOffset = intermediateOffset,
                 decreaseAccumulator = -length, increaseAccumulator = 0, annihilationAccumulator = 0;
             if(operationAtIntermediateOffset) {
@@ -197,13 +196,19 @@ export default class Differential extends BasicBackend {
                     prevIntermediateOffset = operationAtIntermediateOffset.dstOffset;
                 --operationIndex;
             }
-            for(; operationIndex < creaseLengthOperations.length;) {
-                const operation = creaseLengthOperations[operationIndex];
+            for(let i = operationIndex; i < creaseLengthOperations.length; ++i) {
+                const operation = creaseLengthOperations[i];
                 if(prevIntermediateOffset+decreaseAccumulator < operation.dstOffset)
                     break;
                 if(operation.length < 0)
                     decreaseAccumulator -= operation.length;
-                else {
+            }
+            length = -decreaseAccumulator;
+            for(; operationIndex < creaseLengthOperations.length;) {
+                const operation = creaseLengthOperations[operationIndex];
+                if(prevIntermediateOffset+decreaseAccumulator < operation.dstOffset)
+                    break;
+                if(operation.length > 0) {
                     increaseAccumulator += operation.length;
                     const annihilate = Math.min(-length, operation.length);
                     this.cutAndShiftReplaceOperations(operationsOfSymbol.copyOperations, 'srcOffset', operation.dstOffset, 0, -annihilate);
@@ -213,9 +218,9 @@ export default class Differential extends BasicBackend {
                 this.removeCreaseLengthOperation(operation, creaseLengthOperations, operationIndex);
                 operationId = operation.id;
             }
-            this.shiftIntermediateOffsets(creaseLengthOperations, operationIndex, originalLength);
             length = increaseAccumulator-decreaseAccumulator;
             console.assert(annihilationAccumulator == increaseAccumulator-Math.max(0, length));
+            this.shiftIntermediateOffsets(creaseLengthOperations, operationIndex, -annihilationAccumulator);
             this.cutAndShiftReplaceOperations(operationsOfSymbol.replaceOperations, 'dstOffset', intermediateOffset, decreaseAccumulator, -annihilationAccumulator);
             this.mergeReplaceOperations(operationsOfSymbol.replaceOperations, intermediateOffset);
             intermediateOffset = (length > 0 && operationAtIntermediateOffset && operationAtIntermediateOffset.length > 0)
@@ -226,10 +231,11 @@ export default class Differential extends BasicBackend {
             if(operationAtIntermediateOffset) {
                 if(operationAtIntermediateOffset.length < 0) {
                     const annihilate = Math.min(-operationAtIntermediateOffset.length, length);
-                    if(annihilate === -operationAtIntermediateOffset.length)
-                        this.removeCreaseLengthOperation(operation, creaseLengthOperations, operationIndex);
-                    else
-                        operationAtIntermediateOffset.length = -operationAtIntermediateOffset.length-annihilate;
+                    if(annihilate === -operationAtIntermediateOffset.length) {
+                        intermediateOffset = operationAtIntermediateOffset.dstOffset;
+                        this.removeCreaseLengthOperation(operationAtIntermediateOffset, creaseLengthOperations, --operationIndex);
+                    } else
+                        operationAtIntermediateOffset.length += annihilate;
                     length -= annihilate;
                 } else {
                     operationAtIntermediateOffset.length += length;
@@ -303,11 +309,10 @@ export default class Differential extends BasicBackend {
             }
             return length == 0 || addSlice(context.srcSymbol, context.srcIntermediateOffset, length);
         }, skipDecreaseOperations = (contextSlot, handleSlice, length) => {
-            let range = length;
             const creaseLengthOperations = context[contextSlot+'CreaseLengthOperations'];
             for(let operationIndex = context[contextSlot+'OperationIndex']; operationIndex < creaseLengthOperations.length && length > 0; ++operationIndex) {
                 const operation = creaseLengthOperations[operationIndex];
-                if(context[contextSlot+'IntermediateOffset']+range < operation.dstOffset)
+                if(context[contextSlot+'IntermediateOffset']+length < operation.dstOffset)
                     break;
                 if(operation.length < 0) {
                     const sliceLength = Math.min(length, operation.dstOffset-context[contextSlot+'IntermediateOffset']);
@@ -315,7 +320,6 @@ export default class Differential extends BasicBackend {
                         return false;
                     length -= sliceLength;
                     context[contextSlot+'IntermediateOffset'] = operation.dstOffset-operation.length;
-                    range -= operation.length;
                 }
             }
             return length == 0 || handleSlice(length);
