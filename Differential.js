@@ -144,17 +144,18 @@ export default class Differential extends BasicBackend {
         }
     }
 
-    mergeReplaceOperations(replaceOperations, intermediateOffset) {
+    mergeReplaceOperations(replaceOperations, offsetKey, intermediateOffset) {
         if(!replaceOperations)
             return;
+        const otherOffsetKey = (offsetKey == 'dstOffset') ? 'srcOffset' : 'dstOffset';
         for(let operationIndex = 1; operationIndex < replaceOperations.length; ++operationIndex) {
             const secondOperation = replaceOperations[operationIndex];
-            if(secondOperation.dstOffset < intermediateOffset)
+            if(secondOperation[offsetKey] < intermediateOffset)
                 continue;
             const firstOperation = replaceOperations[operationIndex-1];
-            if(secondOperation.dstOffset == intermediateOffset &&
-               firstOperation.dstOffset+firstOperation.length == secondOperation.dstOffset &&
-               firstOperation.srcOffset+firstOperation.length == secondOperation.srcOffset &&
+            if(secondOperation[offsetKey] == intermediateOffset &&
+               firstOperation[offsetKey]+firstOperation.length == secondOperation[offsetKey] &&
+               firstOperation[otherOffsetKey]+firstOperation.length == secondOperation[otherOffsetKey] &&
                firstOperation.srcSymbol == secondOperation.srcSymbol) {
                 firstOperation.length += secondOperation.length;
                 this.removeReplaceOperation(secondOperation, replaceOperations, operationIndex--);
@@ -169,7 +170,7 @@ export default class Differential extends BasicBackend {
                 creaseLengthOperations[i].dstOffset += shift;
     }
 
-    saveDataToRestore(srcSymbol, srcOffset, length) {
+    saveDataToRestore(symbol, offset, length) {
         // TODO: Save data if not newly increased or already replaced
     }
 
@@ -189,16 +190,17 @@ export default class Differential extends BasicBackend {
                 operationAtIntermediateOffset = undefined;
         }
         if(length < 0) {
-            let prevIntermediateOffset = intermediateOffset,
-                decreaseAccumulator = -length, increaseAccumulator = 0, annihilationAccumulator = 0;
+            let decreaseAccumulator = -length,
+                increaseAccumulator = 0,
+                annihilationAccumulator = 0;
             if(operationAtIntermediateOffset) {
                 if(operationAtIntermediateOffset.length < 0)
-                    prevIntermediateOffset = operationAtIntermediateOffset.dstOffset;
+                    intermediateOffset = operationAtIntermediateOffset.dstOffset;
                 --operationIndex;
             }
             for(let i = operationIndex; i < creaseLengthOperations.length; ++i) {
                 const operation = creaseLengthOperations[i];
-                if(prevIntermediateOffset+decreaseAccumulator < operation.dstOffset)
+                if(intermediateOffset+decreaseAccumulator < operation.dstOffset)
                     break;
                 if(operation.length < 0)
                     decreaseAccumulator -= operation.length;
@@ -206,12 +208,13 @@ export default class Differential extends BasicBackend {
             length = -decreaseAccumulator;
             for(; operationIndex < creaseLengthOperations.length;) {
                 const operation = creaseLengthOperations[operationIndex];
-                if(prevIntermediateOffset+decreaseAccumulator < operation.dstOffset)
+                if(intermediateOffset+decreaseAccumulator < operation.dstOffset)
                     break;
                 if(operation.length > 0) {
                     increaseAccumulator += operation.length;
                     const annihilate = Math.min(-length, operation.length);
                     this.cutAndShiftReplaceOperations(operationsOfSymbol.copyOperations, 'srcOffset', operation.dstOffset, 0, -annihilate);
+                    // this.mergeReplaceOperations(operationsOfSymbol.copyOperations, 'srcOffset', operation.dstOffset); // TODO
                     annihilationAccumulator += annihilate;
                     length += annihilate;
                 }
@@ -222,10 +225,9 @@ export default class Differential extends BasicBackend {
             console.assert(annihilationAccumulator == increaseAccumulator-Math.max(0, length));
             this.shiftIntermediateOffsets(creaseLengthOperations, operationIndex, -annihilationAccumulator);
             this.cutAndShiftReplaceOperations(operationsOfSymbol.replaceOperations, 'dstOffset', intermediateOffset, decreaseAccumulator, -annihilationAccumulator);
-            this.mergeReplaceOperations(operationsOfSymbol.replaceOperations, intermediateOffset);
-            intermediateOffset = (length > 0 && operationAtIntermediateOffset && operationAtIntermediateOffset.length > 0)
-                ? operationAtIntermediateOffset.dstOffset
-                : prevIntermediateOffset;
+            this.mergeReplaceOperations(operationsOfSymbol.replaceOperations, 'dstOffset', intermediateOffset);
+            if(length > 0 && operationAtIntermediateOffset && operationAtIntermediateOffset.length > 0)
+                intermediateOffset = operationAtIntermediateOffset.dstOffset;
         } else {
             let mergeAccumulator = 0;
             if(operationAtIntermediateOffset) {
@@ -312,7 +314,7 @@ export default class Differential extends BasicBackend {
             const creaseLengthOperations = context[contextSlot+'CreaseLengthOperations'];
             for(let operationIndex = context[contextSlot+'OperationIndex']; operationIndex < creaseLengthOperations.length && length > 0; ++operationIndex) {
                 const operation = creaseLengthOperations[operationIndex];
-                if(context[contextSlot+'IntermediateOffset']+length < operation.dstOffset)
+                if(context[contextSlot+'IntermediateOffset']+length <= operation.dstOffset)
                     break;
                 if(operation.length < 0) {
                     const sliceLength = Math.min(length, operation.dstOffset-context[contextSlot+'IntermediateOffset']);
@@ -346,7 +348,7 @@ export default class Differential extends BasicBackend {
         for(const operation of addReplaceOperations)
             this.addReplaceOperation(operation);
         for(const operation of mergeReplaceOperations)
-            this.mergeReplaceOperations(this.getOrCreateEntry(this.operationsBySymbol, operation.dstSymbol).replaceOperations, operation.dstOffset);
+            this.mergeReplaceOperations(this.getOrCreateEntry(this.operationsBySymbol, operation.dstSymbol).replaceOperations, 'dstOffset', operation.dstOffset);
         return this.ontology.replaceDataSimultaneously(replaceOperations);
     }
 
