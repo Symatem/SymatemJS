@@ -171,7 +171,48 @@ export default class Differential extends BasicBackend {
     }
 
     saveDataToRestore(symbol, offset, length) {
-        // TODO: Save data if not newly increased or already replaced
+        console.assert(offset+length <= this.ontology.getLength(symbol));
+        const operationsOfSymbol = this.getOrCreateEntry(this.operationsBySymbol, symbol),
+              creaseLengthOperations = (operationsOfSymbol.creaseLengthOperations) ? operationsOfSymbol.creaseLengthOperations : [],
+              replaceOperations = (operationsOfSymbol.replaceOperations) ? operationsOfSymbol.replaceOperations : [];
+        const addSlice = (length) => {
+            const data = this.ontology.readData(symbol, intermediateOffset, length);
+            // TODO
+            return true;
+        };
+        let replaceOperationIndex = 0;
+        const avoidReplaceOperations = (length) => {
+            for(; length > 0 && replaceOperationIndex < replaceOperations.length; ++replaceOperationIndex) {
+                const operation = replaceOperations[replaceOperationIndex];
+                if(operation.dstOffset+operation.length <= intermediateOffset)
+                    continue;
+                if(intermediateOffset+length <= operation.dstOffset)
+                    break;
+                const sliceLength = operation.dstOffset-intermediateOffset;
+                if(sliceLength > 0) {
+                    if(!addSlice(sliceLength))
+                        return false;
+                    length -= sliceLength;
+                } else
+                    length -= operation.dstOffset+operation.length-intermediateOffset;
+                intermediateOffset = operation.dstOffset+operation.length;
+            }
+            return length <= 0 || addSlice(length);
+        };
+        let [intermediateOffset, operationIndex] = this.constructor.getIntermediateOffset(creaseLengthOperations, offset);
+        if(operationIndex > 0 && intermediateOffset < creaseLengthOperations[operationIndex-1].dstOffset+creaseLengthOperations[operationIndex-1].length)
+            intermediateOffset = creaseLengthOperations[--operationIndex].dstOffset;
+        for(; operationIndex < creaseLengthOperations.length && length > 0; ++operationIndex) {
+            const operation = creaseLengthOperations[operationIndex];
+            if(intermediateOffset+length <= operation.dstOffset)
+                break;
+            const sliceLength = Math.min(length, operation.dstOffset-intermediateOffset);
+            if(sliceLength == 0 || !avoidReplaceOperations(sliceLength))
+                return false;
+            length -= sliceLength+Math.max(0, operation.length);
+            intermediateOffset = operation.dstOffset+Math.abs(operation.length);
+        }
+        return length <= 0 || avoidReplaceOperations(length);
     }
 
     creaseLength(dstSymbol, dstOffset, length) {
