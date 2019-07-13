@@ -420,7 +420,7 @@ export default class NativeBackend extends BasicBackend {
      */
     readData(symbol, offset, length) {
         const handle = this.getHandle(symbol);
-        if(!handle || offset+length > handle.dataLength)
+        if(!handle || length < 0 || offset+length > handle.dataLength)
             return;
         if(offset%8 == 0 && length%8 == 0)
             return (offset == 0 && length == handle.dataLength)
@@ -440,7 +440,7 @@ export default class NativeBackend extends BasicBackend {
      */
     writeData(symbol, offset, length, dataBytes) {
         const handle = this.manifestSymbol(symbol);
-        if(!handle || offset+length > handle.dataLength)
+        if(!handle || length < 0 || offset+length > handle.dataLength || !dataBytes)
             return false;
         if(offset == 0 && length == handle.dataLength) {
             handle.dataBytes = dataBytes;
