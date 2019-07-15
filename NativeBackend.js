@@ -345,10 +345,9 @@ export default class NativeBackend extends BasicBackend {
         if(Object.keys(namespace.handles).length == 0)
             delete this.namespaces[namespaceIdentity];
         else {
-            if(handleIdentity == namespace.nextIdentity - 1)
-                --namespace.nextIdentity;
-            else if(handleIdentity < namespace.nextIdentity - 1)
-                namespace.freeIdentities[handleIdentity] = true;
+            namespace.freeIdentities[handleIdentity] = true;
+            while(namespace.freeIdentities[namespace.nextIdentity-1])
+                delete namespace.freeIdentities[--namespace.nextIdentity];
         }
         return (namespaceIdentity == this.constructor.identityOfSymbol(this.constructor.symbolByName.Namespaces))
             ? this.unlinkNamespace(handleIdentity)
@@ -408,7 +407,7 @@ export default class NativeBackend extends BasicBackend {
      */
     getBitString(symbol) {
         const handle = this.getHandle(symbol);
-        return this.constructor.bufferToBitString(handle.dataBytes, handle.dataLength);
+        return (handle) ? this.constructor.bufferToBitString(handle.dataBytes, handle.dataLength) : '';
     }
 
     /**
@@ -422,10 +421,11 @@ export default class NativeBackend extends BasicBackend {
         const handle = this.getHandle(symbol);
         if(!handle || length < 0 || offset+length > handle.dataLength)
             return;
+        console.assert(handle.dataBytes.length%4 == 0);
         if(offset%8 == 0 && length%8 == 0)
             return (offset == 0 && length == handle.dataLength)
-                   ? handle.dataBytes
-                   : handle.dataBytes.subarray(offset/8, (offset+length)/8);
+                   ? handle.dataBytes.slice()
+                   : handle.dataBytes.slice(offset/8, (offset+length)/8);
         const dataBytes = new Uint8Array(Math.ceil(length/32)*4);
         bitwiseCopy(dataBytes, 0, handle.dataBytes, offset, length);
         return dataBytes;
@@ -442,10 +442,7 @@ export default class NativeBackend extends BasicBackend {
         const handle = this.manifestSymbol(symbol);
         if(!handle || length < 0 || offset+length > handle.dataLength || !dataBytes)
             return false;
-        if(offset == 0 && length == handle.dataLength) {
-            handle.dataBytes = dataBytes;
-            handle.dataLength = length;
-        } else if(offset%8 == 0 && length%8 == 0)
+        if(offset%8 == 0 && length%8 == 0)
             handle.dataBytes.set(dataBytes.subarray(0, length/8), offset/8);
         else {
             if(dataBytes.byteLength%4 != 0) {
@@ -455,6 +452,7 @@ export default class NativeBackend extends BasicBackend {
             }
             bitwiseCopy(handle.dataBytes, offset, dataBytes, 0, length);
         }
+        console.assert(handle.dataBytes.length%4 == 0);
         return true;
     }
 
@@ -475,6 +473,7 @@ export default class NativeBackend extends BasicBackend {
             dstHandle.dataBytes.set(srcHandle.dataBytes.subarray(srcOffset/8, (srcOffset+length)/8), dstOffset/8);
         else
             bitwiseCopy(dstHandle.dataBytes, dstOffset, srcHandle.dataBytes, srcOffset, length);
+        console.assert(handle.dataBytes.length%4 == 0);
         return true;
     }
 

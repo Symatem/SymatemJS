@@ -1,6 +1,9 @@
-Object.clone = function(obj) {
-    return Object.assign(Object.create(Object.getPrototypeOf(obj)), obj);
-};
+DataView.prototype.djb2Hash = function() {
+    let result = 5381;
+    for(let i = 0; i < this.byteLength; ++i)
+        result = ((result<<5)+result+this.getUint8(i))>>>0;
+    return result; // ('0000000'+result.toString(16).toUpperCase()).substr(-8);
+}
 
 String.prototype.repeat = function(count) {
     if(count < 1)
@@ -23,12 +26,14 @@ Object.sorted = function(src, callback) {
     return Object.fromEntries(Array.from(Object.entries(src)).sort(callback));
 };
 
-DataView.prototype.djb2Hash = function() {
-    let result = 5381;
-    for(let i = 0; i < this.byteLength; ++i)
-        result = ((result<<5)+result+this.getUint8(i))>>>0;
-    return result; // ('0000000'+result.toString(16).toUpperCase()).substr(-8);
-}
+Object.clone = function(obj) {
+    return Object.assign(Object.create(Object.getPrototypeOf(obj)), obj);
+};
+
+Array.reversed = function*(array) {
+    for(let i = array.length-1; i >= 0; --i)
+        yield array[i];
+};
 
 const queryMode = ['M', 'V', 'I'],
       queryMask = {};
