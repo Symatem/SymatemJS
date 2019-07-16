@@ -1,5 +1,15 @@
 import BasicBackend from './BasicBackend.js';
 
+function getOrCreateEntry(dict, key, value={}) {
+    const entry = dict[key];
+    return (entry) ? entry : (dict[key] = value);
+}
+
+function getOrDefaultEntry(dict, key, value={}) {
+    const entry = dict[key];
+    return (entry) ? entry : value;
+}
+
 export default class Differential extends BasicBackend {
     constructor(ontology, repositoryNamespace, recordingRelocation={}) {
         super();
@@ -17,16 +27,11 @@ export default class Differential extends BasicBackend {
         return this.ontology.getLength(symbol);
     }
 
-    getOrCreateEntry(dict, key, value={}) {
-        const entry = dict[key];
-        return (entry) ? entry : (dict[key] = value);
-    }
-
     manifestSymbol(symbol) {
         if(!this.ontology.manifestSymbol(symbol))
             return false;
         symbol = BasicBackend.relocateSymbol(symbol, this.recordingRelocation);
-        const operationsOfSymbol = this.getOrCreateEntry(this.operationsBySymbol, symbol);
+        const operationsOfSymbol = getOrCreateEntry(this.operationsBySymbol, symbol);
         if(operationsOfSymbol.manifestOrRelease == 'release')
             delete operationsOfSymbol.manifestOrRelease;
         else
@@ -38,7 +43,7 @@ export default class Differential extends BasicBackend {
         if(!this.ontology.releaseSymbol(symbol))
             return false;
         symbol = BasicBackend.relocateSymbol(symbol, this.recordingRelocation);
-        const operationsOfSymbol = this.getOrCreateEntry(this.operationsBySymbol, symbol);
+        const operationsOfSymbol = getOrCreateEntry(this.operationsBySymbol, symbol);
         if(operationsOfSymbol.manifestOrRelease == 'manifest')
             delete operationsOfSymbol.manifestOrRelease;
         else
@@ -50,9 +55,9 @@ export default class Differential extends BasicBackend {
         if(!this.ontology.setTriple(triple, link))
             return false;
         triple = triple.map(symbol => BasicBackend.relocateSymbol(symbol, this.recordingRelocation));
-        const operationsOfSymbol = this.getOrCreateEntry(this.operationsBySymbol, triple[0]),
-              attributeDict = this.getOrCreateEntry(operationsOfSymbol, 'tripleOperations'),
-              valueDict = this.getOrCreateEntry(attributeDict, triple[1]),
+        const operationsOfSymbol = getOrCreateEntry(this.operationsBySymbol, triple[0]),
+              attributeDict = getOrCreateEntry(operationsOfSymbol, 'tripleOperations'),
+              valueDict = getOrCreateEntry(attributeDict, triple[1]),
               isLinked = valueDict[triple[2]];
         if(isLinked === link)
             return false;
@@ -85,8 +90,8 @@ export default class Differential extends BasicBackend {
 
     addReplaceOperation(mode, operation, operations, operationIndex) {
         if(operations === undefined) {
-            const operationsOfSymbol = this.getOrCreateEntry(this.operationsBySymbol, operation[mode+'Symbol']);
-            operations = this.getOrCreateEntry(operationsOfSymbol, (mode == 'src') ? 'copyOperations' : 'replaceOperations', []);
+            const operationsOfSymbol = getOrCreateEntry(this.operationsBySymbol, operation[mode+'Symbol']);
+            operations = getOrCreateEntry(operationsOfSymbol, (mode == 'src') ? 'copyOperations' : 'replaceOperations', []);
             operationIndex = this.constructor.getOperationIndex(operations, mode+'Offset', operation[mode+'Offset']);
         }
         operations.splice(operationIndex, 0, operation);
@@ -157,7 +162,7 @@ export default class Differential extends BasicBackend {
     }
 
     mergeReplaceOperations(operations, mode, intermediateOffset) {
-        // TODO: Take possible overlap into account if(mode == 'src')
+        // TODO: Take possible DAG-like overlap into account if(mode == 'src')
         const complementaryMode = (mode == 'dst') ? 'src' : 'dst';
         if(!operations)
             return;
@@ -184,43 +189,60 @@ export default class Differential extends BasicBackend {
                 creaseLengthOperations[i].dstOffset += shift;
     }
 
-    saveDataToRestore(symbol, offset, length) {
-        // TODO: Skip and merge with existing restore operations
-        console.assert(offset+length <= this.ontology.getLength(symbol));
-        const operationsOfSymbol = this.getOrCreateEntry(this.operationsBySymbol, symbol),
-              creaseLengthOperations = (operationsOfSymbol.creaseLengthOperations) ? operationsOfSymbol.creaseLengthOperations : [],
-              replaceOperations = (operationsOfSymbol.replaceOperations) ? operationsOfSymbol.replaceOperations : [];
-        let replaceOperationIndex = 0,
-            [intermediateOffset, operationIndex] = this.constructor.getIntermediateOffset(creaseLengthOperations, offset),
-            decreaseAccumulator = intermediateOffset-offset;
+    saveDataToRestore(srcSymbol, srcOffset, length) {
+        console.assert(srcOffset+length <= this.ontology.getLength(srcSymbol));
+        const operationsOfSymbol = getOrCreateEntry(this.operationsBySymbol, srcSymbol),
+              creaseLengthOperations = getOrDefaultEntry(operationsOfSymbol, 'creaseLengthOperations', []);
+        let [intermediateOffset, operationIndex] = this.constructor.getIntermediateOffset(creaseLengthOperations, srcOffset),
+            decreaseAccumulator = intermediateOffset-srcOffset,
+            dstSymbol = operationsOfSymbol.restoreSymbol;
         const addSlice = (length) => {
             if(length <= 0)
                 return;
-            const storeSymbol = this.ontology.createSymbol(this.repositoryNamespace);
-            this.ontology.setRawData(storeSymbol, this.ontology.readData(symbol, intermediateOffset-decreaseAccumulator, length), length);
+            let dstOffset = (dstSymbol) ? this.ontology.getLength(dstSymbol) : 0,
+                replaceOperations = (dstSymbol) ? this.operationsBySymbol[dstSymbol].replaceOperations : [],
+                replaceOperationIndex = 0;
+            if(!dstSymbol) {
+                operationsOfSymbol.restoreSymbol = dstSymbol = this.ontology.createSymbol(this.repositoryNamespace);
+                this.operationsBySymbol[dstSymbol] = {'replaceOperations': []};
+                replaceOperations = this.operationsBySymbol[dstSymbol].replaceOperations;
+            } else
+                for(; replaceOperationIndex < replaceOperations.length; ++replaceOperationIndex)
+                    if(intermediateOffset <= replaceOperations[replaceOperationIndex].srcOffset) {
+                        dstOffset = replaceOperations[replaceOperationIndex].dstOffset;
+                        break;
+                    }
+            this.ontology.creaseLength(dstSymbol, dstOffset, length);
+            this.ontology.writeData(dstSymbol, dstOffset, length, this.ontology.readData(srcSymbol, intermediateOffset-decreaseAccumulator, length));
             const operation = {
-                'dstSymbol': storeSymbol,
-                'dstOffset': 0,
-                'srcSymbol': symbol,
+                'dstSymbol': dstSymbol,
+                'dstOffset': dstOffset,
+                'srcSymbol': srcSymbol,
                 'srcOffset': intermediateOffset,
                 'length': length
             };
             this.addReplaceOperation('src', operation);
-            this.addReplaceOperation('dst', operation);
+            this.addReplaceOperation('dst', operation, replaceOperations, replaceOperationIndex++);
+            // this.mergeReplaceOperations(replaceOperations, 'src', intermediateOffset); // TODO
+            for(; replaceOperationIndex < replaceOperations.length; ++replaceOperationIndex)
+                replaceOperations[replaceOperationIndex].dstOffset += length;
         };
-        const avoidReplaceOperations = (length) => {
+        const avoidRestoreOperations = (length) => {
             if(length <= 0)
                 return;
-            for(; length > 0 && replaceOperationIndex < replaceOperations.length; ++replaceOperationIndex) {
-                const operation = replaceOperations[replaceOperationIndex];
-                if(operation.dstOffset+operation.length <= intermediateOffset)
-                    continue;
-                if(intermediateOffset+length <= operation.dstOffset)
-                    break;
-                const sliceLength = operation.dstOffset-intermediateOffset;
-                addSlice(sliceLength);
-                length -= sliceLength+operation.length; // operation.dstOffset+operation.length-intermediateOffset;
-                intermediateOffset = operation.dstOffset+operation.length;
+            if(dstSymbol) {
+                const replaceOperations = this.operationsBySymbol[dstSymbol].replaceOperations;
+                for(let replaceOperationIndex = 0; length > 0 && replaceOperationIndex < replaceOperations.length; ++replaceOperationIndex) {
+                    const operation = replaceOperations[replaceOperationIndex];
+                    if(operation.srcOffset+operation.length <= intermediateOffset)
+                        continue;
+                    if(intermediateOffset+length <= operation.srcOffset)
+                        break;
+                    const sliceLength = operation.srcOffset-intermediateOffset;
+                    addSlice(sliceLength);
+                    length -= sliceLength+operation.length; // operation.srcOffset+operation.length-intermediateOffset;
+                    intermediateOffset = operation.srcOffset+operation.length;
+                }
             }
             addSlice(length);
         };
@@ -231,27 +253,32 @@ export default class Differential extends BasicBackend {
             if(intermediateOffset+length <= operation.dstOffset)
                 break;
             const sliceLength = Math.min(length, operation.dstOffset-intermediateOffset);
-            avoidReplaceOperations(sliceLength);
+            avoidRestoreOperations(sliceLength);
             length -= sliceLength+Math.max(0, operation.length);
             intermediateOffset = operation.dstOffset+Math.abs(operation.length);
             if(operation.length < 0)
                 decreaseAccumulator -= operation.length;
         }
-        avoidReplaceOperations(length);
+        avoidRestoreOperations(length);
     }
 
     creaseLength(dstSymbol, dstOffset, length) {
-        // TODO: Validate operation
         if(length == 0)
             return true;
+        const dataLength = this.ontology.getLength(dstSymbol);
+        if(length < 0) {
+            if(dstOffset-length > dataLength)
+                return false;
+        } else if(dstOffset > dataLength)
+            return false;
         const originalDstSymbol = dstSymbol;
         dstSymbol = BasicBackend.relocateSymbol(dstSymbol, this.recordingRelocation);
         if(length < 0)
             this.saveDataToRestore(dstSymbol, dstOffset, -length);
         if(!this.ontology.creaseLength(originalDstSymbol, dstOffset, length))
             return false;
-        const operationsOfSymbol = this.getOrCreateEntry(this.operationsBySymbol, dstSymbol),
-              creaseLengthOperations = this.getOrCreateEntry(operationsOfSymbol, 'creaseLengthOperations', []);
+        const operationsOfSymbol = getOrCreateEntry(this.operationsBySymbol, dstSymbol),
+              creaseLengthOperations = getOrCreateEntry(operationsOfSymbol, 'creaseLengthOperations', []);
         let operationAtIntermediateOffset,
             [intermediateOffset, operationIndex] = this.constructor.getIntermediateOffset(creaseLengthOperations, dstOffset);
         if(operationIndex > 0) {
@@ -334,19 +361,26 @@ export default class Differential extends BasicBackend {
     }
 
     replaceDataSimultaneously(replaceOperations) {
-        // TODO: Validate operations
+        for(const operation of replaceOperations)
+            if(operation.length < 0 ||
+               operation.dstOffset+operation.length > this.ontology.getLength(operation.dstSymbol) ||
+               operation.srcOffset+operation.length > this.ontology.getLength(operation.srcSymbol))
+                return false;
         const context = {},
               cutReplaceOperations = [], addReplaceOperations = [], mergeReplaceOperations = [],
               addSlice = (srcSymbol, srcOffset, length) => {
-            const srcCreaseLengthOperations = (this.operationsBySymbol[srcSymbol] && this.operationsBySymbol[srcSymbol].creaseLengthOperations) ? this.operationsBySymbol[srcSymbol].creaseLengthOperations : [];
+            const operationsOfSymbol = getOrDefaultEntry(this.operationsBySymbol, srcSymbol, {}),
+                  srcCreaseLengthOperations = getOrDefaultEntry(operationsOfSymbol, 'creaseLengthOperations', []);
             for(let operationIndex = 0; operationIndex < srcCreaseLengthOperations.length; ++operationIndex) {
                 const operation = srcCreaseLengthOperations[operationIndex];
                 if(operation.dstOffset+Math.abs(operation.length) <= srcOffset)
                     continue;
                 if(operation.dstOffset >= srcOffset+length)
                     break;
-                if(operation.length > 0)
+                if(operation.length > 0) {
+                    console.error('Tried to copy data from uninitialized increased slice', operationIndex, srcSymbol, srcOffset, length);
                     return false;
+                }
             }
             if(context.dstSymbol != srcSymbol || context.dstIntermediateOffset != srcOffset)
                 addReplaceOperations.push({
@@ -361,13 +395,13 @@ export default class Differential extends BasicBackend {
             return true;
         }, backTrackSrc = (length) => {
             cutReplaceOperations.push({'dstSymbol': context.dstSymbol, 'dstOffset': context.dstIntermediateOffset, 'length': length});
-            for(; context.replaceOperationIndexAtSrcSymbol < context.replaceOperationsAtSrcSymbol.length; ++context.replaceOperationIndexAtSrcSymbol) {
-                const operation = context.replaceOperationsAtSrcSymbol[context.replaceOperationIndexAtSrcSymbol];
+            for(; context.srcReplaceOperationIndex < context.srcReplaceOperations.length; ++context.srcReplaceOperationIndex) {
+                const operation = context.srcReplaceOperations[context.srcReplaceOperationIndex];
                 if(context.srcIntermediateOffset <= operation.dstOffset+operation.length)
                     break;
             }
-            while(length > 0 && context.replaceOperationIndexAtSrcSymbol < context.replaceOperationsAtSrcSymbol.length) {
-                const operation = context.replaceOperationsAtSrcSymbol[context.replaceOperationIndexAtSrcSymbol];
+            while(length > 0 && context.srcReplaceOperationIndex < context.srcReplaceOperations.length) {
+                const operation = context.srcReplaceOperations[context.srcReplaceOperationIndex];
                 if(context.srcIntermediateOffset+length <= operation.dstOffset)
                     break;
                 if(context.srcIntermediateOffset < operation.dstOffset) {
@@ -385,7 +419,7 @@ export default class Differential extends BasicBackend {
                     length -= sliceLength;
                 }
                 if(operation.dstOffset+operation.length <= context.srcIntermediateOffset)
-                    ++context.replaceOperationIndexAtSrcSymbol;
+                    ++context.srcReplaceOperationIndex;
             }
             return length == 0 || addSlice(context.srcSymbol, context.srcIntermediateOffset, length);
         }, skipDecreaseOperations = (contextSlot, handleSlice, length) => {
@@ -410,33 +444,30 @@ export default class Differential extends BasicBackend {
         for(const operation of replaceOperations) {
             if(operation.length <= 0 || (operation.dstSymbol == operation.srcSymbol && operation.dstOffset == operation.srcOffset))
                 continue;
-            this.saveDataToRestore(BasicBackend.relocateSymbol(operation.dstSymbol, this.recordingRelocation), operation.dstOffset, operation.length);
-            context.dstSymbol = BasicBackend.relocateSymbol(operation.dstSymbol, this.recordingRelocation);
-            context.srcSymbol = BasicBackend.relocateSymbol(operation.srcSymbol, this.recordingRelocation);
-            context.dstCreaseLengthOperations = (this.operationsBySymbol[context.dstSymbol] && this.operationsBySymbol[context.dstSymbol].creaseLengthOperations) ? this.operationsBySymbol[context.dstSymbol].creaseLengthOperations : [];
-            [context.dstIntermediateOffset, context.dstOperationIndex] = this.constructor.getIntermediateOffset(context.dstCreaseLengthOperations, operation.dstOffset);
-            context.srcCreaseLengthOperations = (this.operationsBySymbol[context.srcSymbol] && this.operationsBySymbol[context.srcSymbol].creaseLengthOperations) ? this.operationsBySymbol[context.srcSymbol].creaseLengthOperations : [];
-            [context.srcIntermediateOffset, context.srcOperationIndex] = this.constructor.getIntermediateOffset(context.srcCreaseLengthOperations, operation.srcOffset);
-            context.replaceOperationsAtSrcSymbol = (this.operationsBySymbol[context.srcSymbol] && this.operationsBySymbol[context.srcSymbol].replaceOperations) ? this.operationsBySymbol[context.srcSymbol].replaceOperations : [];
-            context.replaceOperationIndexAtSrcSymbol = 0;
+            for(const mode of ['dst', 'src']) {
+                context[mode+'Symbol'] = BasicBackend.relocateSymbol(operation[mode+'Symbol'], this.recordingRelocation);
+                context[mode+'OperationsOfSymbol'] = getOrDefaultEntry(this.operationsBySymbol, context[mode+'Symbol'], {});
+                context[mode+'CreaseLengthOperations'] = getOrDefaultEntry(context[mode+'OperationsOfSymbol'], 'creaseLengthOperations', []);
+                [context[mode+'IntermediateOffset'], context[mode+'OperationIndex']] = this.constructor.getIntermediateOffset(context[mode+'CreaseLengthOperations'], operation[mode+'Offset']);
+            }
+            context.srcReplaceOperations = getOrDefaultEntry(context.srcOperationsOfSymbol, 'replaceOperations', []);
+            context.srcReplaceOperationIndex = 0;
             mergeReplaceOperations.push({'dstSymbol': context.dstSymbol, 'dstOffset': context.dstIntermediateOffset});
             if(!skipDstDecreaseOperations(operation.length))
                 return false;
             mergeReplaceOperations.push({'dstSymbol': context.dstSymbol, 'dstOffset': context.dstIntermediateOffset});
         }
+        for(const operation of replaceOperations)
+            this.saveDataToRestore(BasicBackend.relocateSymbol(operation.dstSymbol, this.recordingRelocation), operation.dstOffset, operation.length);
         for(const operation of cutReplaceOperations)
-            this.cutAndShiftReplaceOperations(this.getOrCreateEntry(this.operationsBySymbol, operation.dstSymbol).replaceOperations, 'dst', operation.dstOffset, operation.length, 0);
+            this.cutAndShiftReplaceOperations(getOrCreateEntry(this.operationsBySymbol, operation.dstSymbol).replaceOperations, 'dst', operation.dstOffset, operation.length, 0);
         for(const operation of addReplaceOperations) {
             this.addReplaceOperation('dst', operation);
             this.addReplaceOperation('src', operation);
         }
         for(const operation of mergeReplaceOperations)
-            this.mergeReplaceOperations(this.getOrCreateEntry(this.operationsBySymbol, operation.dstSymbol).replaceOperations, 'dst', operation.dstOffset);
+            this.mergeReplaceOperations(getOrCreateEntry(this.operationsBySymbol, operation.dstSymbol).replaceOperations, 'dst', operation.dstOffset);
         return this.ontology.replaceDataSimultaneously(replaceOperations);
-    }
-
-    replaceData(dstSymbol, dstOffset, srcSymbol, srcOffset, length) {
-        return this.replaceDataSimultaneously([{'dstSymbol': dstSymbol, 'dstOffset': dstOffset, 'srcSymbol': srcSymbol, 'srcOffset': srcOffset, 'length': length}]);
     }
 
     writeData(dstSymbol, offset, length, dataBytes) {

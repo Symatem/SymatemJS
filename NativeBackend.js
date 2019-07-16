@@ -469,11 +469,11 @@ export default class NativeBackend extends BasicBackend {
               srcHandle = this.getHandle(srcSymbol);
         if(!dstHandle || !srcHandle || dstOffset+length > dstHandle.dataLength || srcOffset+length > srcHandle.dataLength)
             return false;
+        console.assert(dstHandle.dataBytes.length%4 == 0 && srcHandle.dataBytes.length%4 == 0);
         if(dstOffset%8 == 0 && srcOffset%8 == 0 && length%8 == 0)
             dstHandle.dataBytes.set(srcHandle.dataBytes.subarray(srcOffset/8, (srcOffset+length)/8), dstOffset/8);
         else
             bitwiseCopy(dstHandle.dataBytes, dstOffset, srcHandle.dataBytes, srcOffset, length);
-        console.assert(handle.dataBytes.length%4 == 0);
         return true;
     }
 

@@ -548,9 +548,7 @@ export default class BasicBackend {
      * @param {number} length in bits
      */
     replaceData(dstSymbol, dstOffset, srcSymbol, srcOffset, length) {
-        const dataBytes = this.readData(srcSymbol, srcOffset, length);
-        this.writeData(dstSymbol, dstOffset, length, dataBytes);
-        return true;
+        return this.replaceDataSimultaneously([{'dstSymbol': dstSymbol, 'dstOffset': dstOffset, 'srcSymbol': srcSymbol, 'srcOffset': srcOffset, 'length': length}]);
     }
 
     /**
@@ -558,8 +556,11 @@ export default class BasicBackend {
      * @param {ReplaceDataOperation[]} operations
      */
     replaceDataSimultaneously(operations) {
-        for(const operation of operations)
+        for(const operation of operations) {
             operation.dataBytes = this.readData(operation.srcSymbol, operation.srcOffset, operation.length);
+            if(operation.length < 0 || !operation.dataBytes || operation.dstOffset+operation.length > this.getLength(operation.dstSymbol))
+                return false;
+        }
         for(const operation of operations)
             if(!this.writeData(operation.dstSymbol, operation.dstOffset, operation.length, operation.dataBytes))
                 return false;
