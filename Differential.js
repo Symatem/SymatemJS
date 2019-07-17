@@ -296,35 +296,39 @@ export default class Differential extends BasicBackend {
                 --operationIndex;
             }
             const firstOperation = (operationAtIntermediateOffset) ? operationAtIntermediateOffset : creaseLengthOperations[operationIndex],
-                  minOperationIndex = operationIndex;
-            for(; operationIndex < creaseLengthOperations.length; ++operationIndex) {
-                const operation = creaseLengthOperations[operationIndex];
+                  increaseLengthOperations = [];
+            for(let i = operationIndex; i < creaseLengthOperations.length;) {
+                const operation = creaseLengthOperations[i];
                 if(intermediateOffset+decreaseAccumulator < operation.dstOffset)
                     break;
                 if(operation.length < 0)
                     decreaseAccumulator -= operation.length;
-            }
-            length = -decreaseAccumulator;
-            for(--operationIndex; operationIndex >= minOperationIndex; --operationIndex) {
-                const operation = creaseLengthOperations[operationIndex];
-                if(intermediateOffset+decreaseAccumulator < operation.dstOffset)
-                    break;
-                if(operation.length > 0) {
+                else {
                     increaseAccumulator += operation.length;
-                    const annihilate = Math.min(-length, operation.length);
-                    this.cutAndShiftReplaceOperations(operationsOfSymbol.copyOperations, 'src', operation.dstOffset, 0, -annihilate);
-                    // this.mergeReplaceOperations(operationsOfSymbol.copyOperations, 'src', operation.dstOffset); // TODO
-                    annihilationAccumulator += annihilate;
-                    length += annihilate;
+                    increaseLengthOperations.push(operation);
                 }
-                creaseLengthOperations.splice(operationIndex, 1);
                 operationId = operation.id;
+                creaseLengthOperations.splice(i, 1);
             }
-            ++operationIndex; // operationIndex = minOperationIndex;
+            const copyOperations = getOrDefaultEntry(operationsOfSymbol, 'copyOperations', []);
+            let copyOperationIndex = 0;
             length = increaseAccumulator-decreaseAccumulator;
-            console.assert(annihilationAccumulator == increaseAccumulator-Math.max(0, length));
-            this.shiftIntermediateOffsets(creaseLengthOperations, operationIndex, -annihilationAccumulator);
-            this.cutAndShiftReplaceOperations(operationsOfSymbol.replaceOperations, 'dst', intermediateOffset, decreaseAccumulator, -annihilationAccumulator);
+            increaseAccumulator = 0;
+            for(let i = 0; i < increaseLengthOperations.length; ++i) {
+                const operation = increaseLengthOperations[i];
+                increaseAccumulator += operation.length;
+                for(; copyOperationIndex < copyOperations.length; ++copyOperationIndex) {
+                    if(copyOperations[copyOperationIndex].srcOffset+copyOperations[copyOperationIndex].length <= operation.dstOffset)
+                        continue;
+                    if(i+1 < increaseLengthOperations.length && increaseLengthOperations[i+1].dstOffset <= copyOperations[copyOperationIndex].srcOffset)
+                        break;
+                    copyOperations[copyOperationIndex].srcOffset += Math.max(0, length)-increaseAccumulator;
+                    // this.mergeReplaceOperations(operationsOfSymbol.copyOperations, 'src', copyOperations[copyOperationIndex].srcOffset); // TODO
+                }
+            }
+            const shift = Math.max(0, length)-increaseAccumulator;
+            this.shiftIntermediateOffsets(creaseLengthOperations, operationIndex, shift);
+            this.cutAndShiftReplaceOperations(operationsOfSymbol.replaceOperations, 'dst', intermediateOffset, decreaseAccumulator, shift);
             this.mergeReplaceOperations(operationsOfSymbol.replaceOperations, 'dst', intermediateOffset);
             if(length > 0 && firstOperation && firstOperation.length > 0)
                 intermediateOffset = firstOperation.dstOffset;
@@ -378,7 +382,7 @@ export default class Differential extends BasicBackend {
                 if(operation.dstOffset >= srcOffset+length)
                     break;
                 if(operation.length > 0) {
-                    console.error('Tried to copy data from uninitialized increased slice', operationIndex, srcSymbol, srcOffset, length);
+                    console.error('Tried to copy data from uninitialized increased slice');
                     return false;
                 }
             }
