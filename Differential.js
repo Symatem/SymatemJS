@@ -275,14 +275,8 @@ export default class Differential extends BasicBackend {
             } else if(dstOffset > dataLength)
                 return false;
         }
-        const originalDstSymbol = dstSymbol;
+        const originalDstSymbol = dstSymbol, originalLength = length;
         dstSymbol = BasicBackend.relocateSymbol(dstSymbol, this.recordingRelocation);
-        if(this.isRecordingFromOntology) {
-            if(length < 0)
-                this.saveDataToRestore(dstSymbol, dstOffset, -length);
-            if(!this.ontology.creaseLength(originalDstSymbol, dstOffset, length))
-                return false;
-        }
         const operationsOfSymbol = getOrCreateEntry(this.operationsBySymbol, dstSymbol),
               creaseLengthOperations = getOrCreateEntry(operationsOfSymbol, 'creaseLengthOperations', []);
         let operationAtIntermediateOffset,
@@ -300,9 +294,9 @@ export default class Differential extends BasicBackend {
                     intermediateOffset = operationAtIntermediateOffset.dstOffset;
                 --operationIndex;
             }
-            const firstOperation = (operationAtIntermediateOffset) ? operationAtIntermediateOffset : creaseLengthOperations[operationIndex],
-                  increaseLengthOperations = [];
-            for(let i = operationIndex; i < creaseLengthOperations.length;) {
+            const increaseLengthOperations = [];
+            let creaseLengthOperationsToDelete = 0;
+            for(let i = operationIndex; i < creaseLengthOperations.length; ++i) {
                 const operation = creaseLengthOperations[i];
                 if(intermediateOffset+decreaseAccumulator < operation.dstOffset)
                     break;
@@ -313,17 +307,25 @@ export default class Differential extends BasicBackend {
                     increaseLengthOperations.push(operation);
                 }
                 operationId = operation.id;
-                creaseLengthOperations.splice(i, 1);
+                ++creaseLengthOperationsToDelete;
             }
-            const copyOperations = getOrDefaultEntry(operationsOfSymbol, 'copyOperations', []);
-            let copyOperationIndex = 0;
+            if(this.isRecordingFromOntology)
+                this.saveDataToRestore(dstSymbol, dstOffset, -length);
             length = increaseAccumulator-decreaseAccumulator;
             increaseAccumulator = 0;
-            for(let i = 0; i < increaseLengthOperations.length; ++i) {
-                const operation = increaseLengthOperations[i];
-                increaseAccumulator += operation.length;
+            let copyOperationIndex = 0;
+            const copyOperations = getOrDefaultEntry(operationsOfSymbol, 'copyOperations', []),
+                  firstOperation = (operationAtIntermediateOffset) ? operationAtIntermediateOffset : creaseLengthOperations[operationIndex],
+                  nextIntermediateOffset = (length > 0 && firstOperation && firstOperation.length > 0) ? firstOperation.dstOffset : intermediateOffset;
+            for(let i = -1; i < increaseLengthOperations.length; ++i) {
+                let srcOffset = nextIntermediateOffset;
+                if(i >= 0) {
+                    const operation = increaseLengthOperations[i];
+                    increaseAccumulator += operation.length;
+                    srcOffset = operation.dstOffset;
+                }
                 for(; copyOperationIndex < copyOperations.length; ++copyOperationIndex) {
-                    if(copyOperations[copyOperationIndex].srcOffset+copyOperations[copyOperationIndex].length <= operation.dstOffset)
+                    if(copyOperations[copyOperationIndex].srcOffset+copyOperations[copyOperationIndex].length <= srcOffset)
                         continue;
                     if(i+1 < increaseLengthOperations.length && increaseLengthOperations[i+1].dstOffset <= copyOperations[copyOperationIndex].srcOffset)
                         break;
@@ -332,12 +334,12 @@ export default class Differential extends BasicBackend {
                         --copyOperationIndex;
                 }
             }
-            const shift = Math.max(0, length)-increaseAccumulator;
-            this.shiftIntermediateOffsets(creaseLengthOperations, operationIndex, shift);
-            this.cutAndShiftReplaceOperations(operationsOfSymbol.replaceOperations, 'dst', intermediateOffset, decreaseAccumulator, shift);
+            creaseLengthOperations.splice(operationIndex, creaseLengthOperationsToDelete);
+            const annihilated = increaseAccumulator-Math.max(0, length);
+            this.shiftIntermediateOffsets(creaseLengthOperations, operationIndex, -annihilated);
+            this.cutAndShiftReplaceOperations(operationsOfSymbol.replaceOperations, 'dst', intermediateOffset, decreaseAccumulator, -annihilated);
             this.mergeReplaceOperations(operationsOfSymbol.replaceOperations, 'dst', intermediateOffset);
-            if(length > 0 && firstOperation && firstOperation.length > 0)
-                intermediateOffset = firstOperation.dstOffset;
+            intermediateOffset = nextIntermediateOffset;
         } else {
             let mergeAccumulator = 0;
             if(operationAtIntermediateOffset) {
@@ -367,7 +369,7 @@ export default class Differential extends BasicBackend {
                 'dstOffset': intermediateOffset,
                 'length': length
             });
-        return true;
+        return !this.isRecordingFromOntology || this.ontology.creaseLength(originalDstSymbol, dstOffset, originalLength);
     }
 
     replaceDataSimultaneously(replaceOperations) {
