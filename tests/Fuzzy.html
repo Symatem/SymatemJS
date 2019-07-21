@@ -19,7 +19,7 @@
             document.body.appendChild(seed);
             seed.value = Math.floor(Math.random()*(0x80000000-1));
             seed.onblur = () => {
-                const ontology = new NativeBackend(),
+                const backend = new NativeBackend(),
                       rand = new PRNG(seed.value),
                       tests = {},
                       progressBars = {};
@@ -28,7 +28,7 @@
                 const table = document.createElement('table');
                 document.body.appendChild(table);
                 for(let testBundle of testBundles) {
-                    testBundle = testBundle(ontology, rand);
+                    testBundle = testBundle(backend, rand);
                     for(const name in testBundle) {
                         tests[name] = testBundle[name];
                         const row = document.createElement('tr');

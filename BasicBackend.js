@@ -84,28 +84,7 @@ function sortSymbolsArrayCallback(a, b) {
     return (namespaceIdDiff) ? namespaceIdDiff : BasicBackend.identityOfSymbol(a)-BasicBackend.identityOfSymbol(b);
 }
 
-/**
- * @typedef {Object} Symbol
- * @property {Number} namespaceIdentity
- * @property {Number} identity
- */
-
-/**
- * @typedef {Object} Triple
- * @property {Symbol} entity
- * @property {Symbol} attribute
- * @property {Symbol} value
- */
-
-/**
- * @typedef {Object} ReplaceDataOperation
- * @property {Symbol} dstOffset
- * @property {Number} dstOffset in bits
- * @property {Symbol} srcSymbol
- * @property {Number} srcOffset in bits
- * @property {Number} length in bits
- */
-
+/** Abstract super class of all backends */
 export default class BasicBackend {
     static get queryMask() {
         return queryMask;
@@ -231,8 +210,8 @@ export default class BasicBackend {
 
     /**
      * Concats namespaceIdentity and identity into a symbol
-     * @param {Number} namespaceIdentity
-     * @param {Number} identity
+     * @param {Identity} namespaceIdentity
+     * @param {Identity} identity
      * @return {Symbol} symbol
      */
     static concatIntoSymbol(namespaceIdentity, identity) {
@@ -241,8 +220,8 @@ export default class BasicBackend {
 
     /**
      * Same as concatIntoSymbol but resolves the namespaceIdentity by name
-     * @param {Number} namespaceName
-     * @param {Number} identity
+     * @param {String} namespaceName
+     * @param {Identity} identity
      * @return {Symbol} symbol
      */
     static symbolInNamespace(namespaceName, identity) {
@@ -252,7 +231,7 @@ export default class BasicBackend {
     /**
      * Extracts the namespaceIdentity of a symbol
      * @param {Symbol} symbol
-     * @return {Number} namespaceIdentity
+     * @return {Identity} namespaceIdentity
      */
     static namespaceOfSymbol(symbol) {
         return parseInt(symbol.split(':')[0]);
@@ -261,7 +240,7 @@ export default class BasicBackend {
     /**
      * Extracts the identity of a symbol
      * @param {Symbol} symbol
-     * @return {Number} identity
+     * @return {Identity} identity
      */
     static identityOfSymbol(symbol) {
         return parseInt(symbol.split(':')[1]);
@@ -287,43 +266,12 @@ export default class BasicBackend {
     /**
      * Relocates a symbol into another namespace according to a lookup table
      * @param {Symbol} symbol
-     * @param {Object} namespaces relocation table
+     * @param {RelocationTable} namespaces relocation table
      * @return {Symbol} relocated symbol
      */
     static relocateSymbol(symbol, namespaces) {
         const namespaceId = namespaces[BasicBackend.namespaceOfSymbol(symbol)];
         return (namespaceId) ? BasicBackend.concatIntoSymbol(namespaceId, BasicBackend.identityOfSymbol(symbol)) : symbol;
-    }
-
-
-
-    /**
-     * Fills the ontology with the predefined symbols
-     */
-    initBasicOntology() {
-        for(const name of Object.getOwnPropertyNames(symbolByName))
-            this.setData(symbolByName[name], name);
-        for(const entity of [symbolByName.BinaryNumber, symbolByName.TwosComplement, symbolByName.IEEE754, symbolByName.UTF8, symbolByName.Composite])
-            this.setTriple([entity, symbolByName.Type, symbolByName.Encoding], true);
-    }
-
-    /**
-     * Creates a new namespace with the given symbols and adds them to symbolByName
-     * @param {String} namespaceName
-     * @param {String[]} symbolNames
-     * @return {Number} identity of the new namespace
-     */
-    registerAdditionalSymbols(namespaceName, symbolNames) {
-        const namespaceSymbol = this.createSymbol(BasicBackend.identityOfSymbol(BasicBackend.symbolByName.Namespaces)),
-              namespaceIdentity = BasicBackend.identityOfSymbol(namespace);
-        symbolByName[namespaceName] = namespaceSymbol;
-        this.setData(namespaceSymbol, namespaceName);
-        for(const name of symbolNames) {
-            const symbol = this.createSymbol(namespaceIdentity);
-            symbolByName[name] = symbol;
-            this.setData(symbol, name);
-        }
-        return namespaceIdentity;
     }
 
     /**
@@ -456,6 +404,126 @@ export default class BasicBackend {
         return dataBytes;
     }
 
+
+
+    /**
+     * Fills the predefined symbols
+     */
+    initPredefinedSymbols() {
+        for(const name of Object.getOwnPropertyNames(symbolByName))
+            this.setData(symbolByName[name], name);
+        for(const entity of [symbolByName.BinaryNumber, symbolByName.TwosComplement, symbolByName.IEEE754, symbolByName.UTF8, symbolByName.Composite])
+            this.setTriple([entity, symbolByName.Type, symbolByName.Encoding], true);
+    }
+
+    /**
+     * Creates a new namespace with the given symbols and adds them to symbolByName
+     * @param {String} namespaceName
+     * @param {String[]} symbolNames
+     * @return {Identity} identity of the new namespace
+     */
+    registerAdditionalSymbols(namespaceName, symbolNames) {
+        const namespaceSymbol = this.createSymbol(BasicBackend.identityOfSymbol(BasicBackend.symbolByName.Namespaces)),
+              namespaceIdentity = BasicBackend.identityOfSymbol(namespace);
+        symbolByName[namespaceName] = namespaceSymbol;
+        this.setData(namespaceSymbol, namespaceName);
+        for(const name of symbolNames) {
+            const symbol = this.createSymbol(namespaceIdentity);
+            symbolByName[name] = symbol;
+            this.setData(symbol, name);
+        }
+        return namespaceIdentity;
+    }
+
+    /**
+     * Creates a new symbol
+     * @param {Identity} namespaceIdentity Identity of the namespace to create the symbol in
+     * @return {Symbol} symbol
+     */
+    createSymbol(namespaceIdentity) {
+        throw new Error('Abstract, not implemented');
+    }
+
+    /**
+     * Deletes a symbol
+     * @param {Symbol} symbol
+     * @return {Boolean} True on success (changes occurred)
+     */
+    releaseSymbol(symbol) {
+        throw new Error('Abstract, not implemented');
+    }
+
+    /**
+     * Unlinks all triples of a symbol and releases it
+     * @param {Symbol} symbol
+     */
+    unlinkSymbol(symbol) {
+        for(const triple of this.queryTriples(queryMask.MVV, [symbol, 0, 0]))
+            this.setTriple(triple, false);
+        for(const triple of this.queryTriples(queryMask.VMV, [0, symbol, 0]))
+            this.setTriple(triple, false);
+        for(const triple of this.queryTriples(queryMask.VVM, [0, 0, symbol]))
+            this.setTriple(triple, false);
+        this.setLength(symbol, 0);
+        this.releaseSymbol(symbol);
+        return true;
+    }
+
+    /**
+     * Returns the length of the symbols virtual space
+     * @param {Symbol} symbol
+     * @return {Number} length in bits
+     */
+    getLength(symbol) {
+        throw new Error('Abstract, not implemented');
+    }
+
+    /**
+     * Inserts or erases a slice of a symbols virtual space at the given offset and with the given length
+     * @param {Symbol} symbol
+     * @param {Number} offset in bits
+     * @param {Number} length in bits (positive=insert, negative=erase)
+     * @return {Boolean} True on success (changes occurred)
+     */
+    creaseLength(symbol, offset, length) {
+        throw new Error('Abstract, not implemented');
+    }
+
+    /**
+     * Increases or deceases the length of a symbols virtual space at the end
+     * @param {Symbol} symbol
+     * @param {Number} newLength in bits
+     */
+    setLength(symbol, newLength) {
+        const length = this.getLength(symbol);
+        if(newLength != length)
+            this.creaseLength(symbol, Math.min(length, newLength), newLength-length);
+        return true;
+    }
+
+    /**
+     * Returns a slice of copied data starting at the given offset and with the given length
+     * @param {Symbol} symbol
+     * @param {Number} offset in bits
+     * @param {Number} length in bits
+     * @return {Uint8Array} dataBytes (undefined on error)
+     */
+    readData(symbol, offset, length) {
+        throw new Error('Abstract, not implemented');
+    }
+
+    /**
+     * Replaces a slice of data starting at the given offset and with the given length by dataBytes
+     * @param {Symbol} symbol
+     * @param {Number} offset in bits
+     * @param {Number} length in bits
+     * @param {Uint8Array} dataBytes
+     * @return {Boolean} True on success (changes occurred)
+     */
+    writeData(symbol, offset, length, dataBytes) {
+        throw new Error('Abstract, not implemented');
+    }
+
     /**
      * Returns a symbols entire data converted to JS native data types
      * @param {Symbol} symbol
@@ -525,7 +593,7 @@ export default class BasicBackend {
      * Replaces the entire data of a symbol
      * @param {Symbol} symbol
      * @param {Uint8Array} dataBytes
-     * @param {number} dataLength in bits
+     * @param {Number} dataLength in bits
      */
     setRawData(symbol, dataBytes, dataLength) {
         if(!dataBytes) {
@@ -540,12 +608,22 @@ export default class BasicBackend {
     }
 
     /**
+     * Returns a symbols entire data converted to a string of '0's and '1's
+     * @param {Symbol} symbol
+     * @return {String} binary
+     */
+    getBitString(symbol) {
+        return this.constructor.bufferToBitString(this.getRawData(symbol), this.getLength(symbol));
+    }
+
+    /**
      * Replaces a slice of a symbols data by another symbols data
-     * @param {Symbol} dstOffset
-     * @param {number} dstOffset in bits
+     * @param {Symbol} dstSymbol
+     * @param {Number} dstOffset in bits
      * @param {Symbol} srcSymbol
-     * @param {number} srcOffset in bits
-     * @param {number} length in bits
+     * @param {Number} srcOffset in bits
+     * @param {Number} length in bits
+     * @return {Boolean} True on success (changes occurred)
      */
     replaceData(dstSymbol, dstOffset, srcSymbol, srcOffset, length) {
         return this.replaceDataSimultaneously([{'dstSymbol': dstSymbol, 'dstOffset': dstOffset, 'srcSymbol': srcSymbol, 'srcOffset': srcOffset, 'length': length}]);
@@ -568,31 +646,23 @@ export default class BasicBackend {
     }
 
     /**
-     * Increases or deceases the length of a symbols virtual space at the end
-     * @param {Symbol} symbol
-     * @param {Number} newLength in bits
+     * Yields all matching triples according to the given triple and mask. The final .next() returns the count of matches
+     * @param {QueryMask} mask
+     * @param {Triple} triple
+     * @return {Triple} iterator of matches
      */
-    setLength(symbol, newLength) {
-        const length = this.getLength(symbol);
-        if(newLength != length)
-            this.creaseLength(symbol, Math.min(length, newLength), newLength-length);
-        return true;
+    queryTriples(mask, triple) {
+        throw new Error('Abstract, not implemented');
     }
 
     /**
-     * Unlinks all triples of a symbol and releases it
-     * @param {Symbol} symbol
+     * Links or unlinks a triple
+     * @param {Triple} triple
+     * @param {Boolean} linked
+     * @return {Boolean} True on success (changes occurred)
      */
-    unlinkSymbol(symbol) {
-        for(const triple of this.queryTriples(queryMask.MVV, [symbol, 0, 0]))
-            this.setTriple(triple, false);
-        for(const triple of this.queryTriples(queryMask.VMV, [0, symbol, 0]))
-            this.setTriple(triple, false);
-        for(const triple of this.queryTriples(queryMask.VVM, [0, 0, symbol]))
-            this.setTriple(triple, false);
-        this.setLength(symbol, 0);
-        this.releaseSymbol(symbol);
-        return true;
+    setTriple(triple, linked) {
+        throw new Error('Abstract, not implemented');
     }
 
     /**
@@ -646,10 +716,19 @@ export default class BasicBackend {
         return (iterator.next().value == 1) ? triple[index] : symbolByName.Void;
     }
 
+    /**
+     * Scan through all internal structures and check their integrity
+     * @return {Boolean} True on success
+     */
+    validateIntegrity() {
+        throw new Error('Abstract, not implemented');
+    }
+
 
 
     /**
-     * Stores the ontology as JSON format
+     * Stores the content as JSON format
+     * @deprecated Use the version contol differential format instead
      * @return {String} json
      */
     encodeJson() {
@@ -680,7 +759,8 @@ export default class BasicBackend {
     }
 
     /**
-     * Loads the ontology from JSON format
+     * Loads the content from JSON format
+     * @deprecated Use the version contol differential format instead
      * @param {String} json
      */
     decodeJson(json) {

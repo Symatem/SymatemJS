@@ -1,9 +1,17 @@
-export default class VersionDAG {
-    constructor() {
+/** The repository is a DAG with the versions being vertices and the differentals being edges */
+export default class Repository {
+    /**
+     * @param {BasicBackend} backend
+     * @param {Identity} namespaceIdentity
+     */
+    constructor(backend, namespaceIdentity) {
+        this.backend = backend;
+        this.namespaceIdentity = namespaceIdentity;
         this.versions = {};
         this.checkouts = {};
     }
 
+    // TODO: Documentation
     addVersion(versionId, parents) {
         if(!this.versions[versionId])
             this.versions[versionId] = {
@@ -21,21 +29,25 @@ export default class VersionDAG {
         return this.versions[versionId];
     }
 
+    // TODO: Documentation
     removeVersion(versionId) {
         for(const parentId in this.versions[versionId].parents)
             delete this.versions[parentId].children[versionId];
         delete this.versions[versionId];
     }
 
+    // TODO: Documentation
     addCheckout(versionId, namespaceIdentity) {
         this.checkouts[versionId] = namespaceIdentity;
     }
 
+    // TODO: Documentation
     removeCheckout(versionId) {
-        this.ontology.unlinkSymbol(BasicBackend.symbolInNamespace('Namespaces', this.checkouts[versionId]));
+        this.backend.unlinkSymbol(BasicBackend.symbolInNamespace('Namespaces', this.checkouts[versionId]));
         delete this.checkouts[versionId];
     }
 
+    // TODO: Documentation
     findPathTo(dstVersionId, srcVersionId) {
         for(const versionId in this.versions)
             delete this.versions[versionId].discoveredBy;

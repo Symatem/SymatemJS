@@ -5,18 +5,18 @@
     "Alexander Meißner"
   ],
   "license": "MIT",
-  "description": "Symatem JS & WebAssembly API",
-  "module": "NativeBackend.js",
-  "main": "dist/NativeBackend.js",
+  "description": "Symatem JS API",
+  "module": "SymatemJS.js",
+  "main": "dist/SymatemJS.js",
   "scripts": {
-    "docs": "documentation readme NativeBackend.js --section=API",
-    "lint": "documentation lint NativeBackend.js",
+    "docs": "documentation build SymatemJS.js -f html -o docs",
+    "lint": "documentation lint SymatemJS.js",
     "semantic-release": "semantic-release"
   },
   "bugs": {
     "url": "https://github.com/Symatem/SymatemJS/issues"
   },
-  "homepage": "https://github.com/Symatem/SymatemJS#readme",
+  "homepage": "https://github.com/Symatem/SymatemJS",
   "repository": {
     "type": "git",
     "url": "https://github.com/Symatem/SymatemJS.git"
@@ -24,7 +24,6 @@
   "dependencies": {},
   "devDependencies": {
     "documentation": "^6.3.3",
-    "rollup": "^0.59.1",
     "semantic-release": "^15.4.1"
   }
 }

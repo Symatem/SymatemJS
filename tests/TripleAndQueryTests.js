@@ -1,10 +1,10 @@
 import BasicBackend from '../BasicBackend.js';
 
-export default function(ontology, rand) {
+export default function(backend, rand) {
     let triplePool = new Set();
     const symbolPool = [], maskByIndex = Object.keys(BasicBackend.queryMask);
     for(let i = 0; i < 10; ++i)
-        symbolPool.push(ontology.createSymbol(4));
+        symbolPool.push(backend.createSymbol(4));
 
     return {
         'setTriple': () => {
@@ -12,7 +12,7 @@ export default function(ontology, rand) {
                   tripleTag = triple.toString(),
                   tripleExists = triplePool.has(tripleTag),
                   linked = rand.selectUniformly([false, true]),
-                  result = ontology.setTriple(triple, linked);
+                  result = backend.setTriple(triple, linked);
             if(linked)
                 triplePool.add(tripleTag);
             else
@@ -27,7 +27,7 @@ export default function(ontology, rand) {
             const triple = [rand.selectUniformly(symbolPool), rand.selectUniformly(symbolPool), rand.selectUniformly(symbolPool)],
                   maskIndex = rand.range(0, 27),
                   mask = maskByIndex[maskIndex],
-                  iterator = ontology.queryTriples(maskIndex, triple),
+                  iterator = backend.queryTriples(maskIndex, triple),
                   result = new Set(), expected = new Set();
             for(const tripleTag of triplePool) {
                 const tripleFromPool = tripleTag.split(',');
@@ -57,7 +57,7 @@ export default function(ontology, rand) {
                     noErrorsOccured = false;
             }
             if(!noErrorsOccured)
-                console.error(triple, mask, [...triplePool].sort(), [...ontology.queryTriples(BasicBackend.queryMask.VVV, triple)].sort(), [...result].sort(), [...expected].sort());
+                console.error(triple, mask, [...triplePool].sort(), [...backend.queryTriples(BasicBackend.queryMask.VVV, triple)].sort(), [...result].sort(), [...expected].sort());
             return noErrorsOccured;
         },
         'moveTriples': () => {
@@ -66,7 +66,7 @@ export default function(ontology, rand) {
                   srcSymbols = new Set(symbolPool);
             for(let i = 0; i < 5; ++i) {
                 const srcSymbol = rand.selectUniformly([...srcSymbols]),
-                      dstSymbol = ontology.createSymbol(4);
+                      dstSymbol = backend.createSymbol(4);
                 translationTable[srcSymbol] = dstSymbol;
                 srcSymbols.delete(srcSymbol);
                 dstSymbols.push(dstSymbol);
@@ -87,10 +87,10 @@ export default function(ontology, rand) {
                 renamedTriplePool.add(triple.toString());
             }
             triplePool = renamedTriplePool;
-            ontology.moveTriples(translationTable);
+            backend.moveTriples(translationTable);
             const expected = [...triplePool].sort(),
-                  result = [...ontology.queryTriples(BasicBackend.queryMask.VVV, [])].sort();
-            let noErrorsOccured = (expected.length == result.length) && ontology.validateIntegrity();
+                  result = [...backend.queryTriples(BasicBackend.queryMask.VVV, [])].sort();
+            let noErrorsOccured = (expected.length == result.length) && backend.validateIntegrity();
             for(let i = 0; i < expected.length && noErrorsOccured; ++i)
                 if(expected[i] != result[i].toString())
                     noErrorsOccured = false;

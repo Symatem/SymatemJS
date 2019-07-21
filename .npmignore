@@ -1,10 +1,4 @@
-build
 tests
-doc
-*.log
-*.tmp
-.test
-.tmp
+docs
 .gitignore
 .travis.yml
-rollup.config.js

@@ -10,65 +10,22 @@ function getOrDefaultEntry(dict, key, value={}) {
     return (entry) ? entry : value;
 }
 
+/** Differential defining the transformation from one version to another and back.
+ * To record the actions from a journal, use the differental as backend and then call commit.
+ */
 export default class Differential extends BasicBackend {
-    constructor(ontology, repositoryNamespace, recordingRelocation={}) {
+    /**
+     * @param {NativeBackend} backend
+     * @param {Identity} repositoryNamespace The namespace identity of the repository
+     * @param {RelocationTable} recordingRelocation Relocate recording namespaces to become modal namespaces
+     */
+    constructor(backend, repositoryNamespace, recordingRelocation={}) {
         super();
-        this.ontology = ontology;
-        this.isRecordingFromOntology = true;
+        this.backend = backend;
+        this.isRecordingFromBackend = true;
         this.repositoryNamespace = repositoryNamespace;
         this.recordingRelocation = recordingRelocation;
         this.operationsBySymbol = {};
-    }
-
-    queryTriples(queryMask, triple) {
-        console.assert(this.isRecordingFromOntology);
-        return this.ontology.queryTriples(queryMask, triple);
-    }
-
-    getLength(symbol) {
-        console.assert(this.isRecordingFromOntology);
-        return this.ontology.getLength(symbol);
-    }
-
-    manifestSymbol(symbol) {
-        if(this.isRecordingFromOntology && !this.ontology.manifestSymbol(symbol))
-            return false;
-        symbol = BasicBackend.relocateSymbol(symbol, this.recordingRelocation);
-        const operationsOfSymbol = getOrCreateEntry(this.operationsBySymbol, symbol);
-        if(operationsOfSymbol.manifestOrRelease == 'release')
-            delete operationsOfSymbol.manifestOrRelease;
-        else
-            operationsOfSymbol.manifestOrRelease = 'manifest';
-        return true;
-    }
-
-    releaseSymbol(symbol) {
-        if(this.isRecordingFromOntology && !this.ontology.releaseSymbol(symbol))
-            return false;
-        symbol = BasicBackend.relocateSymbol(symbol, this.recordingRelocation);
-        const operationsOfSymbol = getOrCreateEntry(this.operationsBySymbol, symbol);
-        if(operationsOfSymbol.manifestOrRelease == 'manifest')
-            delete operationsOfSymbol.manifestOrRelease;
-        else
-            operationsOfSymbol.manifestOrRelease = 'release';
-        return true;
-    }
-
-    setTriple(triple, link) {
-        if(this.isRecordingFromOntology && !this.ontology.setTriple(triple, link))
-            return false;
-        triple = triple.map(symbol => BasicBackend.relocateSymbol(symbol, this.recordingRelocation));
-        const operationsOfSymbol = getOrCreateEntry(this.operationsBySymbol, triple[0]),
-              attributeDict = getOrCreateEntry(operationsOfSymbol, 'tripleOperations'),
-              valueDict = getOrCreateEntry(attributeDict, triple[1]),
-              isLinked = valueDict[triple[2]];
-        if(isLinked === link)
-            return false;
-        if(isLinked === undefined)
-            valueDict[triple[2]] = link;
-        else
-            delete valueDict[triple[2]];
-        return true;
     }
 
     static getIntermediateOffset(creaseLengthOperations, intermediateOffset) {
@@ -196,7 +153,7 @@ export default class Differential extends BasicBackend {
     }
 
     saveDataToRestore(srcSymbol, srcOffset, length) {
-        console.assert(this.isRecordingFromOntology && srcOffset+length <= this.ontology.getLength(srcSymbol));
+        console.assert(this.isRecordingFromBackend && srcOffset+length <= this.backend.getLength(srcSymbol));
         const operationsOfSymbol = getOrCreateEntry(this.operationsBySymbol, srcSymbol),
               creaseLengthOperations = getOrDefaultEntry(operationsOfSymbol, 'creaseLengthOperations', []);
         let [intermediateOffset, operationIndex] = this.constructor.getIntermediateOffset(creaseLengthOperations, srcOffset),
@@ -205,11 +162,11 @@ export default class Differential extends BasicBackend {
         const addSlice = (length) => {
             if(length <= 0)
                 return;
-            let dstOffset = (dstSymbol) ? this.ontology.getLength(dstSymbol) : 0,
+            let dstOffset = (dstSymbol) ? this.backend.getLength(dstSymbol) : 0,
                 replaceOperations = (dstSymbol) ? this.operationsBySymbol[dstSymbol].replaceOperations : [],
                 replaceOperationIndex = 0;
             if(!dstSymbol) {
-                operationsOfSymbol.restoreSymbol = dstSymbol = this.ontology.createSymbol(this.repositoryNamespace);
+                operationsOfSymbol.restoreSymbol = dstSymbol = this.backend.createSymbol(this.repositoryNamespace);
                 this.operationsBySymbol[dstSymbol] = {'replaceOperations': []};
                 replaceOperations = this.operationsBySymbol[dstSymbol].replaceOperations;
             } else
@@ -218,8 +175,8 @@ export default class Differential extends BasicBackend {
                         dstOffset = replaceOperations[replaceOperationIndex].dstOffset;
                         break;
                     }
-            this.ontology.creaseLength(dstSymbol, dstOffset, length);
-            this.ontology.writeData(dstSymbol, dstOffset, length, this.ontology.readData(srcSymbol, intermediateOffset-decreaseAccumulator, length));
+            this.backend.creaseLength(dstSymbol, dstOffset, length);
+            this.backend.writeData(dstSymbol, dstOffset, length, this.backend.readData(srcSymbol, intermediateOffset-decreaseAccumulator, length));
             const operation = {
                 'dstSymbol': dstSymbol,
                 'dstOffset': dstOffset,
@@ -269,11 +226,66 @@ export default class Differential extends BasicBackend {
         avoidRestoreOperations(length);
     }
 
+    queryTriples(queryMask, triple) {
+        console.assert(this.isRecordingFromBackend);
+        return this.backend.queryTriples(queryMask, triple);
+    }
+
+    getLength(symbol) {
+        console.assert(this.isRecordingFromBackend);
+        return this.backend.getLength(symbol);
+    }
+
+    manifestSymbol(symbol) {
+        console.assert(this.operationsBySymbol);
+        if(this.isRecordingFromBackend && !this.backend.manifestSymbol(symbol))
+            return false;
+        symbol = BasicBackend.relocateSymbol(symbol, this.recordingRelocation);
+        const operationsOfSymbol = getOrCreateEntry(this.operationsBySymbol, symbol);
+        if(operationsOfSymbol.manifestOrRelease == 'release')
+            delete operationsOfSymbol.manifestOrRelease;
+        else
+            operationsOfSymbol.manifestOrRelease = 'manifest';
+        return true;
+    }
+
+    releaseSymbol(symbol) {
+        console.assert(this.operationsBySymbol);
+        if(this.isRecordingFromBackend && !this.backend.releaseSymbol(symbol))
+            return false;
+        symbol = BasicBackend.relocateSymbol(symbol, this.recordingRelocation);
+        const operationsOfSymbol = getOrCreateEntry(this.operationsBySymbol, symbol);
+        if(operationsOfSymbol.manifestOrRelease == 'manifest')
+            delete operationsOfSymbol.manifestOrRelease;
+        else
+            operationsOfSymbol.manifestOrRelease = 'release';
+        return true;
+    }
+
+    setTriple(triple, link) {
+        console.assert(this.operationsBySymbol);
+        if(this.isRecordingFromBackend && !this.backend.setTriple(triple, link))
+            return false;
+        triple = triple.map(symbol => BasicBackend.relocateSymbol(symbol, this.recordingRelocation));
+        const operationsOfSymbol = getOrCreateEntry(this.operationsBySymbol, triple[0]),
+              attributeDict = getOrCreateEntry(operationsOfSymbol, 'tripleOperations'),
+              valueDict = getOrCreateEntry(attributeDict, triple[1]),
+              isLinked = valueDict[triple[2]];
+        if(isLinked === link)
+            return false;
+        if(isLinked === undefined)
+            valueDict[triple[2]] = link;
+        else
+            delete valueDict[triple[2]];
+        return true;
+    }
+
     creaseLength(dstSymbol, dstOffset, length) {
+        console.assert(this.operationsBySymbol);
         if(length == 0)
             return true;
-        if(this.isRecordingFromOntology) {
-            const dataLength = this.ontology.getLength(dstSymbol);
+        if(this.isRecordingFromBackend) {
+            const dataLength = this.backend.getLength(dstSymbol);
             if(length < 0) {
                 if(dstOffset-length > dataLength)
                     return false;
@@ -314,7 +326,7 @@ export default class Differential extends BasicBackend {
                 operationId = operation.id;
                 ++creaseLengthOperationsToDelete;
             }
-            if(this.isRecordingFromOntology)
+            if(this.isRecordingFromBackend)
                 this.saveDataToRestore(dstSymbol, dstOffset, -length);
             length = increaseAccumulator-decreaseAccumulator;
             increaseAccumulator = 0;
@@ -374,15 +386,16 @@ export default class Differential extends BasicBackend {
                 'dstOffset': intermediateOffset,
                 'length': length
             });
-        return !this.isRecordingFromOntology || this.ontology.creaseLength(originalDstSymbol, dstOffset, originalLength);
+        return !this.isRecordingFromBackend || this.backend.creaseLength(originalDstSymbol, dstOffset, originalLength);
     }
 
     replaceDataSimultaneously(replaceOperations) {
-        if(this.isRecordingFromOntology)
+        console.assert(this.operationsBySymbol);
+        if(this.isRecordingFromBackend)
             for(const operation of replaceOperations)
                 if(operation.length < 0 ||
-                   operation.dstOffset+operation.length > this.ontology.getLength(operation.dstSymbol) ||
-                   operation.srcOffset+operation.length > this.ontology.getLength(operation.srcSymbol))
+                   operation.dstOffset+operation.length > this.backend.getLength(operation.dstSymbol) ||
+                   operation.srcOffset+operation.length > this.backend.getLength(operation.srcSymbol))
                     return false;
         const context = {},
               cutReplaceOperations = [], addReplaceOperations = [], mergeReplaceOperations = [],
@@ -475,7 +488,7 @@ export default class Differential extends BasicBackend {
                 return false;
             mergeReplaceOperations.push({'dstSymbol': context.dstSymbol, 'dstOffset': context.dstIntermediateOffset});
         }
-        if(this.isRecordingFromOntology)
+        if(this.isRecordingFromBackend)
             for(const operation of replaceOperations)
                 this.saveDataToRestore(BasicBackend.relocateSymbol(operation.dstSymbol, this.recordingRelocation), operation.dstOffset, operation.length);
         for(const operation of cutReplaceOperations)
@@ -486,17 +499,45 @@ export default class Differential extends BasicBackend {
         }
         for(const operation of mergeReplaceOperations)
             this.mergeReplaceOperations(getOrCreateEntry(this.operationsBySymbol, operation.dstSymbol).replaceOperations, 'dst', operation.dstOffset);
-        return !this.isRecordingFromOntology || this.ontology.replaceDataSimultaneously(replaceOperations);
+        return !this.isRecordingFromBackend || this.backend.replaceDataSimultaneously(replaceOperations);
     }
 
     writeData(dstSymbol, dstOffset, length, dataBytes) {
+        console.assert(this.operationsBySymbol);
         dstSymbol = BasicBackend.relocateSymbol(dstSymbol, this.recordingRelocation);
-        const srcSymbol = this.ontology.createSymbol(this.repositoryNamespace);
-        this.ontology.setRawData(srcSymbol, dataBytes, length);
+        const srcSymbol = this.backend.createSymbol(this.repositoryNamespace);
+        this.backend.setRawData(srcSymbol, dataBytes, length);
         return this.replaceData(dstSymbol, dstOffset, srcSymbol, 0, length);
     }
 
-    commit(repositoryNamespace) {
+    /**
+     * Scan through all internal structures and check their integrity
+     * @return {Boolean} True on success
+     */
+    validateIntegrity() {
+        for(const symbol in this.operationsBySymbol) {
+            const operationsOfSymbol = this.operationsBySymbol[symbol];
+            if(operationsOfSymbol.creaseLengthOperations)
+                for(let i = 1; i < operationsOfSymbol.creaseLengthOperations.length; ++i)
+                    if(operationsOfSymbol.creaseLengthOperations[i-1].dstOffset >= operationsOfSymbol.creaseLengthOperations[i].dstOffset)
+                        return false;
+            if(operationsOfSymbol.copyOperations)
+                for(let i = 1; i < operationsOfSymbol.copyOperations.length; ++i)
+                    if(operationsOfSymbol.copyOperations[i-1].srcOffset > operationsOfSymbol.copyOperations[i].srcOffset)
+                        return false;
+            if(operationsOfSymbol.replaceOperations)
+                for(let i = 1; i < operationsOfSymbol.replaceOperations.length; ++i)
+                    if(operationsOfSymbol.replaceOperations[i-1].dstOffset >= operationsOfSymbol.replaceOperations[i].dstOffset)
+                        return false;
+        }
+        // TODO
+        return true;
+    }
+
+    /**
+     * Optimizes the internal structures so that they are ready to be applied, but no further recording can happen afterwards.
+     */
+    commit() {
         if(!this.operationsBySymbol)
             return false;
         this.operationsByType = {
@@ -536,17 +577,18 @@ export default class Differential extends BasicBackend {
                         this.operationsByType.tripleOperations.push([[...triple], operationsOfSymbol.tripleOperations[triple[1]][triple[2]]]);
         }
         delete this.operationsBySymbol;
-        // TODO: Write to ontology
-        // this.symbol = this.ontology.createSymbol(repositoryNamespace);
         // TODO: Optimize data source and data restore
         return true;
     }
 
-    uncommit() {
-        // TODO: Unlink from ontology
-    }
-
-    apply(reverse, checkoutRelocation={}, dst=this.ontology) {
+    /**
+     * Applies this differential to a checkout
+     * @param {Boolean} reverse Set to true to revert this differential
+     * @param {RelocationTable} checkoutRelocation Relocate modal namespaces to become checkout namespaces
+     * @param {BasicBackend} dst Apply to another differential or the backend (default)
+     * @return {Boolean} True on success
+     */
+    apply(reverse, checkoutRelocation={}, dst=this.backend) {
         // TODO: Validate everything first before applying anything (atomic transactions)
         for(const symbol of this.operationsByType[(reverse) ? 'releaseSymbols' : 'manifestSymbols'])
             dst.manifestSymbol(BasicBackend.relocateSymbol(symbol, checkoutRelocation));

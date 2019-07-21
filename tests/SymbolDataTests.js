@@ -1,16 +1,16 @@
 import BasicBackend from '../BasicBackend.js';
 
-export default function(ontology, rand) {
-    const destination = ontology.createSymbol(4),
-          source = ontology.createSymbol(4);
+export default function(backend, rand) {
+    const destination = backend.createSymbol(4),
+          source = backend.createSymbol(4);
 
     function bitStringOfSymbol(symbol) {
-        const handle = ontology.getHandle(symbol);
+        const handle = backend.getHandle(symbol);
         return BasicBackend.bufferToBitString(handle.dataBytes, handle.dataLength);
     }
 
     function fillSymbol(symbol) {
-        const handle = ontology.getHandle(symbol);
+        const handle = backend.getHandle(symbol);
         handle.dataLength = rand.range(0, 512);
         handle.dataBytes = rand.bytes(Math.ceil(handle.dataLength/32)*4);
         return [bitStringOfSymbol(symbol), handle.dataLength, rand.range(0, handle.dataLength)];
@@ -25,7 +25,7 @@ export default function(ontology, rand) {
             const [destinationString, destinationLength, destinationOffset] = fillSymbol(destination),
                   length = rand.range(0, destinationLength-destinationOffset),
                   expectedString = [destinationString.substr(0, destinationOffset), destinationString.substr(destinationOffset+length)].join('');
-            ontology.creaseLength(destination, destinationOffset, -length);
+            backend.creaseLength(destination, destinationOffset, -length);
             const resultString = bitStringOfSymbol(destination);
             if(expectedString != resultString) {
                 console.error(
@@ -42,7 +42,7 @@ export default function(ontology, rand) {
             const [destinationString, destinationLength, destinationOffset] = fillSymbol(destination),
                   length = rand.range(0, 512),
                   expectedString = [destinationString.substr(0, destinationOffset), new Array(length).fill('0').join(''), destinationString.substr(destinationOffset)].join('');
-            ontology.creaseLength(destination, destinationOffset, length);
+            backend.creaseLength(destination, destinationOffset, length);
             const resultString = bitStringOfSymbol(destination);
             if(expectedString != resultString) {
                 console.error(
@@ -59,7 +59,7 @@ export default function(ontology, rand) {
             const [sourceString, sourceLength, sourceOffset] = fillSymbol(source),
                   length = rand.range(0, sourceLength-sourceOffset),
                   expectedString = sourceString.substr(sourceOffset, length);
-            const resultString = BasicBackend.bufferToBitString(ontology.readData(source, sourceOffset, length), length);
+            const resultString = BasicBackend.bufferToBitString(backend.readData(source, sourceOffset, length), length);
             if(expectedString != resultString) {
                 console.error(
                     sourceOffset, sourceLength, length,
@@ -77,7 +77,7 @@ export default function(ontology, rand) {
                   sourceBuffer = rand.bytes(Math.ceil(sourceLength/32)*4),
                   sourceString = BasicBackend.bufferToBitString(sourceBuffer, sourceLength),
                   expectedString = [destinationString.substr(0, destinationOffset), sourceString.substr(0, sourceLength), destinationString.substr(destinationOffset+sourceLength)].join('');
-            ontology.writeData(destination, destinationOffset, sourceLength, sourceBuffer);
+            backend.writeData(destination, destinationOffset, sourceLength, sourceBuffer);
             const resultString = bitStringOfSymbol(destination);
             if(expectedString != resultString) {
                 console.error(
@@ -96,7 +96,7 @@ export default function(ontology, rand) {
                   [sourceString, sourceLength, sourceOffset] = fillSymbol(source),
                   length = rand.range(0, Math.min(destinationLength-destinationOffset, sourceLength-sourceOffset)),
                   expectedString = [destinationString.substr(0, destinationOffset), sourceString.substr(sourceOffset, length), destinationString.substr(destinationOffset+length)].join('');
-            ontology.replaceData(destination, destinationOffset, source, sourceOffset, length);
+            backend.replaceData(destination, destinationOffset, source, sourceOffset, length);
             const resultString = bitStringOfSymbol(destination);
             if(expectedString != resultString) {
                 console.error(

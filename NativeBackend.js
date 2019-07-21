@@ -237,6 +237,8 @@ function bitwiseCopy(destination, destinationOffset, source, sourceOffset, lengt
 }
 
 import BasicBackend from './BasicBackend.js';
+
+/** Implements a backend in JS */
 export default class NativeBackend extends BasicBackend {
     constructor() {
         super();
@@ -309,11 +311,6 @@ export default class NativeBackend extends BasicBackend {
         return handle;
     }
 
-    /**
-     * Creates a new symbol
-     * @param {Number} namespaceIdentity Identity of the namespace to create the symbol in
-     * @return {Symbol} symbol
-     */
     createSymbol(namespaceIdentity) {
         const namespace = this.manifestNamespace(namespaceIdentity);
         let handleIdentity;
@@ -328,10 +325,6 @@ export default class NativeBackend extends BasicBackend {
         return symbol;
     }
 
-    /**
-     * Deletes a symbol
-     * @param {Symbol} symbol
-     */
     releaseSymbol(symbol) {
         const namespaceIdentity = this.constructor.namespaceOfSymbol(symbol),
               namespace = this.namespaces[namespaceIdentity],
@@ -354,24 +347,11 @@ export default class NativeBackend extends BasicBackend {
             : true;
     }
 
-
-
-    /**
-     * Returns the length of the symbols virtual space
-     * @param {Symbol} symbol
-     * @return {Number} length in bits
-     */
     getLength(symbol) {
         const handle = this.getHandle(symbol);
         return (handle) ? handle.dataLength : 0;
     }
 
-    /**
-     * Inserts or erases a slice of a symbols virtual space at the given offset and with the given length
-     * @param {Symbol} symbol
-     * @param {Number} offset in bits
-     * @param {Number} length in bits (positive=insert, negative=erase)
-     */
     creaseLength(symbol, offset, length) {
         const handle = (offset == 0 && length > 0) ? this.manifestSymbol(symbol) : this.getHandle(symbol);
         if(!handle)
@@ -400,23 +380,6 @@ export default class NativeBackend extends BasicBackend {
         return true;
     }
 
-    /**
-     * Returns a symbols data binary string of '0's and '1's
-     * @param {Symbol} symbol
-     * @return {String} binary
-     */
-    getBitString(symbol) {
-        const handle = this.getHandle(symbol);
-        return (handle) ? this.constructor.bufferToBitString(handle.dataBytes, handle.dataLength) : '';
-    }
-
-    /**
-     * Returns a slice of data starting at the given offset and with the given length
-     * @param {Symbol} symbol
-     * @param {Number} offset in bits
-     * @param {Number} length in bits
-     * @return {Uint8Array} dataSlice Do not modify the return value as it might be used internally
-     */
     readData(symbol, offset, length) {
         const handle = this.getHandle(symbol);
         if(!handle || length < 0 || offset+length > handle.dataLength)
@@ -431,13 +394,6 @@ export default class NativeBackend extends BasicBackend {
         return dataBytes;
     }
 
-    /**
-     * Replaces a slice of data starting at the given offset and with the given length by dataBytes
-     * @param {Symbol} symbol
-     * @param {Number} offset in bits
-     * @param {Number} length in bits
-     * @param {Uint8Array} dataBytes
-     */
     writeData(symbol, offset, length, dataBytes) {
         const handle = this.manifestSymbol(symbol);
         if(!handle || length < 0 || offset+length > handle.dataLength || !dataBytes)
@@ -456,14 +412,6 @@ export default class NativeBackend extends BasicBackend {
         return true;
     }
 
-    /**
-     * Replaces a slice of a symbols data by another symbols data
-     * @param {Symbol} dstOffset
-     * @param {Number} dstOffset in bits
-     * @param {Symbol} srcSymbol
-     * @param {Number} srcOffset in bits
-     * @param {Number} length in bits
-     */
     replaceData(dstSymbol, dstOffset, srcSymbol, srcOffset, length) {
         const dstHandle = this.getHandle(dstSymbol),
               srcHandle = this.getHandle(srcSymbol);
@@ -477,14 +425,6 @@ export default class NativeBackend extends BasicBackend {
         return true;
     }
 
-
-
-    /**
-     * Links or unlinks a triple
-     * @param {Triple} triple
-     * @param {Boolean} linked
-     * @return {Boolean} success Returns false if no changes were made
-     */
     setTriple(triple, linked) {
         function operateSubIndex(subIndex, beta, gamma) {
             if(linked) {
@@ -526,11 +466,6 @@ export default class NativeBackend extends BasicBackend {
         return operateSubIndex(valueHandle.subIndices[indexByName.VAE], triple[1], triple[0]);
     }
 
-    /**
-     * Moves the triples of the given source symbols to the destination symbols simultaneously.
-     * The symbols data has to be moved using replaceDataSimultaneously().
-     * @param {Object.<Symbol, Symbol>} translationTable Dictionary: key=source, value=destination
-     */
     moveTriples(translationTable) {
         const dstSymbols = {}, subIndexUpdatesBySymbol = {};
         for(const srcSymbol in translationTable) {
@@ -603,21 +538,11 @@ export default class NativeBackend extends BasicBackend {
         return true;
     }
 
-    /**
-     * Yields all matching triples according to the given triple and mask. The final .next() returns the count of matches
-     * @param {QueryMask} mask
-     * @param {Triple} triple
-     * @return {Triple} iterator of matches
-     */
     queryTriples(mask, triple) {
         const index = indexLookup[mask];
         return searchLookup[mask].call(this, index, reorderTriple(triplePrioritized, index, triple));
     }
 
-    /**
-     * Scan through all internal structures and check their integrity
-     * @return {Boolean} success
-     */
     validateIntegrity() {
         for(const namespaceIdentity in this.namespaces) {
             const namespace = this.namespaces[namespaceIdentity],
