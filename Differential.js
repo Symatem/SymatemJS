@@ -57,18 +57,32 @@ export default class Differential extends BasicBackend {
         operations.splice(operationIndex, 0, operation);
     }
 
-    removeCopyReplaceOperation(mode, operation, operations, operationIndex) {
+    removeCopyReplaceOperation(mode, operation, dirtySymbols, operations, operationIndex) {
         if(operations === undefined) {
             const operationsOfSymbol = this.operationsBySymbol[operation[mode+'Symbol']];
             operations = operationsOfSymbol[(mode == 'src') ? 'copyOperations' : 'replaceOperations'];
             operationIndex = operations.indexOf(operation);
         }
         operations.splice(operationIndex, 1);
-        if(operations.length == 0 && BasicBackend.namespaceOfSymbol(operation[mode+'Symbol']) == this.repositoryNamespace)
-            this.backend.unlinkSymbol(operation[mode+'Symbol']);
+        if(dirtySymbols && operations.length == 0)
+            dirtySymbols.add(operation[mode+'Symbol']);
     }
 
-    cutAndShiftReplaceOperations(operations, mode, intermediateOffset, decreaseLength, shift) {
+    cleanOperationsBySymbol(symbols) {
+        for(const symbol of symbols) {
+            const operationsOfSymbol = this.operationsBySymbol[symbol];
+            for(const type of ['copyOperations', 'replaceOperations'])
+                if(operationsOfSymbol[type] && operationsOfSymbol[type].length == 0)
+                    delete operationsOfSymbol[type];
+            if(Object.keys(operationsOfSymbol) == 0) {
+                delete this.operationsBySymbol[symbol];
+                if(BasicBackend.namespaceOfSymbol(symbol) == this.repositoryNamespace)
+                    this.backend.unlinkSymbol(symbol);
+            }
+        }
+    }
+
+    cutAndShiftCopyReplaceOperations(mode, operations, dirtySymbols, intermediateOffset, decreaseLength, shift) {
         const complementaryMode = (mode == 'dst') ? 'src' : 'dst';
         if(!operations)
             return;
@@ -86,7 +100,7 @@ export default class Differential extends BasicBackend {
                     'srcSymbol': operation.srcSymbol,
                     'length': endLength,
                     [mode+'Offset']: intermediateEndOffset+shift,
-                    [complementaryMode+'Offset']: operation[complementaryMode+'Offset']+operation.length-endLength // +intermediateEndOffset-operation[mode+'Offset']
+                    [complementaryMode+'Offset']: operation[complementaryMode+'Offset']+operation.length-endLength
                 };
                 addCopyReplaceOperations.push(secondPart);
                 operation.length = intermediateOffset-operation[mode+'Offset'];
@@ -96,8 +110,8 @@ export default class Differential extends BasicBackend {
                 if(operationsBeginIsInside || operationsEndIsInside) {
                     if(operationsBeginIsInside) {
                         if(operationsEndIsInside) {
-                            this.removeCopyReplaceOperation(mode, operation, operations, operationIndex--);
-                            this.removeCopyReplaceOperation(complementaryMode, operation);
+                            this.removeCopyReplaceOperation(mode, operation, dirtySymbols, operations, operationIndex--);
+                            this.removeCopyReplaceOperation(complementaryMode, operation, dirtySymbols);
                         } else {
                             operation[mode+'Offset'] = intermediateEndOffset+shift;
                             operation[complementaryMode+'Offset'] += operation.length-endLength;
@@ -124,7 +138,7 @@ export default class Differential extends BasicBackend {
         }
     }
 
-    mergeReplaceOperations(operations, mode, intermediateOffset) {
+    mergeCopyReplaceOperations(mode, operations, intermediateOffset) {
         // TODO: Take possible DAG-like overlap into account if(mode == 'src')
         const complementaryMode = (mode == 'dst') ? 'src' : 'dst';
         if(!operations)
@@ -140,8 +154,8 @@ export default class Differential extends BasicBackend {
                firstOperation[complementaryMode+'Offset']+firstOperation.length == secondOperation[complementaryMode+'Offset'] &&
                firstOperation.srcSymbol == secondOperation.srcSymbol) {
                 firstOperation.length += secondOperation.length;
-                this.removeCopyReplaceOperation(mode, secondOperation, operations, operationIndex--);
-                this.removeCopyReplaceOperation(complementaryMode, secondOperation);
+                this.removeCopyReplaceOperation(mode, secondOperation, undefined, operations, operationIndex--);
+                this.removeCopyReplaceOperation(complementaryMode, secondOperation, undefined);
                 return true;
             } else
                 return false;
@@ -162,17 +176,16 @@ export default class Differential extends BasicBackend {
             return;
         let [intermediateOffset, operationIndex] = this.constructor.getIntermediateOffset(creaseLengthOperations, srcOffset),
             decreaseAccumulator = intermediateOffset-srcOffset,
-            dstSymbol = operationsOfSymbol.restoreSymbol;
+            dstSymbol = operationsOfSymbol.restoreSymbol,
+            replaceOperations = (dstSymbol) ? this.operationsBySymbol[dstSymbol].replaceOperations : [];
         const addSlice = (length) => {
             if(length <= 0)
                 return;
             let dstOffset = (dstSymbol) ? this.backend.getLength(dstSymbol) : 0,
-                replaceOperations = (dstSymbol) ? this.operationsBySymbol[dstSymbol].replaceOperations : [],
                 replaceOperationIndex = 0;
             if(!dstSymbol) {
                 operationsOfSymbol.restoreSymbol = dstSymbol = this.backend.createSymbol(this.repositoryNamespace);
-                this.operationsBySymbol[dstSymbol] = {'replaceOperations': []};
-                replaceOperations = this.operationsBySymbol[dstSymbol].replaceOperations;
+                this.operationsBySymbol[dstSymbol] = {'replaceOperations': replaceOperations};
             } else
                 for(; replaceOperationIndex < replaceOperations.length; ++replaceOperationIndex)
                     if(intermediateOffset <= replaceOperations[replaceOperationIndex].srcOffset) {
@@ -192,14 +205,11 @@ export default class Differential extends BasicBackend {
             this.addCopyReplaceOperation('dst', operation, replaceOperations, replaceOperationIndex++);
             for(; replaceOperationIndex < replaceOperations.length; ++replaceOperationIndex)
                 replaceOperations[replaceOperationIndex].dstOffset += length;
-            this.mergeReplaceOperations(replaceOperations, 'dst', dstOffset);
-            this.mergeReplaceOperations(replaceOperations, 'dst', dstOffset+length);
         };
         const avoidRestoreOperations = (length) => {
             if(length <= 0)
                 return;
-            if(dstSymbol) {
-                const replaceOperations = this.operationsBySymbol[dstSymbol].replaceOperations;
+            if(replaceOperations)
                 for(let replaceOperationIndex = 0; length > 0 && replaceOperationIndex < replaceOperations.length; ++replaceOperationIndex) {
                     const operation = replaceOperations[replaceOperationIndex];
                     if(operation.srcOffset+operation.length <= intermediateOffset)
@@ -208,10 +218,9 @@ export default class Differential extends BasicBackend {
                         break;
                     const sliceLength = operation.srcOffset-intermediateOffset;
                     addSlice(sliceLength);
-                    length -= sliceLength+operation.length; // operation.srcOffset+operation.length-intermediateOffset;
+                    length -= sliceLength+operation.length;
                     intermediateOffset = operation.srcOffset+operation.length;
                 }
-            }
             addSlice(length);
         };
         if(operationIndex > 0 && intermediateOffset < creaseLengthOperations[operationIndex-1].dstOffset+creaseLengthOperations[operationIndex-1].length)
@@ -228,6 +237,9 @@ export default class Differential extends BasicBackend {
                 decreaseAccumulator -= operation.length;
         }
         avoidRestoreOperations(length);
+        if(replaceOperations)
+            for(let replaceOperationIndex = replaceOperations.length-1; replaceOperationIndex > 0; --replaceOperationIndex)
+                this.mergeCopyReplaceOperations('dst', replaceOperations, replaceOperations[replaceOperationIndex].dstOffset);
     }
 
     queryTriples(queryMask, triple) {
@@ -246,9 +258,11 @@ export default class Differential extends BasicBackend {
             return false;
         symbol = BasicBackend.relocateSymbol(symbol, this.recordingRelocation);
         const operationsOfSymbol = getOrCreateEntry(this.operationsBySymbol, symbol);
-        if(operationsOfSymbol.manifestOrRelease == 'release')
+        if(operationsOfSymbol.manifestOrRelease == 'release') {
             delete operationsOfSymbol.manifestOrRelease;
-        else
+            if(Object.keys(operationsOfSymbol) == 0)
+                delete this.operationsBySymbol[symbol];
+        } else
             operationsOfSymbol.manifestOrRelease = 'manifest';
         return true;
     }
@@ -259,9 +273,11 @@ export default class Differential extends BasicBackend {
             return false;
         symbol = BasicBackend.relocateSymbol(symbol, this.recordingRelocation);
         const operationsOfSymbol = getOrCreateEntry(this.operationsBySymbol, symbol);
-        if(operationsOfSymbol.manifestOrRelease == 'manifest')
+        if(operationsOfSymbol.manifestOrRelease == 'manifest') {
             delete operationsOfSymbol.manifestOrRelease;
-        else
+            if(Object.keys(operationsOfSymbol) == 0)
+                delete this.operationsBySymbol[symbol];
+        } else
             operationsOfSymbol.manifestOrRelease = 'release';
         return true;
     }
@@ -279,8 +295,17 @@ export default class Differential extends BasicBackend {
             return false;
         if(isLinked === undefined)
             valueDict[triple[2]] = link;
-        else
+        else {
             delete valueDict[triple[2]];
+            if(Object.keys(valueDict).length == 0) {
+                delete attributeDict[triple[1]];
+                if(Object.keys(attributeDict).length == 0) {
+                    delete operationsOfSymbol.tripleOperations;
+                    if(Object.keys(operationsOfSymbol) == 0)
+                        delete this.operationsBySymbol[triple[0]];
+                }
+            }
+        }
         return true;
     }
 
@@ -296,10 +321,12 @@ export default class Differential extends BasicBackend {
             } else if(dstOffset > dataLength)
                 return false;
         }
-        const originalDstSymbol = dstSymbol, originalLength = length;
+        const originalDstSymbol = dstSymbol,
+              originalLength = length;
         dstSymbol = BasicBackend.relocateSymbol(dstSymbol, this.recordingRelocation);
         const operationsOfSymbol = getOrCreateEntry(this.operationsBySymbol, dstSymbol),
-              creaseLengthOperations = getOrCreateEntry(operationsOfSymbol, 'creaseLengthOperations', []);
+              creaseLengthOperations = getOrCreateEntry(operationsOfSymbol, 'creaseLengthOperations', []),
+              dirtySymbols = new Set();
         let operationAtIntermediateOffset,
             [intermediateOffset, operationIndex] = this.constructor.getIntermediateOffset(creaseLengthOperations, dstOffset);
         if(operationIndex > 0) {
@@ -327,7 +354,6 @@ export default class Differential extends BasicBackend {
                     increaseAccumulator += operation.length;
                     increaseLengthOperations.push(operation);
                 }
-                operationId = operation.id;
                 ++creaseLengthOperationsToDelete;
             }
             if(this.isRecordingFromBackend)
@@ -352,6 +378,7 @@ export default class Differential extends BasicBackend {
                     if(i+1 < increaseLengthOperations.length && increaseLengthOperations[i+1].dstOffset <= copyOperation.srcOffset)
                         break;
                     if(copyOperation.srcOffset < srcOffset) {
+                        // Splitting is an alternative to: this.cutAndShiftCopyReplaceOperations('src', copyOperations, undefined, srcOffset, 0, 0);
                         const endLength = copyOperation.srcOffset+copyOperation.length-srcOffset,
                               secondPart = {
                             'dstSymbol': copyOperation.dstSymbol,
@@ -363,18 +390,19 @@ export default class Differential extends BasicBackend {
                         copyOperation.length -= endLength;
                         this.addCopyReplaceOperation('dst', secondPart);
                         this.addCopyReplaceOperation('src', secondPart);
-                        // this.cutAndShiftReplaceOperations(copyOperations, 'src', srcOffset, 0, 0);
-                    } else
+                    } else {
                         copyOperation.srcOffset += Math.max(0, length)-increaseAccumulator;
-                    if(this.mergeReplaceOperations(copyOperations, 'src', copyOperation.srcOffset))
-                        --copyOperationIndex;
+                        if(this.mergeCopyReplaceOperations('src', copyOperations, copyOperation.srcOffset))
+                            --copyOperationIndex;
+                    }
                 }
             }
             creaseLengthOperations.splice(operationIndex, creaseLengthOperationsToDelete);
             const annihilated = increaseAccumulator-Math.max(0, length);
             this.shiftIntermediateOffsets(creaseLengthOperations, operationIndex, -annihilated);
-            this.cutAndShiftReplaceOperations(operationsOfSymbol.replaceOperations, 'dst', intermediateOffset, decreaseAccumulator, -annihilated);
-            this.mergeReplaceOperations(operationsOfSymbol.replaceOperations, 'dst', intermediateOffset);
+            this.cutAndShiftCopyReplaceOperations('dst', operationsOfSymbol.replaceOperations, dirtySymbols, intermediateOffset, decreaseAccumulator, -annihilated);
+            this.mergeCopyReplaceOperations('dst', operationsOfSymbol.replaceOperations, intermediateOffset);
+            this.cleanOperationsBySymbol(dirtySymbols);
             intermediateOffset = nextIntermediateOffset;
         } else {
             let mergeAccumulator = 0;
@@ -394,8 +422,8 @@ export default class Differential extends BasicBackend {
             }
             if(length > 0) {
                 this.shiftIntermediateOffsets(creaseLengthOperations, operationIndex, length);
-                this.cutAndShiftReplaceOperations(operationsOfSymbol.copyOperations, 'src', intermediateOffset, 0, length);
-                this.cutAndShiftReplaceOperations(operationsOfSymbol.replaceOperations, 'dst', intermediateOffset, 0, length);
+                this.cutAndShiftCopyReplaceOperations('src', operationsOfSymbol.copyOperations, undefined, intermediateOffset, 0, length);
+                this.cutAndShiftCopyReplaceOperations('dst', operationsOfSymbol.replaceOperations, undefined, intermediateOffset, 0, length);
                 length -= mergeAccumulator;
             }
         }
@@ -405,7 +433,13 @@ export default class Differential extends BasicBackend {
                 'dstOffset': intermediateOffset,
                 'length': length
             });
-        return !this.isRecordingFromBackend || this.backend.creaseLength(originalDstSymbol, dstOffset, originalLength);
+        if(creaseLengthOperations.length == 0) {
+            delete operationsOfSymbol.creaseLengthOperations;
+            if(Object.keys(operationsOfSymbol) == 0)
+                delete this.operationsBySymbol[dstSymbol];
+        }
+        console.assert(!this.isRecordingFromBackend || this.backend.creaseLength(originalDstSymbol, dstOffset, originalLength));
+        return true;
     }
 
     replaceDataSimultaneously(replaceOperations) {
@@ -417,7 +451,10 @@ export default class Differential extends BasicBackend {
                    operation.srcOffset+operation.length > this.backend.getLength(operation.srcSymbol))
                     return false;
         const context = {},
-              cutReplaceOperations = [], addCopyReplaceOperations = [], mergeReplaceOperations = [],
+              dirtySymbols = new Set(),
+              cutReplaceOperations = [],
+              addCopyReplaceOperations = [],
+              mergeCopyReplaceOperations = [],
               addSlice = (srcSymbol, srcOffset, length) => {
             const operationsOfSymbol = getOrDefaultEntry(this.operationsBySymbol, srcSymbol, {}),
                   srcCreaseLengthOperations = getOrDefaultEntry(operationsOfSymbol, 'creaseLengthOperations', []);
@@ -502,23 +539,25 @@ export default class Differential extends BasicBackend {
             }
             context.srcReplaceOperations = getOrDefaultEntry(context.srcOperationsOfSymbol, 'replaceOperations', []);
             context.srcReplaceOperationIndex = 0;
-            mergeReplaceOperations.push({'dstSymbol': context.dstSymbol, 'dstOffset': context.dstIntermediateOffset});
+            mergeCopyReplaceOperations.push({'dstSymbol': context.dstSymbol, 'dstOffset': context.dstIntermediateOffset});
             if(!skipDstDecreaseOperations(operation.length))
                 return false;
-            mergeReplaceOperations.push({'dstSymbol': context.dstSymbol, 'dstOffset': context.dstIntermediateOffset});
+            mergeCopyReplaceOperations.push({'dstSymbol': context.dstSymbol, 'dstOffset': context.dstIntermediateOffset});
         }
         if(this.isRecordingFromBackend)
             for(const operation of replaceOperations)
                 this.saveDataToRestore(BasicBackend.relocateSymbol(operation.dstSymbol, this.recordingRelocation), operation.dstOffset, operation.length);
         for(const operation of cutReplaceOperations)
-            this.cutAndShiftReplaceOperations(getOrCreateEntry(this.operationsBySymbol, operation.dstSymbol).replaceOperations, 'dst', operation.dstOffset, operation.length, 0);
+            this.cutAndShiftCopyReplaceOperations('dst', getOrCreateEntry(this.operationsBySymbol, operation.dstSymbol).replaceOperations, dirtySymbols, operation.dstOffset, operation.length, 0);
         for(const operation of addCopyReplaceOperations) {
             this.addCopyReplaceOperation('dst', operation);
             this.addCopyReplaceOperation('src', operation);
         }
-        for(const operation of mergeReplaceOperations)
-            this.mergeReplaceOperations(getOrCreateEntry(this.operationsBySymbol, operation.dstSymbol).replaceOperations, 'dst', operation.dstOffset);
-        return !this.isRecordingFromBackend || this.backend.replaceDataSimultaneously(replaceOperations);
+        for(const operation of mergeCopyReplaceOperations)
+            this.mergeCopyReplaceOperations('dst', getOrCreateEntry(this.operationsBySymbol, operation.dstSymbol).replaceOperations, operation.dstOffset);
+        this.cleanOperationsBySymbol(dirtySymbols);
+        console.assert(!this.isRecordingFromBackend || this.backend.replaceDataSimultaneously(replaceOperations));
+        return true;
     }
 
     writeData(dstSymbol, dstOffset, length, dataBytes) {
@@ -534,22 +573,48 @@ export default class Differential extends BasicBackend {
      * @return {Boolean} True on success
      */
     validateIntegrity() {
+        function checkOperations(operations, location, key, negativeAllowed, overlapAllowed) {
+            if(operations)
+                for(let i = 0; i < operations.length; ++i) {
+                    if(operations[i].length == 0) {
+                        console.error(`Empty entry in ${location}`);
+                        return false;
+                    }
+                    if(!negativeAllowed && operations[i].length < 0) {
+                        console.error(`Negative entry in ${location}`);
+                        return false;
+                    }
+                    if(i > 0 && operations[i-1][key] > operations[i][key]) {
+                        console.error(`Wrong order in ${location}`);
+                        return false;
+                    }
+                    if(!overlapAllowed && i > 0 && operations[i-1][key]+operations[i-1].length > operations[i][key]) {
+                        console.error(`Overlap in ${location}`);
+                        return false;
+                    }
+                }
+            return true;
+        }
         for(const symbol in this.operationsBySymbol) {
             const operationsOfSymbol = this.operationsBySymbol[symbol];
-            if(operationsOfSymbol.creaseLengthOperations)
-                for(let i = 1; i < operationsOfSymbol.creaseLengthOperations.length; ++i)
-                    if(operationsOfSymbol.creaseLengthOperations[i-1].dstOffset >= operationsOfSymbol.creaseLengthOperations[i].dstOffset)
-                        return false;
-            if(operationsOfSymbol.copyOperations)
-                for(let i = 1; i < operationsOfSymbol.copyOperations.length; ++i)
-                    if(operationsOfSymbol.copyOperations[i-1].srcOffset > operationsOfSymbol.copyOperations[i].srcOffset)
-                        return false;
-            if(operationsOfSymbol.replaceOperations)
-                for(let i = 1; i < operationsOfSymbol.replaceOperations.length; ++i)
-                    if(operationsOfSymbol.replaceOperations[i-1].dstOffset >= operationsOfSymbol.replaceOperations[i].dstOffset)
-                        return false;
+            if(Object.keys(operationsOfSymbol) == 0) {
+                console.error(`Empty entry in operationsBySymbol['${symbol}']`);
+                return false;
+            }
+            for(const type of ['tripleOperations', 'copyOperations', 'replaceOperations', 'creaseLengthOperations'])
+                if(operationsOfSymbol[type] && operationsOfSymbol[type].length == 0) {
+                    console.error(`Empty entry in operationsBySymbol['${symbol}']['${type}']`);
+                    return false;
+                }
+            if(!checkOperations(operationsOfSymbol.copyOperations, `operationsOfSymbol['${symbol}'].copyOperations`, 'srcOffset', false, true))
+                return false;
+            if(!checkOperations(operationsOfSymbol.replaceOperations, `operationsOfSymbol['${symbol}'].replaceOperations`, 'dstOffset', false, false))
+                return false;
+            if(!checkOperations(operationsOfSymbol.creaseLengthOperations, `operationsOfSymbol['${symbol}'].creaseLengthOperations`, 'dstOffset', true, false))
+                return false;
+            // TODO: Check increases covered by replaces and free of copyOperations
+            // TODO: Check decreases free of replaceOperations
         }
-        // TODO
         return true;
     }
 
