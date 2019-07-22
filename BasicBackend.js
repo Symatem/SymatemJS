@@ -424,7 +424,7 @@ export default class BasicBackend {
      */
     registerAdditionalSymbols(namespaceName, symbolNames) {
         const namespaceSymbol = this.createSymbol(BasicBackend.identityOfSymbol(BasicBackend.symbolByName.Namespaces)),
-              namespaceIdentity = BasicBackend.identityOfSymbol(namespace);
+              namespaceIdentity = BasicBackend.identityOfSymbol(namespaceSymbol);
         symbolByName[namespaceName] = namespaceSymbol;
         this.setData(namespaceSymbol, namespaceName);
         for(const name of symbolNames) {

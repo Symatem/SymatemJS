@@ -1,6 +1,6 @@
 import BasicBackend from '../BasicBackend.js';
 
-export default function(backend, rand) {
+export function getTests(backend, rand) {
     const destination = backend.createSymbol(4),
           source = backend.createSymbol(4);
 
@@ -13,6 +13,9 @@ export default function(backend, rand) {
         const handle = backend.getHandle(symbol);
         handle.dataLength = rand.range(0, 512);
         handle.dataBytes = rand.bytes(Math.ceil(handle.dataLength/32)*4);
+        handle.dataBytes[Math.floor(handle.dataLength/8)] &= ~((-1)<<(handle.dataLength%8));
+        for(let i = Math.floor(handle.dataLength/8)+1; i < handle.dataBytes.length; ++i)
+            handle.dataBytes[i] = 0;
         return [bitStringOfSymbol(symbol), handle.dataLength, rand.range(0, handle.dataLength)];
     }
 
@@ -21,7 +24,7 @@ export default function(backend, rand) {
     }
 
     return {
-        'decreaseLength': () => {
+        'decreaseLength': [1000, () => {
             const [destinationString, destinationLength, destinationOffset] = fillSymbol(destination),
                   length = rand.range(0, destinationLength-destinationOffset),
                   expectedString = [destinationString.substr(0, destinationOffset), destinationString.substr(destinationOffset+length)].join('');
@@ -37,8 +40,8 @@ export default function(backend, rand) {
                 return false;
             }
             return true;
-        },
-        'increaseLength': () => {
+        }],
+        'increaseLength': [1000, () => {
             const [destinationString, destinationLength, destinationOffset] = fillSymbol(destination),
                   length = rand.range(0, 512),
                   expectedString = [destinationString.substr(0, destinationOffset), new Array(length).fill('0').join(''), destinationString.substr(destinationOffset)].join('');
@@ -54,8 +57,8 @@ export default function(backend, rand) {
                 return false;
             }
             return true;
-        },
-        'readData': () => {
+        }],
+        'readData': [1000, () => {
             const [sourceString, sourceLength, sourceOffset] = fillSymbol(source),
                   length = rand.range(0, sourceLength-sourceOffset),
                   expectedString = sourceString.substr(sourceOffset, length);
@@ -70,8 +73,8 @@ export default function(backend, rand) {
                 return false;
             }
             return true;
-        },
-        'writeData': () => {
+        }],
+        'writeData': [1000, () => {
             const [destinationString, destinationLength, destinationOffset] = fillSymbol(destination),
                   sourceLength = rand.range(0, Math.min(destinationLength-destinationOffset)),
                   sourceBuffer = rand.bytes(Math.ceil(sourceLength/32)*4),
@@ -90,8 +93,8 @@ export default function(backend, rand) {
                 return false;
             }
             return true;
-        },
-        'replaceData': () => {
+        }],
+        'replaceData': [1000, () => {
             const [destinationString, destinationLength, destinationOffset] = fillSymbol(destination),
                   [sourceString, sourceLength, sourceOffset] = fillSymbol(source),
                   length = rand.range(0, Math.min(destinationLength-destinationOffset, sourceLength-sourceOffset)),
@@ -109,6 +112,6 @@ export default function(backend, rand) {
                 return false;
             }
             return true;
-        }
+        }]
     };
 }

@@ -342,12 +342,27 @@ export default class Differential extends BasicBackend {
                     srcOffset = operation.dstOffset;
                 }
                 for(; copyOperationIndex < copyOperations.length; ++copyOperationIndex) {
-                    if(copyOperations[copyOperationIndex].srcOffset+copyOperations[copyOperationIndex].length <= srcOffset)
+                    const copyOperation = copyOperations[copyOperationIndex];
+                    if(copyOperation.srcOffset+copyOperation.length <= srcOffset)
                         continue;
-                    if(i+1 < increaseLengthOperations.length && increaseLengthOperations[i+1].dstOffset <= copyOperations[copyOperationIndex].srcOffset)
+                    if(i+1 < increaseLengthOperations.length && increaseLengthOperations[i+1].dstOffset <= copyOperation.srcOffset)
                         break;
-                    copyOperations[copyOperationIndex].srcOffset += Math.max(0, length)-increaseAccumulator;
-                    if(this.mergeReplaceOperations(copyOperations, 'src', copyOperations[copyOperationIndex].srcOffset))
+                    if(copyOperation.srcOffset < srcOffset) {
+                        const endLength = copyOperation.srcOffset+copyOperation.length-srcOffset,
+                              secondPart = {
+                            'dstSymbol': copyOperation.dstSymbol,
+                            'srcSymbol': copyOperation.srcSymbol,
+                            'length': endLength,
+                            'srcOffset': srcOffset,
+                            'dstOffset': copyOperation.dstOffset+copyOperation.length-endLength
+                        };
+                        copyOperation.length -= endLength;
+                        this.addReplaceOperation('dst', secondPart);
+                        this.addReplaceOperation('src', secondPart);
+                        // this.cutAndShiftReplaceOperations(copyOperations, 'src', srcOffset, 0, 0);
+                    } else
+                        copyOperation.srcOffset += Math.max(0, length)-increaseAccumulator;
+                    if(this.mergeReplaceOperations(copyOperations, 'src', copyOperation.srcOffset))
                         --copyOperationIndex;
                 }
             }

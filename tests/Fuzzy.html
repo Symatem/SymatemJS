@@ -8,17 +8,20 @@
             import NativeBackend from '../NativeBackend.js';
             import PRNG from './PRNG.js';
 
-            import SymbolDataTests from './SymbolDataTests.js';
-            import TripleAndQueryTests from './TripleAndQueryTests.js';
+            import {getTests as SymbolDataTests} from './SymbolDataTests.js';
+            import {getTests as TripleAndQueryTests} from './TripleAndQueryTests.js';
+            import {getTests as DifferentialTests} from './DifferentialTests.js';
             const testBundles = [
                 SymbolDataTests,
-                TripleAndQueryTests
+                TripleAndQueryTests,
+                DifferentialTests
             ];
 
             const seed = document.createElement('input');
             document.body.appendChild(seed);
             seed.value = Math.floor(Math.random()*(0x80000000-1));
             seed.onblur = () => {
+                console.log(`Seed: ${seed.value}`);
                 const backend = new NativeBackend(),
                       rand = new PRNG(seed.value),
                       tests = {},
@@ -54,8 +57,8 @@
                         current = queue.shift();
                     }
                     const progressBar = progressBars[current];
-                    for(let i = 0; i < 10; ++i)
-                        if(!tests[current]())
+                    for(let i = 0; i < tests[current][0]; ++i)
+                        if(!tests[current][1]())
                             throw new Error('Test case failed');
                     ++progressBar.value;
                     if(progressBar.value >= progressBar.max)

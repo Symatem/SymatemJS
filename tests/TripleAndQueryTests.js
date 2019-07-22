@@ -1,13 +1,13 @@
 import BasicBackend from '../BasicBackend.js';
 
-export default function(backend, rand) {
+export function getTests(backend, rand) {
     let triplePool = new Set();
     const symbolPool = [], maskByIndex = Object.keys(BasicBackend.queryMask);
     for(let i = 0; i < 10; ++i)
         symbolPool.push(backend.createSymbol(4));
 
     return {
-        'setTriple': () => {
+        'setTriple': [200, () => {
             const triple = [rand.selectUniformly(symbolPool), rand.selectUniformly(symbolPool), rand.selectUniformly(symbolPool)],
                   tripleTag = triple.toString(),
                   tripleExists = triplePool.has(tripleTag),
@@ -22,8 +22,8 @@ export default function(backend, rand) {
                 return false;
             }
             return true;
-        },
-        'queryTriples': () => {
+        }],
+        'queryTriples': [100, () => {
             const triple = [rand.selectUniformly(symbolPool), rand.selectUniformly(symbolPool), rand.selectUniformly(symbolPool)],
                   maskIndex = rand.range(0, 27),
                   mask = maskByIndex[maskIndex],
@@ -59,8 +59,8 @@ export default function(backend, rand) {
             if(!noErrorsOccured)
                 console.error(triple, mask, [...triplePool].sort(), [...backend.queryTriples(BasicBackend.queryMask.VVV, triple)].sort(), [...result].sort(), [...expected].sort());
             return noErrorsOccured;
-        },
-        'moveTriples': () => {
+        }],
+        'moveTriples': [1, () => {
             const translationTable = {},
                   dstSymbols = [],
                   srcSymbols = new Set(symbolPool);
@@ -97,6 +97,6 @@ export default function(backend, rand) {
             if(!noErrorsOccured)
                 console.error(result, expected);
             return noErrorsOccured;
-        }
+        }]
     };
 }
