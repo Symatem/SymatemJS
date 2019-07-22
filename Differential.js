@@ -48,7 +48,7 @@ export default class Differential extends BasicBackend {
         return operations.length;
     }
 
-    addReplaceOperation(mode, operation, operations, operationIndex) {
+    addCopyReplaceOperation(mode, operation, operations, operationIndex) {
         if(operations === undefined) {
             const operationsOfSymbol = getOrCreateEntry(this.operationsBySymbol, operation[mode+'Symbol']);
             operations = getOrCreateEntry(operationsOfSymbol, (mode == 'src') ? 'copyOperations' : 'replaceOperations', []);
@@ -57,13 +57,15 @@ export default class Differential extends BasicBackend {
         operations.splice(operationIndex, 0, operation);
     }
 
-    removeReplaceOperation(mode, operation, operations, operationIndex) {
+    removeCopyReplaceOperation(mode, operation, operations, operationIndex) {
         if(operations === undefined) {
             const operationsOfSymbol = this.operationsBySymbol[operation[mode+'Symbol']];
             operations = operationsOfSymbol[(mode == 'src') ? 'copyOperations' : 'replaceOperations'];
             operationIndex = operations.indexOf(operation);
         }
         operations.splice(operationIndex, 1);
+        if(operations.length == 0 && BasicBackend.namespaceOfSymbol(operation[mode+'Symbol']) == this.repositoryNamespace)
+            this.backend.unlinkSymbol(operation[mode+'Symbol']);
     }
 
     cutAndShiftReplaceOperations(operations, mode, intermediateOffset, decreaseLength, shift) {
@@ -71,7 +73,7 @@ export default class Differential extends BasicBackend {
         if(!operations)
             return;
         const intermediateEndOffset = intermediateOffset+decreaseLength,
-              addReplaceOperations = [];
+              addCopyReplaceOperations = [];
         for(let operationIndex = 0; operationIndex < operations.length; ++operationIndex) {
             const operation = operations[operationIndex],
                   operationEndOffset = operation[mode+'Offset']+operation.length;
@@ -86,7 +88,7 @@ export default class Differential extends BasicBackend {
                     [mode+'Offset']: intermediateEndOffset+shift,
                     [complementaryMode+'Offset']: operation[complementaryMode+'Offset']+operation.length-endLength // +intermediateEndOffset-operation[mode+'Offset']
                 };
-                addReplaceOperations.push(secondPart);
+                addCopyReplaceOperations.push(secondPart);
                 operation.length = intermediateOffset-operation[mode+'Offset'];
             } else {
                 const operationsBeginIsInside = (intermediateOffset <= operation[mode+'Offset'] && operation[mode+'Offset'] <= intermediateEndOffset),
@@ -94,8 +96,8 @@ export default class Differential extends BasicBackend {
                 if(operationsBeginIsInside || operationsEndIsInside) {
                     if(operationsBeginIsInside) {
                         if(operationsEndIsInside) {
-                            this.removeReplaceOperation(mode, operation, operations, operationIndex--);
-                            this.removeReplaceOperation(complementaryMode, operation);
+                            this.removeCopyReplaceOperation(mode, operation, operations, operationIndex--);
+                            this.removeCopyReplaceOperation(complementaryMode, operation);
                         } else {
                             operation[mode+'Offset'] = intermediateEndOffset+shift;
                             operation[complementaryMode+'Offset'] += operation.length-endLength;
@@ -116,9 +118,9 @@ export default class Differential extends BasicBackend {
                     operation[mode+'Offset'] += shift;
             }
         }
-        for(const operation of addReplaceOperations) {
-            this.addReplaceOperation('dst', operation);
-            this.addReplaceOperation('src', operation);
+        for(const operation of addCopyReplaceOperations) {
+            this.addCopyReplaceOperation('dst', operation);
+            this.addCopyReplaceOperation('src', operation);
         }
     }
 
@@ -138,8 +140,8 @@ export default class Differential extends BasicBackend {
                firstOperation[complementaryMode+'Offset']+firstOperation.length == secondOperation[complementaryMode+'Offset'] &&
                firstOperation.srcSymbol == secondOperation.srcSymbol) {
                 firstOperation.length += secondOperation.length;
-                this.removeReplaceOperation(mode, secondOperation, operations, operationIndex--);
-                this.removeReplaceOperation(complementaryMode, secondOperation);
+                this.removeCopyReplaceOperation(mode, secondOperation, operations, operationIndex--);
+                this.removeCopyReplaceOperation(complementaryMode, secondOperation);
                 return true;
             } else
                 return false;
@@ -156,6 +158,8 @@ export default class Differential extends BasicBackend {
         console.assert(this.isRecordingFromBackend && srcOffset+length <= this.backend.getLength(srcSymbol));
         const operationsOfSymbol = getOrCreateEntry(this.operationsBySymbol, srcSymbol),
               creaseLengthOperations = getOrDefaultEntry(operationsOfSymbol, 'creaseLengthOperations', []);
+        if(operationsOfSymbol.manifestOrRelease == 'manifest')
+            return;
         let [intermediateOffset, operationIndex] = this.constructor.getIntermediateOffset(creaseLengthOperations, srcOffset),
             decreaseAccumulator = intermediateOffset-srcOffset,
             dstSymbol = operationsOfSymbol.restoreSymbol;
@@ -184,8 +188,8 @@ export default class Differential extends BasicBackend {
                 'srcOffset': intermediateOffset,
                 'length': length
             };
-            this.addReplaceOperation('src', operation);
-            this.addReplaceOperation('dst', operation, replaceOperations, replaceOperationIndex++);
+            this.addCopyReplaceOperation('src', operation);
+            this.addCopyReplaceOperation('dst', operation, replaceOperations, replaceOperationIndex++);
             for(; replaceOperationIndex < replaceOperations.length; ++replaceOperationIndex)
                 replaceOperations[replaceOperationIndex].dstOffset += length;
             this.mergeReplaceOperations(replaceOperations, 'dst', dstOffset);
@@ -357,8 +361,8 @@ export default class Differential extends BasicBackend {
                             'dstOffset': copyOperation.dstOffset+copyOperation.length-endLength
                         };
                         copyOperation.length -= endLength;
-                        this.addReplaceOperation('dst', secondPart);
-                        this.addReplaceOperation('src', secondPart);
+                        this.addCopyReplaceOperation('dst', secondPart);
+                        this.addCopyReplaceOperation('src', secondPart);
                         // this.cutAndShiftReplaceOperations(copyOperations, 'src', srcOffset, 0, 0);
                     } else
                         copyOperation.srcOffset += Math.max(0, length)-increaseAccumulator;
@@ -413,7 +417,7 @@ export default class Differential extends BasicBackend {
                    operation.srcOffset+operation.length > this.backend.getLength(operation.srcSymbol))
                     return false;
         const context = {},
-              cutReplaceOperations = [], addReplaceOperations = [], mergeReplaceOperations = [],
+              cutReplaceOperations = [], addCopyReplaceOperations = [], mergeReplaceOperations = [],
               addSlice = (srcSymbol, srcOffset, length) => {
             const operationsOfSymbol = getOrDefaultEntry(this.operationsBySymbol, srcSymbol, {}),
                   srcCreaseLengthOperations = getOrDefaultEntry(operationsOfSymbol, 'creaseLengthOperations', []);
@@ -429,7 +433,7 @@ export default class Differential extends BasicBackend {
                 }
             }
             if(context.dstSymbol != srcSymbol || context.dstIntermediateOffset != srcOffset)
-                addReplaceOperations.push({
+                addCopyReplaceOperations.push({
                     'dstSymbol': context.dstSymbol,
                     'dstOffset': context.dstIntermediateOffset,
                     'srcSymbol': srcSymbol,
@@ -508,9 +512,9 @@ export default class Differential extends BasicBackend {
                 this.saveDataToRestore(BasicBackend.relocateSymbol(operation.dstSymbol, this.recordingRelocation), operation.dstOffset, operation.length);
         for(const operation of cutReplaceOperations)
             this.cutAndShiftReplaceOperations(getOrCreateEntry(this.operationsBySymbol, operation.dstSymbol).replaceOperations, 'dst', operation.dstOffset, operation.length, 0);
-        for(const operation of addReplaceOperations) {
-            this.addReplaceOperation('dst', operation);
-            this.addReplaceOperation('src', operation);
+        for(const operation of addCopyReplaceOperations) {
+            this.addCopyReplaceOperation('dst', operation);
+            this.addCopyReplaceOperation('src', operation);
         }
         for(const operation of mergeReplaceOperations)
             this.mergeReplaceOperations(getOrCreateEntry(this.operationsBySymbol, operation.dstSymbol).replaceOperations, 'dst', operation.dstOffset);
