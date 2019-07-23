@@ -6,6 +6,7 @@ export const repositoryNamespace = 3,
              checkoutNamespace = 4,
 randomizationOptions = {
     'minSymbolCount': 8,
+    'minTripleCount': 8,
     'dataLength': 32,
     'minCreaseLength': 6,
     'maxCreaseLength': 12,
@@ -125,16 +126,29 @@ export function getTests(backend, rand) {
             generateJournal(backend, rand, (description, method, args) => {
                 diff[method](...args);
             });
-            if(!diff.validateIntegrity() || !diff.commit())
+            if(!diff.validateIntegrity())
                 return false;
+            diff.commit();
             const resultOfJournal = stringifyCheckout(backend);
-            if(!diff.apply(true))
+            if(!diff.apply(true)) {
+                console.warn('Could not apply reverse');
                 return false;
+            }
             const resultOfRevert = stringifyCheckout(backend);
-            if(!diff.apply(false))
+            if(!diff.apply(false)) {
+                console.warn('Could not apply forward');
                 return false;
+            }
             const resultOfDifferential = stringifyCheckout(backend);
-            return resultOfNothing == resultOfRevert && resultOfJournal == resultOfDifferential;
+            if(resultOfNothing != resultOfRevert) {
+                console.warn(resultOfNothing, resultOfRevert);
+                return false;
+            }
+            if(resultOfJournal != resultOfDifferential) {
+                console.warn(resultOfJournal, resultOfDifferential);
+                return false;
+            }
+            return true;
         }]
     };
 }

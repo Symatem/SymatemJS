@@ -18,7 +18,7 @@ export function getTests(backend, rand) {
             else
                 triplePool.delete(tripleTag);
             if((tripleExists != linked) != result) {
-                console.error([...triplePool].sort().join(' '), triple, tripleExists, linked, result);
+                console.warn([...triplePool].sort().join(' '), triple, tripleExists, linked, result);
                 return false;
             }
             return true;
@@ -57,7 +57,7 @@ export function getTests(backend, rand) {
                     noErrorsOccured = false;
             }
             if(!noErrorsOccured)
-                console.error(triple, mask, [...triplePool].sort(), [...backend.queryTriples(BasicBackend.queryMask.VVV, triple)].sort(), [...result].sort(), [...expected].sort());
+                console.warn(triple, mask, [...triplePool].sort(), [...backend.queryTriples(BasicBackend.queryMask.VVV, triple)].sort(), [...result].sort(), [...expected].sort());
             return noErrorsOccured;
         }],
         'moveTriples': [1, () => {
@@ -95,7 +95,7 @@ export function getTests(backend, rand) {
                 if(expected[i] != result[i].toString())
                     noErrorsOccured = false;
             if(!noErrorsOccured)
-                console.error(result, expected);
+                console.warn(result, expected);
             return noErrorsOccured;
         }]
     };

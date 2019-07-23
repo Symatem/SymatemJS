@@ -60,19 +60,22 @@ const symbolByName = {
 
     'ManifestSymbol': 0,
     'ReleaseSymbol': 0,
+    'LinkTriple': 0,
+    'UnlinkTriple': 0,
     'IncreaseLength': 0,
     'DecreaseLength': 0,
     'DataSource': 0,
     'DataRestore': 0,
     'ReplaceData': 0,
-    'MoveTriples': 0,
-    'LinkTriple': 0,
-    'UnlinkTriple': 0,
+    'RestoreData': 0,
     'Source': 0,
     'Destination': 0,
     'SourceOffset': 0,
     'DestinationOffset': 0,
     'Length': 0,
+    'MinimumLength': 0,
+    'ForwardLength': 0,
+    'ReverseLength': 0,
 
     'Basics': 2,
     'Index': 2,
@@ -86,10 +89,16 @@ function sortSymbolsArrayCallback(a, b) {
 
 /** Abstract super class of all backends */
 export default class BasicBackend {
+    /** All 27 query masks by their name
+      * @enum {Number}
+      */
     static get queryMask() {
         return queryMask;
     }
 
+    /** Predefined symbols by their name
+      * @enum {Symbol}
+      */
     static get symbolByName() {
         return symbolByName;
     }
@@ -640,8 +649,7 @@ export default class BasicBackend {
                 return false;
         }
         for(const operation of operations)
-            if(!this.writeData(operation.dstSymbol, operation.dstOffset, operation.length, operation.dataBytes))
-                return false;
+            console.assert(this.writeData(operation.dstSymbol, operation.dstOffset, operation.length, operation.dataBytes));
         return true;
     }
 
@@ -728,7 +736,6 @@ export default class BasicBackend {
 
     /**
      * Stores the content as JSON format
-     * @deprecated Use the version contol differential format instead
      * @return {String} json
      */
     encodeJson() {
@@ -760,7 +767,6 @@ export default class BasicBackend {
 
     /**
      * Loads the content from JSON format
-     * @deprecated Use the version contol differential format instead
      * @param {String} json
      */
     decodeJson(json) {

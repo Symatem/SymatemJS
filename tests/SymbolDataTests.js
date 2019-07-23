@@ -31,7 +31,7 @@ export function getTests(backend, rand) {
             backend.creaseLength(destination, destinationOffset, -length);
             const resultString = bitStringOfSymbol(destination);
             if(expectedString != resultString) {
-                console.error(
+                console.warn(
                     destinationOffset, destinationLength, length,
                     addBracesAt(destinationString, destinationOffset, length),
                     addBracesAt(expectedString, destinationOffset, 0),
@@ -48,7 +48,7 @@ export function getTests(backend, rand) {
             backend.creaseLength(destination, destinationOffset, length);
             const resultString = bitStringOfSymbol(destination);
             if(expectedString != resultString) {
-                console.error(
+                console.warn(
                     destinationOffset, destinationLength, length,
                     addBracesAt(destinationString, destinationOffset, 0),
                     addBracesAt(expectedString, destinationOffset, length),
@@ -64,7 +64,7 @@ export function getTests(backend, rand) {
                   expectedString = sourceString.substr(sourceOffset, length);
             const resultString = BasicBackend.bufferToBitString(backend.readData(source, sourceOffset, length), length);
             if(expectedString != resultString) {
-                console.error(
+                console.warn(
                     sourceOffset, sourceLength, length,
                     addBracesAt(sourceString, sourceOffset, length),
                     expectedString,
@@ -83,7 +83,7 @@ export function getTests(backend, rand) {
             backend.writeData(destination, destinationOffset, sourceLength, sourceBuffer);
             const resultString = bitStringOfSymbol(destination);
             if(expectedString != resultString) {
-                console.error(
+                console.warn(
                     destinationOffset, destinationLength, sourceLength,
                     sourceString,
                     addBracesAt(destinationString, destinationOffset, sourceLength),
@@ -102,7 +102,7 @@ export function getTests(backend, rand) {
             backend.replaceData(destination, destinationOffset, source, sourceOffset, length);
             const resultString = bitStringOfSymbol(destination);
             if(expectedString != resultString) {
-                console.error(
+                console.warn(
                     destinationOffset, destinationLength, sourceOffset, sourceLength, length,
                     addBracesAt(sourceString, sourceOffset, length),
                     addBracesAt(destinationString, destinationOffset, length),

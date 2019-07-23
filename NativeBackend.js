@@ -209,7 +209,7 @@ function bitwiseCopy(destination, destinationOffset, source, sourceOffset, lengt
         return;
     }
     if(destination == source && sourceOffset < destinationOffset && sourceOffset+length > destinationOffset)
-        console.error('bitwiseCopy with destination == source is not implemented yet'); // TODO
+        throw new Error('bitwiseCopy with destination == source is not implemented yet'); // TODO
     const elementLength = 32;
     destination = new DataView(destination.buffer);
     source = new DataView(source.buffer);
