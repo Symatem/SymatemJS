@@ -538,6 +538,13 @@ export default class NativeBackend extends BasicBackend {
         return true;
     }
 
+    *querySymbols(namespaceIdentity) {
+        const namespace = this.namespaces[namespaceIdentity];
+        if(namespace)
+            for(const handleIdentity in namespace.handles)
+                yield BasicBackend.concatIntoSymbol(namespaceIdentity, handleIdentity);
+    }
+
     queryTriples(mask, triple) {
         const index = indexLookup[mask];
         return searchLookup[mask].call(this, index, reorderTriple(triplePrioritized, index, triple));

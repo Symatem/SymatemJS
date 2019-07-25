@@ -2,7 +2,7 @@ import BasicBackend from '../BasicBackend.js';
 
 export function getTests(backend, rand) {
     let triplePool = new Set();
-    const symbolPool = [], maskByIndex = Object.keys(BasicBackend.queryMask);
+    const symbolPool = [], maskByIndex = Object.keys(BasicBackend.queryMasks);
     for(let i = 0; i < 10; ++i)
         symbolPool.push(backend.createSymbol(4));
 
@@ -57,7 +57,7 @@ export function getTests(backend, rand) {
                     noErrorsOccured = false;
             }
             if(!noErrorsOccured)
-                console.warn(triple, mask, [...triplePool].sort(), [...backend.queryTriples(BasicBackend.queryMask.VVV, triple)].sort(), [...result].sort(), [...expected].sort());
+                console.warn(triple, mask, [...triplePool].sort(), [...backend.queryTriples(BasicBackend.queryMasks.VVV, triple)].sort(), [...result].sort(), [...expected].sort());
             return noErrorsOccured;
         }],
         'moveTriples': [1, () => {
@@ -89,7 +89,7 @@ export function getTests(backend, rand) {
             triplePool = renamedTriplePool;
             backend.moveTriples(translationTable);
             const expected = [...triplePool].sort(),
-                  result = [...backend.queryTriples(BasicBackend.queryMask.VVV, [])].sort();
+                  result = [...backend.queryTriples(BasicBackend.queryMasks.VVV, [])].sort();
             let noErrorsOccured = (expected.length == result.length) && backend.validateIntegrity();
             for(let i = 0; i < expected.length && noErrorsOccured; ++i)
                 if(expected[i] != result[i].toString())

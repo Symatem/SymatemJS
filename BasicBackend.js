@@ -36,9 +36,9 @@ Array.reversed = function*(array) {
 };
 
 const queryMode = ['M', 'V', 'I'],
-      queryMask = {};
+      queryMasks = {};
 for(let i = 0; i < 27; ++i)
-    queryMask[queryMode[i % 3] + queryMode[Math.floor(i / 3) % 3] + queryMode[Math.floor(i / 9) % 3]] = i;
+    queryMasks[queryMode[i % 3] + queryMode[Math.floor(i / 3) % 3] + queryMode[Math.floor(i / 9) % 3]] = i;
 
 const symbolByName = {
     'Void': 0,
@@ -92,8 +92,8 @@ export default class BasicBackend {
     /** All 27 query masks by their name
       * @enum {Number}
       */
-    static get queryMask() {
-        return queryMask;
+    static get queryMasks() {
+        return queryMasks;
     }
 
     /** Predefined symbols by their name
@@ -224,7 +224,7 @@ export default class BasicBackend {
      * @return {Symbol} symbol
      */
     static concatIntoSymbol(namespaceIdentity, identity) {
-        return `${namespaceIdentity}:${identity}`;
+        return [namespaceIdentity, identity].join(':');
     }
 
     /**
@@ -316,23 +316,19 @@ export default class BasicBackend {
         }
         if(!this.getTriple([encoding, symbolByName.Type, symbolByName.Composite]))
             return dataBytes;
-
         const dataValue = [],
-              defaultEncoding = this.getSolitary(encoding, symbolByName.Default);
-
-        let slotSize = this.getSolitary(encoding, symbolByName.SlotSize);
+              defaultEncoding = this.getPairOptionally(encoding, symbolByName.Default);
+        let slotSize = this.getPairOptionally(encoding, symbolByName.SlotSize);
         if(slotSize !== symbolByName.Void && slotSize !== symbolByName.Dynamic)
             slotSize = this.getData(slotSize);
-
-        let offset = 0, count = this.getSolitary(encoding, symbolByName.Count);
+        let offset = 0, count = this.getPairOptionally(encoding, symbolByName.Count);
         if(count === symbolByName.Dynamic)
             count = dataView.getUint32((offset++)*4, true);
         else if(count !== symbolByName.Void)
             count = this.getData(count);
-
         feedback.length = 0;
         for(let i = 0; (count === symbolByName.Void && feedback.length < dataBytes.length*8) || i < count; ++i) {
-            let childEncoding = this.getSolitary(encoding, this.constructor.symbolInNamespace('Index', i));
+            let childEncoding = this.getPairOptionally(encoding, this.constructor.symbolInNamespace('Index', i));
             if(childEncoding === symbolByName.Void)
                 childEncoding = defaultEncoding;
             const childFeedback = {'length': (slotSize === symbolByName.Dynamic) ? dataView.getUint32((offset+i)*4, true) : slotSize};
@@ -379,23 +375,19 @@ export default class BasicBackend {
         }
         if(!this.getTriple([encoding, symbolByName.Type, symbolByName.Composite]))
             return dataValue;
-
         const dataBytesArray = [],
-              defaultEncoding = this.getSolitary(encoding, symbolByName.Default);
-
-        let slotSize = this.getSolitary(encoding, symbolByName.SlotSize);
+              defaultEncoding = this.getPairOptionally(encoding, symbolByName.Default);
+        let slotSize = this.getPairOptionally(encoding, symbolByName.SlotSize);
         if(slotSize !== symbolByName.Void && slotSize !== symbolByName.Dynamic)
             slotSize = this.getData(slotSize);
-
-        let offset = 0, count = this.getSolitary(encoding, symbolByName.Count);
+        let offset = 0, count = this.getPairOptionally(encoding, symbolByName.Count);
         if(count === symbolByName.Dynamic)
             dataView.setUint32(offset++, dataValue.length, true);
         else if(count !== symbolByName.Void && dataValue.length !== this.getData(count))
             throw new Error('Provided dataValue array length does not match count specified in the composite encoding');
-
         let length = 0;
         for(let i = 0; i < dataValue.length; ++i) {
-            let childEncoding = this.getSolitary(encoding, this.constructor.symbolInNamespace('Index', i));
+            let childEncoding = this.getPairOptionally(encoding, this.constructor.symbolInNamespace('Index', i));
             if(childEncoding === symbolByName.Void)
                 childEncoding = defaultEncoding;
             const childDataBytes = this.encodeBinary(childEncoding, dataValue[i]);
@@ -467,11 +459,11 @@ export default class BasicBackend {
      * @param {Symbol} symbol
      */
     unlinkSymbol(symbol) {
-        for(const triple of this.queryTriples(queryMask.MVV, [symbol, 0, 0]))
+        for(const triple of this.queryTriples(queryMasks.MVV, [symbol, 0, 0]))
             this.setTriple(triple, false);
-        for(const triple of this.queryTriples(queryMask.VMV, [0, symbol, 0]))
+        for(const triple of this.queryTriples(queryMasks.VMV, [0, symbol, 0]))
             this.setTriple(triple, false);
-        for(const triple of this.queryTriples(queryMask.VVM, [0, 0, symbol]))
+        for(const triple of this.queryTriples(queryMasks.VVM, [0, 0, symbol]))
             this.setTriple(triple, false);
         this.setLength(symbol, 0);
         this.releaseSymbol(symbol);
@@ -546,7 +538,7 @@ export default class BasicBackend {
         if(!dataLength)
             dataLength = this.getLength(symbol);
         if(dataLength > 0) {
-            const encoding = this.getSolitary(symbol, symbolByName.Encoding);
+            const encoding = this.getPairOptionally(symbol, symbolByName.Encoding);
             return this.decodeBinary(encoding, dataBytes, {'length': dataLength});
         }
     }
@@ -563,11 +555,11 @@ export default class BasicBackend {
         switch(typeof dataValue) {
             case 'undefined':
                 encoding = symbolByName.Void;
-                this.setSolitary([symbol, symbolByName.Encoding, encoding]);
+                this.getAndSetPairs(symbol, symbolByName.Encoding, encoding);
                 break;
             case 'string':
                 encoding = symbolByName.UTF8;
-                this.setSolitary([symbol, symbolByName.Encoding, encoding]);
+                this.getAndSetPairs(symbol, symbolByName.Encoding, encoding);
                 break;
             case 'number':
             case 'boolean':
@@ -577,10 +569,10 @@ export default class BasicBackend {
                     encoding = symbolByName.TwosComplement;
                 else
                     encoding = symbolByName.BinaryNumber;
-                this.setSolitary([symbol, symbolByName.Encoding, encoding]);
+                this.getAndSetPairs(symbol, symbolByName.Encoding, encoding);
                 break;
             default:
-                encoding = this.getSolitary(symbol, symbolByName.Encoding);
+                encoding = this.getPairOptionally(symbol, symbolByName.Encoding);
                 break;
         }
         const dataBytes = this.encodeBinary(encoding, dataValue);
@@ -654,6 +646,15 @@ export default class BasicBackend {
     }
 
     /**
+     * Yields all symbols in a namespace
+     * @param {Identity} namespaceIdentity
+     * @yield {Symbol} symbol
+     */
+    *querySymbols(namespaceIdentity) {
+        throw new Error('Abstract, not implemented');
+    }
+
+    /**
      * Yields all matching triples according to the given triple and mask. The final .next() returns the count of matches
      * @param {QueryMask} mask
      * @param {Triple} triple
@@ -679,49 +680,61 @@ export default class BasicBackend {
      * @return {Boolean} linked
      */
     getTriple(triple) {
-        const iterator = this.queryTriples(queryMask.MMM, triple);
+        const iterator = this.queryTriples(queryMasks.MMM, triple);
         return iterator.next().value.length === 3 && iterator.next().value === 1;
     }
 
     /**
-     * Does the same as setTriple (linked = true) but also unlinks all triples with different values and returns nothing
-     * @param {Triple} triple
+     * Searches and modifes triples based on a pair of matching symbols and varying third
+     * @param {Symbol} first Matching symbol pair
+     * @param {Symbol} second Matching symbol pair
+     * @param {undefined|Symbol|Set<Symbol>} thirds Varying is replaced by these (won't modify anything if undefined)
+     * @param {Number} index Varying position in the triples (0=Entity, 1=Attribute, 2=Value)
+     * @return {Set<Symbol>} Varying search result
      */
-    setSolitary(triple) {
-        let needsToBeLinked = (triple[2] !== symbolByName.Void);
-        for(const iTriple of this.queryTriples(queryMask.MMV, triple)) {
-            if(iTriple[2] == triple[2])
-                needsToBeLinked = false;
-            else
-                this.setTriple(iTriple, false);
+    getAndSetPairs(first, second, thirds, index=2) {
+        let queryMask, triple;
+        switch(index) {
+            case 0:
+                queryMask = queryMasks.VMM;
+                triple = [symbolByName.Void, first, second];
+                break;
+            case 1:
+                queryMask = queryMasks.MVM;
+                triple = [first, symbolByName.Void, second];
+                break;
+            case 2:
+                queryMask = queryMasks.MMV;
+                triple = [first, second, symbolByName.Void];
+                break;
         }
-        if(needsToBeLinked)
+        const result = new Set();
+        for(const queryTriple of this.queryTriples(queryMask, triple)) {
+            if(thirds)
+                this.setTriple(queryTriple, false);
+            result.add(queryTriple[index]);
+        }
+        if(typeof thirds == 'string') {
+            triple[index] = thirds;
             this.setTriple(triple, true);
-        return true;
+        } else if(thirds)
+            for(const thrid of thirds) {
+                triple[index] = third;
+                this.setTriple(triple, true);
+            }
+        return result;
     }
 
     /**
-     * Returns the value if exactly one triple matches with the given pair
-     * @param {Symbol} first symbol
-     * @param {Symbol} second symbol
-     * @param {Number} index 0, 1, 2 search for Entity, Attribute or Value
+     * Returns the third symbol if exactly one triple matches the given pair otherwise Void is returned
+     * @param {Symbol} first Matching symbol pair
+     * @param {Symbol} second Matching symbol pair
+     * @param {Number} index Varying position in the triples (0=Entity, 1=Attribute, 2=Value)
      * @return {Symbol} third symbol or Void
      */
-    getSolitary(first, second, index=2) {
-        let iterator;
-        switch(index) {
-            case 0:
-                iterator = this.queryTriples(queryMask.VMM, [symbolByName.Void, first, second]);
-                break;
-            case 1:
-                iterator = this.queryTriples(queryMask.MVM, [first, symbolByName.Void, second]);
-                break;
-            case 2:
-                iterator = this.queryTriples(queryMask.MMV, [first, second, symbolByName.Void]);
-                break;
-        }
-        const triple = iterator.next().value;
-        return (iterator.next().value == 1) ? triple[index] : symbolByName.Void;
+    getPairOptionally(first, second, index=2) {
+        const thirds = this.getAndSetPairs(first, second, undefined, index);
+        return (thirds.size() == 1) ? thirds.values().next().value : symbolByName.Void;
     }
 
     /**
@@ -740,15 +753,15 @@ export default class BasicBackend {
      */
     encodeJson() {
         const entities = [];
-        for(const tripleE of this.queryTriples(queryMask.VII, [0, 0, 0])) {
+        for(const tripleE of this.queryTriples(queryMasks.VII, [0, 0, 0])) {
             const length = this.getLength(tripleE[0]),
                   data = this.getData(tripleE[0]),
                   attributes = [];
             if(symbolByName[data] === tripleE[0])
                 continue;
-            for(const tripleA of this.queryTriples(queryMask.MVI, tripleE)) {
+            for(const tripleA of this.queryTriples(queryMasks.MVI, tripleE)) {
                 const values = [];
-                for(const tripleV of this.queryTriples(queryMask.MMV, tripleA))
+                for(const tripleV of this.queryTriples(queryMasks.MMV, tripleA))
                     values.push(tripleV[2]);
                 attributes.push(tripleA[1]);
                 attributes.push(values);

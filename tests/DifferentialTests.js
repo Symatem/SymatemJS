@@ -23,7 +23,7 @@ randomizationOptions = {
 };
 
 export function generateJournal(backend, rand, callback) {
-    const symbolPool = Object.keys(backend.namespaces[checkoutNamespace].handles).map((symbolIdentity) => [checkoutNamespace, symbolIdentity].join(':'));
+    const symbolPool = [...backend.querySymbols(checkoutNamespace)];
     for(let iteration = 0; iteration < randomizationOptions.operationCount; ++iteration) {
         const operationType = (symbolPool.length < randomizationOptions.minSymbolCount)
                               ? 'manifestSymbol'
@@ -91,7 +91,7 @@ export function generateJournal(backend, rand, callback) {
                     triple = [rand.selectUniformly(symbolPool), rand.selectUniformly(symbolPool), rand.selectUniformly(symbolPool)];
                 else {
                     const triplePool = [];
-                    for(const triple of backend.queryTriples(BasicBackend.queryMask.VVV, [0, 0, 0]))
+                    for(const triple of backend.queryTriples(BasicBackend.queryMasks.VVV, [0, 0, 0]))
                         if(BasicBackend.namespaceOfSymbol(triple[0]) == checkoutNamespace)
                             triplePool.push(triple);
                     if(triplePool.length == 0)

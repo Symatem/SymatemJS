@@ -139,7 +139,6 @@ export default class Differential extends BasicBackend {
     }
 
     mergeCopyReplaceOperations(mode, operations, intermediateOffset) {
-        // TODO: Take possible DAG-like overlap into account if(mode == 'src')
         const complementaryMode = (mode == 'dst') ? 'src' : 'dst';
         if(!operations)
             return false;
@@ -242,6 +241,8 @@ export default class Differential extends BasicBackend {
                 this.mergeCopyReplaceOperations('dst', replaceOperations, replaceOperations[replaceOperationIndex].dstOffset);
     }
 
+
+
     queryTriples(queryMask, triple) {
         console.assert(this.isRecordingFromBackend);
         return this.backend.queryTriples(queryMask, triple);
@@ -250,6 +251,11 @@ export default class Differential extends BasicBackend {
     getLength(symbol) {
         console.assert(this.isRecordingFromBackend);
         return this.backend.getLength(symbol);
+    }
+
+    readData(symbol, offset, length) {
+        console.assert(this.isRecordingFromBackend);
+        return this.backend.readData(symbol, offset, length);
     }
 
     manifestSymbol(symbol) {
@@ -378,7 +384,6 @@ export default class Differential extends BasicBackend {
                     if(i+1 < increaseLengthOperations.length && increaseLengthOperations[i+1].dstOffset <= copyOperation.srcOffset)
                         break;
                     if(copyOperation.srcOffset < srcOffset) {
-                        // Splitting is an alternative to: this.cutAndShiftCopyReplaceOperations('src', copyOperations, undefined, srcOffset, 0, 0);
                         const endLength = copyOperation.srcOffset+copyOperation.length-srcOffset,
                               secondPart = {
                             'dstSymbol': copyOperation.dstSymbol,
@@ -561,6 +566,8 @@ export default class Differential extends BasicBackend {
         this.backend.setRawData(srcSymbol, dataBytes, length);
         return this.replaceData(dstSymbol, dstOffset, srcSymbol, 0, length);
     }
+
+
 
     /**
      * Scan through all internal structures and check their integrity
