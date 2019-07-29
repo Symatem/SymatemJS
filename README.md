@@ -38,5 +38,5 @@ So three possible mask-states powered by three positions are 27 possible masks a
 -   IVI: Which attributes exist?
 -   IIV: Which values exist?
 
-They are accessed by BasicBackend.queryMask.MMM for example.
+They are accessed by BasicBackend.queryMasks.MMM for example.
 Positions of the triple which are not masked by Match but by Varying or by Ignore should be set to BasicBackend.symbolByName.Void.

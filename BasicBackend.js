@@ -734,7 +734,7 @@ export default class BasicBackend {
      */
     getPairOptionally(first, second, index=2) {
         const thirds = this.getAndSetPairs(first, second, undefined, index);
-        return (thirds.size() == 1) ? thirds.values().next().value : symbolByName.Void;
+        return (thirds.size == 1) ? thirds.values().next().value : symbolByName.Void;
     }
 
     /**
