@@ -238,11 +238,76 @@ function bitwiseCopy(destination, destinationOffset, source, sourceOffset, lengt
 
 import BasicBackend from './BasicBackend.js';
 
+function binarySearch(key, high, keyAt) {
+    /*for(let index = 0; index < high; ++index)
+        if(key < keyAt(index))
+            return index;
+    return high;*/
+    let mid, low = 0;
+    while(low < high) {
+        mid = (low+high)>>1;
+        if(key < keyAt(mid))
+            high = mid;
+        else
+            low = mid+1;
+    }
+    return key >= keyAt(mid) ? mid+1 : mid;
+}
+
 /** Implements a backend in JS */
 export default class NativeBackend extends BasicBackend {
     constructor() {
         super();
         this.namespaces = {};
+    }
+
+    static addIdentityToPool(ranges, identity) {
+        const indexOfRange = binarySearch(identity, ranges.length, (index) => ranges[index].start);
+        const prevRange = ranges[indexOfRange-1],
+              nextRange = ranges[indexOfRange];
+        if(prevRange && (indexOfRange == ranges.length || identity < prevRange.start+prevRange.count))
+            return false;
+        const mergePrevRange = (prevRange && prevRange.start+prevRange.count == identity),
+              mergePostRange = (nextRange && identity+1 == nextRange.start);
+        if(mergePrevRange && mergePostRange) {
+            nextRange.start = prevRange.start;
+            if(nextRange.count)
+                nextRange.count += 1+prevRange.count;
+            ranges.splice(indexOfRange-1, 1);
+        } else if(mergePrevRange) {
+            ++prevRange.count;
+        } else if(mergePostRange) {
+            --nextRange.start;
+            if(nextRange.count)
+                ++nextRange.count;
+        } else
+            ranges.splice(indexOfRange, 0, {'start': identity, 'count': 1});
+        return true;
+    }
+
+    static removeIdentityFromPool(ranges, identity) {
+        const indexOfRange = binarySearch(identity, ranges.length, (index) => ranges[index].start);
+        const range = ranges[indexOfRange-1];
+        if(!range || identity >= range.start+range.count)
+            return false;
+        if(identity == range.start) {
+            ++range.start;
+            if(range.count && --range.count == 0)
+                ranges.splice(indexOfRange-1, 1);
+        } else if(identity == range.start+range.count-1)
+            --range.count;
+        else {
+            const count = identity-range.start;
+            ranges.splice(indexOfRange-1, 0, {'start': range.start, 'count': count});
+            range.start = identity+1;
+            if(range.count)
+                range.count -= 1+count;
+        }
+        return true;
+    }
+
+    static getIdentityFromPool(ranges) {
+        return ranges[0].start;
     }
 
     getHandle(symbol) {
@@ -255,8 +320,7 @@ export default class NativeBackend extends BasicBackend {
         if(!namespace) {
             namespace = {
                 // 'identity': namespaceIdentity,
-                'nextIdentity': 0,
-                'freeIdentities': {},
+                'freeIdentityPool': [{'start': 0}],
                 'handles': {}
             };
             this.namespaces[namespaceIdentity] = namespace;
@@ -295,10 +359,7 @@ export default class NativeBackend extends BasicBackend {
         let handle = namespace.handles[handleIdentity];
         if(handle)
             return handle;
-        delete namespace.freeIdentities[handleIdentity];
-        while(namespace.nextIdentity < handleIdentity)
-            namespace.freeIdentities[namespace.nextIdentity++] = true;
-        namespace.nextIdentity = Math.max(namespace.nextIdentity, handleIdentity+1);
+        console.assert(this.constructor.removeIdentityFromPool(namespace.freeIdentityPool, handleIdentity));
         handle = namespace.handles[handleIdentity] = {
             // namespace: namespace,
             // handleIdentity: handleIdentity,
@@ -313,13 +374,7 @@ export default class NativeBackend extends BasicBackend {
 
     createSymbol(namespaceIdentity) {
         const namespace = this.manifestNamespace(namespaceIdentity);
-        let handleIdentity;
-        if(Object.keys(namespace.freeIdentities).length == 0)
-            handleIdentity = namespace.nextIdentity++;
-        else {
-            handleIdentity = Object.keys(namespace.freeIdentities)[0];
-            delete namespace.freeIdentities[handleIdentity];
-        }
+        let handleIdentity = this.constructor.getIdentityFromPool(namespace.freeIdentityPool);
         const symbol = this.constructor.concatIntoSymbol(namespaceIdentity, handleIdentity);
         this.manifestSymbol(symbol);
         return symbol;
@@ -337,11 +392,8 @@ export default class NativeBackend extends BasicBackend {
         delete namespace.handles[handleIdentity];
         if(Object.keys(namespace.handles).length == 0)
             delete this.namespaces[namespaceIdentity];
-        else {
-            namespace.freeIdentities[handleIdentity] = true;
-            while(namespace.freeIdentities[namespace.nextIdentity-1])
-                delete namespace.freeIdentities[--namespace.nextIdentity];
-        }
+        else
+            console.assert(this.constructor.addIdentityToPool(namespace.freeIdentityPool, handleIdentity));
         return (namespaceIdentity == this.constructor.identityOfSymbol(this.constructor.symbolByName.Namespaces))
             ? this.unlinkNamespace(handleIdentity)
             : true;
@@ -553,13 +605,11 @@ export default class NativeBackend extends BasicBackend {
     validateIntegrity() {
         for(const namespaceIdentity in this.namespaces) {
             const namespace = this.namespaces[namespaceIdentity],
-                  freeIdentities = {};
-            for(let i = 0; i < namespace.nextIdentity; ++i)
-                freeIdentities[i] = true;
-            for(const handleIdentity in namespace.handles) {
-                if(namespace.freeIdentities[handleIdentity])
+                  freeIdentityPool = [{'start': 0}];
+            for(let handleIdentity in namespace.handles) {
+                handleIdentity = parseInt(handleIdentity);
+                if(!this.constructor.removeIdentityFromPool(freeIdentityPool, handleIdentity))
                     return false;
-                delete freeIdentities[handleIdentity];
                 const handle = namespace.handles[handleIdentity];
                 if(handle.subIndices.length != 6)
                     return false;
@@ -580,8 +630,10 @@ export default class NativeBackend extends BasicBackend {
                     }
                 }
             }
-            for(const handleIdentity in freeIdentities)
-                if(!namespace.freeIdentities[handleIdentity])
+            if(freeIdentityPool.length != namespace.freeIdentityPool.length)
+                return false;
+            for(let i = 0; i < freeIdentityPool.length; ++i)
+                if(freeIdentityPool[i].start != namespace.freeIdentityPool[i].start || freeIdentityPool[i].count != namespace.freeIdentityPool[i].count)
                     return false;
         }
         return true;

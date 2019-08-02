@@ -312,7 +312,7 @@ export default class BasicBackend {
                         return dataView.getFloat32(0, true);
                 }
             case symbolByName.UTF8:
-                return this.constructor.utf8ArrayToText(dataBytes);
+                return this.constructor.utf8ArrayToText(dataBytes.slice(0, feedback.length/8));
         }
         if(!this.getTriple([encoding, symbolByName.Type, symbolByName.Composite]))
             return dataBytes;
