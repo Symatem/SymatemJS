@@ -41,11 +41,7 @@ export default class Differential extends BasicBackend {
     }
 
     static getOperationIndex(operations, key, intermediateOffset) {
-        // TODO: Use binary search?
-        for(let operationIndex = 0; operationIndex < operations.length; ++operationIndex)
-            if(intermediateOffset <= operations[operationIndex][key])
-                return operationIndex;
-        return operations.length;
+        return Array.bisect(operations.length, (index) => (operations[index][key] < intermediateOffset));
     }
 
     addCopyReplaceOperation(mode, operation, operations, operationIndex) {

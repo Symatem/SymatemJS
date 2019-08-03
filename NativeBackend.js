@@ -238,22 +238,6 @@ function bitwiseCopy(destination, destinationOffset, source, sourceOffset, lengt
 
 import BasicBackend from './BasicBackend.js';
 
-function binarySearch(key, high, keyAt) {
-    /*for(let index = 0; index < high; ++index)
-        if(key < keyAt(index))
-            return index;
-    return high;*/
-    let mid, low = 0;
-    while(low < high) {
-        mid = (low+high)>>1;
-        if(key < keyAt(mid))
-            high = mid;
-        else
-            low = mid+1;
-    }
-    return key >= keyAt(mid) ? mid+1 : mid;
-}
-
 /** Implements a backend in JS */
 export default class NativeBackend extends BasicBackend {
     constructor() {
@@ -262,7 +246,7 @@ export default class NativeBackend extends BasicBackend {
     }
 
     static addIdentityToPool(ranges, identity) {
-        const indexOfRange = binarySearch(identity, ranges.length, (index) => ranges[index].start);
+        const indexOfRange = Array.bisect(ranges.length, (index) => (ranges[index].start <= identity));
         const prevRange = ranges[indexOfRange-1],
               nextRange = ranges[indexOfRange];
         if(prevRange && (indexOfRange == ranges.length || identity < prevRange.start+prevRange.count))
@@ -286,7 +270,7 @@ export default class NativeBackend extends BasicBackend {
     }
 
     static removeIdentityFromPool(ranges, identity) {
-        const indexOfRange = binarySearch(identity, ranges.length, (index) => ranges[index].start);
+        const indexOfRange = Array.bisect(ranges.length, (index) => (ranges[index].start <= identity));
         const range = ranges[indexOfRange-1];
         if(!range || identity >= range.start+range.count)
             return false;

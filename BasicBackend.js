@@ -35,6 +35,18 @@ Array.reversed = function*(array) {
         yield array[i];
 };
 
+Array.bisect = function(high, compare) {
+    let low = 0;
+    while(low < high) {
+        const mid = (low+high)>>1;
+        if(compare(mid))
+            low = mid+1;
+        else
+            high = mid;
+    }
+    return low;
+};
+
 const queryMode = ['M', 'V', 'I'],
       queryMasks = {};
 for(let i = 0; i < 27; ++i)
