@@ -2,68 +2,82 @@
 export default class Repository {
     /**
      * @param {BasicBackend} backend
-     * @param {Identity} namespaceIdentity
+     * @param {Identity} namespace
      */
-    constructor(backend, namespaceIdentity) {
+    constructor(backend, namespace) {
         this.backend = backend;
-        this.namespaceIdentity = namespaceIdentity;
+        this.namespace = namespace;
         this.versions = {};
-        this.checkouts = {};
+        this.materializedVersions = {};
     }
 
-    // TODO: Documentation
-    addVersion(versionId, parents) {
-        if(!this.versions[versionId])
-            this.versions[versionId] = {
-                'id': versionId,
-                'children': {}
-            };
-        if(parents) {
-            this.versions[versionId].parents = parents;
-            for(const parentId in parents) {
-                if(!this.versions[parentId])
-                    this.addVersion(parentId);
-                this.versions[parentId].children[versionId] = parents[parentId];
-            }
-        }
-        return this.versions[versionId];
+    /** Adds a vertex to the DAG and returns it
+     * @param {Symbol} versionId The version to remove
+     * @param {Object} version
+     */
+    manifestVersion(versionId) {
+        return (this.versions[versionId])
+            ? this.versions[versionId]
+            : this.versions[versionId] = {
+            'id': versionId,
+            'children': {}
+        };
     }
 
-    // TODO: Documentation
+    /** Adds a edges to the DAG
+     * @param {Symbol} versionId The child vertex
+     * @param {Object.<Symbol, Differential>} differentalsToParents Keys are the parent vertices and values the edges connecting them
+     */
+    setPartentsOfVersion(versionId, differentalsToParents) {
+        this.versions[versionId].parents = differentalsToParents;
+        for(const parentId in differentalsToParents)
+            this.manifestVersion(parentId).children[versionId] = differentalsToParents[parentId];
+    }
+
+    /** Removes a vertex from the DAG
+     * @param {Symbol} versionId The version to remove
+     */
     removeVersion(versionId) {
         for(const parentId in this.versions[versionId].parents)
             delete this.versions[parentId].children[versionId];
         delete this.versions[versionId];
     }
 
-    // TODO: Documentation
-    addCheckout(versionId, namespaceIdentity) {
-        this.checkouts[versionId] = namespaceIdentity;
+    /** Materializes a version (checkout)
+     * @param {Symbol} versionId The version to materialize
+     * @param {RelocationTable} checkoutRelocation Relocate modal namespaces to become checkout namespaces
+     */
+    materializeVersion(versionId, checkoutRelocation) {
+        this.materializedVersions[versionId] = checkoutRelocation;
     }
 
-    // TODO: Documentation
-    removeCheckout(versionId) {
-        this.backend.unlinkSymbol(BasicBackend.symbolInNamespace('Namespaces', this.checkouts[versionId]));
-        delete this.checkouts[versionId];
+    /** Deletes the materialization of a version, not the vertex in the DAG
+     * @param {Symbol} versionId The version to dematerialize
+     */
+    dematerializeVersion(versionId) {
+        this.backend.unlinkSymbol(BasicBackend.symbolInNamespace('Namespaces', this.materializedVersions[versionId]));
+        delete this.materializedVersions[versionId];
     }
 
-    // TODO: Documentation
+    /** Finds the shortest path between two versions or a destination and the closest materialized version
+     * @param {Symbol} dstVersionId Destination version
+     * @param {Symbol} srcVersionId Source version (optional, closest materialized version is used otherwise)
+     * @param {Symbol[]} Path of version hops from source to destination
+     */
     findPathTo(dstVersionId, srcVersionId) {
-        for(const versionId in this.versions)
-            delete this.versions[versionId].discoveredBy;
         const path = [], queue = [dstVersionId];
         this.versions[dstVersionId].discoveredBy = true;
         while(queue.length > 0) {
             let versionId = queue.shift();
-            if(srcVersionId == versionId || (!srcVersionId && this.checkouts[versionId])) {
-                const path = [];
+            if(srcVersionId == versionId || (!srcVersionId && this.materializedVersions[versionId])) {
                 while(true) {
                     const discoveredBy = this.versions[versionId].discoveredBy;
                     if(discoveredBy === true)
-                        return path;
+                        break;
                     path.push(discoveredBy);
                     versionId = discoveredBy[0];
                 }
+                break;
             }
             for(const neighborId in this.versions[versionId].parents)
                 if(!this.versions[neighborId].discoveredBy) {
@@ -76,5 +90,8 @@ export default class Repository {
                     queue.push(neighborId);
                 }
         }
+        for(const versionId in this.versions)
+            delete this.versions[versionId].discoveredBy;
+        return path;
     }
 }
