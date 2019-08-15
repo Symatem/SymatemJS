@@ -18,8 +18,8 @@ String.prototype.repeat = function(count) {
     return result+pattern;
 };
 
-Map.prototype.sorted = function(callback) {
-    return new Map(Array.from(this.entries()).sort(callback));
+Map.sorted = function(src, callback) {
+    return new Map(Array.from(src.entries()).sort(callback));
 };
 
 Object.sorted = function(src, callback) {
@@ -93,11 +93,6 @@ const symbolByName = {
     'Index': 2,
     'Namespaces': 2,
 };
-
-function sortSymbolsArrayCallback(a, b) {
-    const namespaceIdDiff = BasicBackend.namespaceOfSymbol(a)-BasicBackend.namespaceOfSymbol(b);
-    return (namespaceIdDiff) ? namespaceIdDiff : BasicBackend.identityOfSymbol(a)-BasicBackend.identityOfSymbol(b);
-}
 
 /** Abstract super class of all backends */
 export default class BasicBackend {
@@ -230,23 +225,12 @@ export default class BasicBackend {
     }
 
     /**
-     * Concats namespaceIdentity and identity into a symbol
-     * @param {Identity} namespaceIdentity
-     * @param {Identity} identity
-     * @return {Symbol} symbol
+     * Validates if the input is a symbol
+     * @param {Symbol} symbol
+     * @return {Boolean}
      */
-    static concatIntoSymbol(namespaceIdentity, identity) {
-        return [namespaceIdentity, identity].join(':');
-    }
-
-    /**
-     * Same as concatIntoSymbol but resolves the namespaceIdentity by name
-     * @param {String} namespaceName
-     * @param {Identity} identity
-     * @return {Symbol} symbol
-     */
-    static symbolInNamespace(namespaceName, identity) {
-        return BasicBackend.concatIntoSymbol(BasicBackend.identityOfSymbol(symbolByName[namespaceName]), identity);
+    static validateSymbol(symbol) {
+        return typeof symbol == 'string' && symbol.split(':').length == 2;
     }
 
     /**
@@ -268,20 +252,34 @@ export default class BasicBackend {
     }
 
     /**
+     * Concats namespaceIdentity and identity into a symbol
+     * @param {Identity} namespaceIdentity
+     * @param {Identity} identity
+     * @return {Symbol} symbol
+     */
+    static concatIntoSymbol(namespaceIdentity, identity) {
+        return [namespaceIdentity, identity].join(':');
+    }
+
+    /**
+     * Same as concatIntoSymbol but resolves the namespaceIdentity by name
+     * @param {String} namespaceName
+     * @param {Identity} identity
+     * @return {Symbol} symbol
+     */
+    static symbolInNamespace(namespaceName, identity) {
+        return BasicBackend.concatIntoSymbol(BasicBackend.identityOfSymbol(symbolByName[namespaceName]), identity);
+    }
+
+    /**
      * Sorts an array of symbols in ascending order (the original is modified)
      * @param {Symbol[]} symbols
      */
     static sortSymbolsArray(symbols) {
-        symbols.sort(sortSymbolsArrayCallback);
-    }
-
-    /**
-     * Sorts the symbol keys of a dict in ascending order
-     * @param {Symbol[]} symbols
-     * @return {Symbol[]} sorted symbols
-     */
-    static sortSymbolsDict(symbols) {
-        return Object.sorted(symbols, (a, b) => sortSymbolsArrayCallback(a[0], b[0]));
+        symbols.sort((a, b) => {
+            const namespaceIdDiff = BasicBackend.namespaceOfSymbol(a)-BasicBackend.namespaceOfSymbol(b);
+            return (namespaceIdDiff) ? namespaceIdDiff : BasicBackend.identityOfSymbol(a)-BasicBackend.identityOfSymbol(b);
+        });
     }
 
     /**
@@ -726,7 +724,7 @@ export default class BasicBackend {
                 this.setTriple(queryTriple, false);
             result.add(queryTriple[index]);
         }
-        if(typeof thirds == 'string') {
+        if(this.constructor.validateSymbol(thirds)) {
             triple[index] = thirds;
             this.setTriple(triple, true);
         } else if(thirds)
@@ -760,38 +758,38 @@ export default class BasicBackend {
 
 
     /**
-     * Stores the content as JSON format
+     * Exports the specified namespaces as JSON
+     * @param {Identity[]} namespaces The namespaces to export
      * @return {String} json
      */
-    encodeJson() {
+    encodeJson(namespaces) {
         const entities = [];
-        for(const tripleE of this.queryTriples(queryMasks.VII, [0, 0, 0])) {
-            const length = this.getLength(tripleE[0]),
-                  data = this.getData(tripleE[0]),
-                  attributes = [];
-            if(symbolByName[data] === tripleE[0])
-                continue;
-            for(const tripleA of this.queryTriples(queryMasks.MVI, tripleE)) {
-                const values = [];
-                for(const tripleV of this.queryTriples(queryMasks.MMV, tripleA))
-                    values.push(tripleV[2]);
-                attributes.push(tripleA[1]);
-                attributes.push(values);
+        for(const namespaceIdentity of namespaces)
+            for(const symbol of this.querySymbols(namespaceIdentity)) {
+                const length = this.getLength(symbol),
+                      data = this.getData(symbol),
+                      attributes = [];
+                for(const tripleA of this.queryTriples(queryMasks.MVI, [symbol, 0, 0])) {
+                    const values = [];
+                    for(const tripleV of this.queryTriples(queryMasks.MMV, tripleA))
+                        values.push(tripleV[2]);
+                    attributes.push(tripleA[1]);
+                    attributes.push(values);
+                }
+                entities.push([
+                    symbol,
+                    length,
+                    (data instanceof Uint8Array) ? Array.from(data.slice(0, length/8)) : data,
+                    attributes
+                ]);
             }
-            entities.push([
-                tripleE[0],
-                length,
-                data,
-                attributes
-            ]);
-        }
         return JSON.stringify({
             'symbols': entities
         }, undefined, '\t');
     }
 
     /**
-     * Loads the content from JSON format
+     * Imports content from JSON
      * @param {String} json
      */
     decodeJson(json) {

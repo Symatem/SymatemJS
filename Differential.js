@@ -44,6 +44,13 @@ export default class Differential extends BasicBackend {
         return Array.bisect(operations.length, (index) => (operations[index][key] < intermediateOffset));
     }
 
+    removeEmptyOperationsOfSymbol(symbol, operationsOfSymbol) {
+        if(Object.keys(operationsOfSymbol).length > 0)
+            return false;
+        delete this.preCommitStructure[symbol];
+        return true;
+    }
+
     addCopyReplaceOperation(mode, operation, operations, operationIndex) {
         if(operations === undefined) {
             const operationsOfSymbol = getOrCreateEntry(this.preCommitStructure, operation[mode+'Symbol']);
@@ -70,11 +77,8 @@ export default class Differential extends BasicBackend {
             for(const type of ['copyOperations', 'replaceOperations'])
                 if(operationsOfSymbol[type] && operationsOfSymbol[type].length == 0)
                     delete operationsOfSymbol[type];
-            if(Object.keys(operationsOfSymbol) == 0) {
-                delete this.preCommitStructure[symbol];
-                if(BasicBackend.namespaceOfSymbol(symbol) == this.repositoryNamespace)
-                    this.backend.unlinkSymbol(symbol);
-            }
+            if(this.removeEmptyOperationsOfSymbol(symbol, operationsOfSymbol) && BasicBackend.namespaceOfSymbol(symbol) == this.repositoryNamespace)
+                this.backend.unlinkSymbol(symbol);
         }
     }
 
@@ -163,9 +167,9 @@ export default class Differential extends BasicBackend {
                 creaseLengthOperations[i].dstOffset += shift;
     }
 
-    saveDataToRestore(srcSymbol, srcOffset, length) {
-        console.assert(this.isRecordingFromBackend && srcOffset+length <= this.backend.getLength(srcSymbol));
-        const operationsOfSymbol = getOrCreateEntry(this.preCommitStructure, srcSymbol),
+    saveDataToRestore(srcSymbolRecording, srcSymbolModal, srcOffset, length) {
+        console.assert(this.isRecordingFromBackend && srcOffset+length <= this.backend.getLength(srcSymbolRecording));
+        const operationsOfSymbol = getOrCreateEntry(this.preCommitStructure, srcSymbolModal),
               creaseLengthOperations = getOrDefaultEntry(operationsOfSymbol, 'creaseLengthOperations', []);
         if(operationsOfSymbol.manifestOrRelease == 'manifest')
             return;
@@ -180,7 +184,7 @@ export default class Differential extends BasicBackend {
                 replaceOperationIndex = 0;
             if(!dstSymbol) {
                 operationsOfSymbol.dataRestore = dstSymbol = this.backend.createSymbol(this.repositoryNamespace);
-                this.preCommitStructure[dstSymbol] = {'replaceOperations': replaceOperations};
+                getOrCreateEntry(this.preCommitStructure, dstSymbol).replaceOperations = replaceOperations;
             } else
                 for(; replaceOperationIndex < replaceOperations.length; ++replaceOperationIndex)
                     if(intermediateOffset <= replaceOperations[replaceOperationIndex].srcOffset) {
@@ -188,11 +192,11 @@ export default class Differential extends BasicBackend {
                         break;
                     }
             this.backend.creaseLength(dstSymbol, dstOffset, length);
-            this.backend.writeData(dstSymbol, dstOffset, length, this.backend.readData(srcSymbol, intermediateOffset-decreaseAccumulator, length));
+            this.backend.writeData(dstSymbol, dstOffset, length, this.backend.readData(srcSymbolRecording, intermediateOffset-decreaseAccumulator, length));
             const operation = {
                 'dstSymbol': dstSymbol,
                 'dstOffset': dstOffset,
-                'srcSymbol': srcSymbol,
+                'srcSymbol': srcSymbolModal,
                 'srcOffset': intermediateOffset,
                 'length': length
             };
@@ -262,8 +266,7 @@ export default class Differential extends BasicBackend {
         const operationsOfSymbol = getOrCreateEntry(this.preCommitStructure, symbol);
         if(operationsOfSymbol.manifestOrRelease == 'release') {
             delete operationsOfSymbol.manifestOrRelease;
-            if(Object.keys(operationsOfSymbol) == 0)
-                delete this.preCommitStructure[symbol];
+            this.removeEmptyOperationsOfSymbol(symbol, operationsOfSymbol);
         } else
             operationsOfSymbol.manifestOrRelease = 'manifest';
         return true;
@@ -277,8 +280,7 @@ export default class Differential extends BasicBackend {
         const operationsOfSymbol = getOrCreateEntry(this.preCommitStructure, symbol);
         if(operationsOfSymbol.manifestOrRelease == 'manifest') {
             delete operationsOfSymbol.manifestOrRelease;
-            if(Object.keys(operationsOfSymbol) == 0)
-                delete this.preCommitStructure[symbol];
+            this.removeEmptyOperationsOfSymbol(symbol, operationsOfSymbol);
         } else
             operationsOfSymbol.manifestOrRelease = 'release';
         return true;
@@ -303,30 +305,28 @@ export default class Differential extends BasicBackend {
                 delete attributeDict[triple[1]];
                 if(Object.keys(attributeDict).length == 0) {
                     delete operationsOfSymbol.tripleOperations;
-                    if(Object.keys(operationsOfSymbol) == 0)
-                        delete this.preCommitStructure[triple[0]];
+                    this.removeEmptyOperationsOfSymbol(triple[0], operationsOfSymbol);
                 }
             }
         }
         return true;
     }
 
-    creaseLength(dstSymbol, dstOffset, length) {
+    creaseLength(dstSymbolRecording, dstOffset, length) {
         console.assert(this.preCommitStructure);
         if(length == 0)
             return true;
         if(this.isRecordingFromBackend) {
-            const dataLength = this.backend.getLength(dstSymbol);
+            const dataLength = this.backend.getLength(dstSymbolRecording);
             if(length < 0) {
                 if(dstOffset-length > dataLength)
                     return false;
             } else if(dstOffset > dataLength)
                 return false;
         }
-        const originalDstSymbol = dstSymbol,
-              originalLength = length;
-        dstSymbol = BasicBackend.relocateSymbol(dstSymbol, this.recordingRelocation);
-        const operationsOfSymbol = getOrCreateEntry(this.preCommitStructure, dstSymbol),
+        const originalLength = length,
+              dstSymbolModal = BasicBackend.relocateSymbol(dstSymbolRecording, this.recordingRelocation);
+        const operationsOfSymbol = getOrCreateEntry(this.preCommitStructure, dstSymbolModal),
               creaseLengthOperations = getOrCreateEntry(operationsOfSymbol, 'creaseLengthOperations', []),
               dirtySymbols = new Set();
         let operationAtIntermediateOffset,
@@ -359,7 +359,7 @@ export default class Differential extends BasicBackend {
                 ++creaseLengthOperationsToDelete;
             }
             if(this.isRecordingFromBackend)
-                this.saveDataToRestore(dstSymbol, dstOffset, -length);
+                this.saveDataToRestore(dstSymbolRecording, dstSymbolModal, dstOffset, -length);
             length = increaseAccumulator-decreaseAccumulator;
             increaseAccumulator = 0;
             let copyOperationIndex = 0;
@@ -430,16 +430,15 @@ export default class Differential extends BasicBackend {
         }
         if(length != 0)
             creaseLengthOperations.splice(operationIndex, 0, {
-                'dstSymbol': dstSymbol,
+                'dstSymbol': dstSymbolModal,
                 'dstOffset': intermediateOffset,
                 'length': length
             });
         if(creaseLengthOperations.length == 0) {
             delete operationsOfSymbol.creaseLengthOperations;
-            if(Object.keys(operationsOfSymbol) == 0)
-                delete this.preCommitStructure[dstSymbol];
+            this.removeEmptyOperationsOfSymbol(dstSymbolModal, operationsOfSymbol);
         }
-        console.assert(!this.isRecordingFromBackend || this.backend.creaseLength(originalDstSymbol, dstOffset, originalLength));
+        console.assert(!this.isRecordingFromBackend || this.backend.creaseLength(dstSymbolRecording, dstOffset, originalLength));
         return true;
     }
 
@@ -540,7 +539,7 @@ export default class Differential extends BasicBackend {
             skipDstDecreaseOperations(operation.length);
             mergeCopyReplaceOperations.push({'dstSymbol': context.dstSymbol, 'dstOffset': context.dstIntermediateOffset});
             if(this.isRecordingFromBackend)
-                this.saveDataToRestore(BasicBackend.relocateSymbol(operation.dstSymbol, this.recordingRelocation), operation.dstOffset, operation.length);
+                this.saveDataToRestore(operation.dstSymbol, context.dstSymbol, operation.dstOffset, operation.length);
         }
         for(const operation of cutReplaceOperations)
             this.cutAndShiftCopyReplaceOperations('dst', getOrCreateEntry(this.preCommitStructure, operation.dstSymbol).replaceOperations, dirtySymbols, operation.dstOffset, operation.length, 0);
@@ -555,12 +554,11 @@ export default class Differential extends BasicBackend {
         return true;
     }
 
-    writeData(dstSymbol, dstOffset, length, dataBytes) {
+    writeData(dstSymbolRecording, dstOffset, length, dataBytes) {
         console.assert(this.preCommitStructure);
-        dstSymbol = BasicBackend.relocateSymbol(dstSymbol, this.recordingRelocation);
         const srcSymbol = this.backend.createSymbol(this.repositoryNamespace);
         this.backend.setRawData(srcSymbol, dataBytes, length);
-        return this.replaceData(dstSymbol, dstOffset, srcSymbol, 0, length);
+        return this.replaceData(dstSymbolRecording, dstOffset, srcSymbol, 0, length);
     }
 
 
