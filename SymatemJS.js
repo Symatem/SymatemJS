@@ -12,7 +12,7 @@ export {BasicBackend, NativeBackend, Differential, Repository};
 /**
  * @typedef {String} Symbol
  * @property {Identity} namespaceIdentity
- * @property {Identity} identity
+ * @property {Identity} handleIdentity
  */
 
 /**

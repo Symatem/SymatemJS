@@ -26,6 +26,7 @@ export default class Differential extends BasicBackend {
         this.repositoryNamespace = repositoryNamespace;
         this.recordingRelocation = recordingRelocation;
         this.preCommitStructure = {};
+        this.dataSource = this.backend.createSymbol(this.repositoryNamespace);
     }
 
     static getIntermediateOffset(creaseLengthOperations, intermediateOffset) {
@@ -42,13 +43,6 @@ export default class Differential extends BasicBackend {
 
     static getOperationIndex(operations, key, intermediateOffset) {
         return Array.bisect(operations.length, (index) => (operations[index][key] < intermediateOffset));
-    }
-
-    removeEmptyOperationsOfSymbol(symbol, operationsOfSymbol) {
-        if(Object.keys(operationsOfSymbol).length > 0)
-            return false;
-        delete this.preCommitStructure[symbol];
-        return true;
     }
 
     addCopyReplaceOperation(mode, operation, operations, operationIndex) {
@@ -71,13 +65,20 @@ export default class Differential extends BasicBackend {
             dirtySymbols.add(operation[mode+'Symbol']);
     }
 
+    removeEmptyOperationsOfSymbol(symbol, operationsOfSymbol) {
+        if(Object.keys(operationsOfSymbol).length > 0)
+            return false;
+        delete this.preCommitStructure[symbol];
+        return true;
+    }
+
     removeEmptyCopyReplaceOperations(symbols) {
         for(const symbol of symbols) {
             const operationsOfSymbol = this.preCommitStructure[symbol];
             for(const type of ['copyOperations', 'replaceOperations'])
                 if(operationsOfSymbol[type] && operationsOfSymbol[type].length == 0)
                     delete operationsOfSymbol[type];
-            if(this.removeEmptyOperationsOfSymbol(symbol, operationsOfSymbol) && BasicBackend.namespaceOfSymbol(symbol) == this.repositoryNamespace)
+            if(this.removeEmptyOperationsOfSymbol(symbol, operationsOfSymbol) && BasicBackend.namespaceOfSymbol(symbol) == this.repositoryNamespace && symbol != this.dataSource)
                 this.backend.unlinkSymbol(symbol);
         }
     }
@@ -175,26 +176,25 @@ export default class Differential extends BasicBackend {
             return;
         let [intermediateOffset, operationIndex] = this.constructor.getIntermediateOffset(creaseLengthOperations, srcOffset),
             decreaseAccumulator = intermediateOffset-srcOffset,
-            dstSymbol = operationsOfSymbol.dataRestore,
-            replaceOperations = (dstSymbol) ? this.preCommitStructure[dstSymbol].replaceOperations : [];
+            replaceOperations = (operationsOfSymbol.dstSymbol) ? this.preCommitStructure[operationsOfSymbol.dstSymbol].replaceOperations : [];
         const addSlice = (length) => {
             if(length <= 0)
                 return;
-            let dstOffset = (dstSymbol) ? this.backend.getLength(dstSymbol) : 0,
+            let dstOffset = (operationsOfSymbol.dstSymbol) ? this.backend.getLength(operationsOfSymbol.dstSymbol) : 0,
                 replaceOperationIndex = 0;
-            if(!dstSymbol) {
-                operationsOfSymbol.dataRestore = dstSymbol = this.backend.createSymbol(this.repositoryNamespace);
-                getOrCreateEntry(this.preCommitStructure, dstSymbol).replaceOperations = replaceOperations;
+            if(!operationsOfSymbol.dstSymbol) {
+                operationsOfSymbol.dstSymbol = this.backend.createSymbol(this.repositoryNamespace);
+                getOrCreateEntry(this.preCommitStructure, operationsOfSymbol.dstSymbol, {'replaceOperations': replaceOperations, 'srcSymbol': srcSymbolModal});
             } else
                 for(; replaceOperationIndex < replaceOperations.length; ++replaceOperationIndex)
                     if(intermediateOffset <= replaceOperations[replaceOperationIndex].srcOffset) {
                         dstOffset = replaceOperations[replaceOperationIndex].dstOffset;
                         break;
                     }
-            this.backend.creaseLength(dstSymbol, dstOffset, length);
-            this.backend.writeData(dstSymbol, dstOffset, length, this.backend.readData(srcSymbolRecording, intermediateOffset-decreaseAccumulator, length));
+            this.backend.creaseLength(operationsOfSymbol.dstSymbol, dstOffset, length);
+            this.backend.writeData(operationsOfSymbol.dstSymbol, dstOffset, length, this.backend.readData(srcSymbolRecording, intermediateOffset-decreaseAccumulator, length));
             const operation = {
-                'dstSymbol': dstSymbol,
+                'dstSymbol': operationsOfSymbol.dstSymbol,
                 'dstOffset': dstOffset,
                 'srcSymbol': srcSymbolModal,
                 'srcOffset': intermediateOffset,
@@ -556,9 +556,10 @@ export default class Differential extends BasicBackend {
 
     writeData(dstSymbolRecording, dstOffset, length, dataBytes) {
         console.assert(this.preCommitStructure);
-        const srcSymbol = this.backend.createSymbol(this.repositoryNamespace);
-        this.backend.setRawData(srcSymbol, dataBytes, length);
-        return this.replaceData(dstSymbolRecording, dstOffset, srcSymbol, 0, length);
+        const srcOffset = this.backend.getLength(this.dataSource);
+        this.backend.creaseLength(this.dataSource, srcOffset, length);
+        this.backend.writeData(this.dataSource, srcOffset, length, dataBytes);
+        return this.replaceData(dstSymbolRecording, dstOffset, this.dataSource, srcOffset, length);
     }
 
 
@@ -615,7 +616,29 @@ export default class Differential extends BasicBackend {
     }
 
     /**
-     * Optimizes the internal structures so that they are ready to be applied, but no further recording can happen afterwards.
+     * Optimizes data source and restore
+     */
+    compressData() {
+        const operationsOfSymbol = getOrDefaultEntry(this.preCommitStructure, this.dataSource),
+              copyOperations = getOrDefaultEntry(operationsOfSymbol, 'copyOperations');
+        let lastOffset = 0, decreaseAccumulator = 0;
+        for(let i = 0; i < copyOperations.length; ++i) {
+            const operation = copyOperations[i],
+                  gapLength = operation.srcOffset-lastOffset,
+                  nextOffset = operation.srcOffset+operation.length;
+            if(gapLength > 0) {
+                this.backend.creaseLength(this.dataSource, lastOffset-decreaseAccumulator, -gapLength);
+                decreaseAccumulator += gapLength;
+            }
+            operation.srcOffset -= decreaseAccumulator;
+            lastOffset = Math.max(lastOffset, nextOffset);
+        }
+        this.backend.setLength(this.dataSource, lastOffset);
+        // TODO: Compress redundancy in data source and restore by finding equal slices and map them to the same place
+    }
+
+    /**
+     * Reorganizes the internal structure so that it is ready to be applied, but no further recording can happen afterwards.
      */
     commit() {
         console.assert(this.preCommitStructure);
@@ -628,8 +651,6 @@ export default class Differential extends BasicBackend {
             'decreaseLengthOperations': [],
             'replaceDataOperations': [],
             'restoreDataOperations': [],
-            'dataSources': [],
-            'dataRestores': [],
             'minimumLengths': []
         };
         for(const symbol in this.preCommitStructure) {
@@ -670,12 +691,8 @@ export default class Differential extends BasicBackend {
                 maximizeMinimumLength(operationsOfSymbol.copyOperations, 'srcOffset', 1);
             }
             this.postCommitStructure.minimumLengths.push({'srcSymbol': symbol, 'forwardLength': minimumLengths[0], 'reverseLength': minimumLengths[1]});
-            for(const type of ['dataSource', 'dataRestore'])
-                if(operationsOfSymbol[type])
-                    this.postCommitStructure[type+'s'].push(operationsOfSymbol[type]);
         }
         delete this.preCommitStructure;
-        // TODO: Optimize data source and data restore
     }
 
     /**

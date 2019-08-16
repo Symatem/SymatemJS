@@ -106,13 +106,13 @@ export function generateJournal(backend, rand, callback) {
 
 export function stringifyCheckout(backend) {
     const namespace = backend.namespaces[checkoutNamespace];
-    namespace.handles = BasicBackend.sortSymbolsDict(namespace.handles);
+    namespace.handles = Object.sorted(namespace.handles);
     for(const handleIdentity in namespace.handles) {
         const handle = namespace.handles[handleIdentity];
         for(let i = 0; i < 6; ++i) {
-            const subIndex = handle.subIndices[i] = BasicBackend.sortSymbolsDict(handle.subIndices[i]);
+            const subIndex = handle.subIndices[i] = Object.sorted(handle.subIndices[i]);
             for(const symbol in subIndex)
-                subIndex[symbol] = BasicBackend.sortSymbolsDict(subIndex[symbol]);
+                subIndex[symbol] = Object.sorted(subIndex[symbol]);
         }
     }
     return JSON.stringify(namespace, undefined, 4);
@@ -126,6 +126,7 @@ export function getTests(backend, rand) {
             generateJournal(backend, rand, (description, method, args) => {
                 diff[method](...args);
             });
+            diff.compressData();
             if(!diff.validateIntegrity())
                 return false;
             diff.commit();
