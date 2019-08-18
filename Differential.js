@@ -27,6 +27,7 @@ export default class Differential extends BasicBackend {
         this.recordingRelocation = recordingRelocation;
         this.preCommitStructure = {};
         this.dataSource = this.backend.createSymbol(this.repositoryNamespace);
+        this.dataRestore = this.backend.createSymbol(this.repositoryNamespace);
     }
 
     static getIntermediateOffset(creaseLengthOperations, intermediateOffset) {
@@ -171,30 +172,25 @@ export default class Differential extends BasicBackend {
     saveDataToRestore(srcSymbolRecording, srcSymbolModal, srcOffset, length) {
         console.assert(this.isRecordingFromBackend && srcOffset+length <= this.backend.getLength(srcSymbolRecording));
         const operationsOfSymbol = getOrCreateEntry(this.preCommitStructure, srcSymbolModal),
-              creaseLengthOperations = getOrDefaultEntry(operationsOfSymbol, 'creaseLengthOperations', []);
+              creaseLengthOperations = getOrDefaultEntry(operationsOfSymbol, 'creaseLengthOperations', []),
+              mergeCopyReplaceOperations = [];
         if(operationsOfSymbol.manifestOrRelease == 'manifest')
             return;
         let [intermediateOffset, operationIndex] = this.constructor.getIntermediateOffset(creaseLengthOperations, srcOffset),
             decreaseAccumulator = intermediateOffset-srcOffset,
-            replaceOperations = (operationsOfSymbol.dstSymbol) ? this.preCommitStructure[operationsOfSymbol.dstSymbol].replaceOperations : [];
+            replaceOperations = (this.preCommitStructure[this.dataRestore]) ? this.preCommitStructure[this.dataRestore].replaceOperations : [];
         const addSlice = (length) => {
             if(length <= 0)
                 return;
-            let dstOffset = (operationsOfSymbol.dstSymbol) ? this.backend.getLength(operationsOfSymbol.dstSymbol) : 0,
-                replaceOperationIndex = 0;
-            if(!operationsOfSymbol.dstSymbol) {
-                operationsOfSymbol.dstSymbol = this.backend.createSymbol(this.repositoryNamespace);
-                getOrCreateEntry(this.preCommitStructure, operationsOfSymbol.dstSymbol, {'replaceOperations': replaceOperations, 'srcSymbol': srcSymbolModal});
-            } else
-                for(; replaceOperationIndex < replaceOperations.length; ++replaceOperationIndex)
-                    if(intermediateOffset <= replaceOperations[replaceOperationIndex].srcOffset) {
-                        dstOffset = replaceOperations[replaceOperationIndex].dstOffset;
-                        break;
-                    }
-            this.backend.creaseLength(operationsOfSymbol.dstSymbol, dstOffset, length);
-            this.backend.writeData(operationsOfSymbol.dstSymbol, dstOffset, length, this.backend.readData(srcSymbolRecording, intermediateOffset-decreaseAccumulator, length));
+            let dstOffset = 0;
+            if(!this.preCommitStructure[this.dataRestore])
+                this.preCommitStructure[this.dataRestore] = {'replaceOperations': replaceOperations};
+            else
+                dstOffset = (replaceOperationIndex < replaceOperations.length) ? replaceOperations[replaceOperationIndex].dstOffset : this.backend.getLength(this.dataRestore);
+            this.backend.creaseLength(this.dataRestore, dstOffset, length);
+            this.backend.writeData(this.dataRestore, dstOffset, length, this.backend.readData(srcSymbolRecording, intermediateOffset-decreaseAccumulator, length));
             const operation = {
-                'dstSymbol': operationsOfSymbol.dstSymbol,
+                'dstSymbol': this.dataRestore,
                 'dstOffset': dstOffset,
                 'srcSymbol': srcSymbolModal,
                 'srcOffset': intermediateOffset,
@@ -202,18 +198,21 @@ export default class Differential extends BasicBackend {
             };
             this.addCopyReplaceOperation('src', operation);
             this.addCopyReplaceOperation('dst', operation, replaceOperations, replaceOperationIndex++);
-            for(; replaceOperationIndex < replaceOperations.length; ++replaceOperationIndex)
-                replaceOperations[replaceOperationIndex].dstOffset += length;
+            mergeCopyReplaceOperations.push(operation.dstOffset);
+            mergeCopyReplaceOperations.push(operation.dstOffset+operation.length);
+            for(let i = replaceOperationIndex; i < replaceOperations.length; ++i)
+                replaceOperations[i].dstOffset += length;
         };
+        let replaceOperationIndex = 0;
         const avoidRestoreOperations = (length) => {
             if(length <= 0)
                 return;
             if(replaceOperations)
-                for(let replaceOperationIndex = 0; length > 0 && replaceOperationIndex < replaceOperations.length; ++replaceOperationIndex) {
+                for(replaceOperationIndex = Math.max(0, replaceOperationIndex-1); length > 0 && replaceOperationIndex < replaceOperations.length; ++replaceOperationIndex) {
                     const operation = replaceOperations[replaceOperationIndex];
-                    if(operation.srcOffset+operation.length <= intermediateOffset)
+                    if(operation.srcSymbol < srcSymbolModal || (operation.srcSymbol == srcSymbolModal && operation.srcOffset+operation.length <= intermediateOffset))
                         continue;
-                    if(intermediateOffset+length <= operation.srcOffset)
+                    if(srcSymbolModal < operation.srcSymbol || intermediateOffset+length <= operation.srcOffset)
                         break;
                     const sliceLength = operation.srcOffset-intermediateOffset;
                     addSlice(sliceLength);
@@ -236,9 +235,8 @@ export default class Differential extends BasicBackend {
                 decreaseAccumulator -= operation.length;
         }
         avoidRestoreOperations(length);
-        if(replaceOperations)
-            for(let replaceOperationIndex = replaceOperations.length-1; replaceOperationIndex > 0; --replaceOperationIndex)
-                this.mergeCopyReplaceOperations('dst', replaceOperations, replaceOperations[replaceOperationIndex].dstOffset);
+        for(const dstOffset of mergeCopyReplaceOperations)
+            this.mergeCopyReplaceOperations('dst', replaceOperations, dstOffset);
     }
 
 
