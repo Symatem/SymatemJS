@@ -1,3 +1,4 @@
+import Utils from './Utils.js';
 import BasicBackend from './BasicBackend.js';
 
 function getOrCreateEntry(dict, key, value={}) {
@@ -16,18 +17,17 @@ function getOrDefaultEntry(dict, key, value={}) {
 export default class Differential extends BasicBackend {
     /**
      * @param {NativeBackend} backend
-     * @param {Identity} repositoryNamespace The namespace identity of the repository
      * @param {RelocationTable} recordingRelocation Relocate recording namespaces to become modal namespaces
+     * @param {Identity} repositoryNamespace The namespace identity of the repository
      */
-    constructor(backend, repositoryNamespace, recordingRelocation={}) {
+    constructor(backend, recordingRelocation, repositoryNamespace) {
         super();
         this.backend = backend;
         this.isRecordingFromBackend = true;
-        this.repositoryNamespace = repositoryNamespace;
         this.recordingRelocation = recordingRelocation;
         this.preCommitStructure = {};
-        this.dataSource = this.backend.createSymbol(this.repositoryNamespace);
-        this.dataRestore = this.backend.createSymbol(this.repositoryNamespace);
+        this.dataSource = this.backend.createSymbol(repositoryNamespace);
+        this.dataRestore = this.backend.createSymbol(repositoryNamespace);
     }
 
     static getIntermediateOffset(creaseLengthOperations, intermediateOffset) {
@@ -43,7 +43,7 @@ export default class Differential extends BasicBackend {
     }
 
     static getOperationIndex(operations, key, intermediateOffset) {
-        return Array.bisect(operations.length, (index) => (operations[index][key] < intermediateOffset));
+        return Utils.bisect(operations.length, (index) => (operations[index][key] < intermediateOffset));
     }
 
     addCopyReplaceOperation(mode, operation, operations, operationIndex) {
@@ -79,8 +79,7 @@ export default class Differential extends BasicBackend {
             for(const type of ['copyOperations', 'replaceOperations'])
                 if(operationsOfSymbol[type] && operationsOfSymbol[type].length == 0)
                     delete operationsOfSymbol[type];
-            if(this.removeEmptyOperationsOfSymbol(symbol, operationsOfSymbol) && BasicBackend.namespaceOfSymbol(symbol) == this.repositoryNamespace && symbol != this.dataSource)
-                this.backend.unlinkSymbol(symbol);
+            this.removeEmptyOperationsOfSymbol(symbol, operationsOfSymbol);
         }
     }
 
@@ -652,7 +651,7 @@ export default class Differential extends BasicBackend {
             'minimumLengths': []
         };
         for(const symbol in this.preCommitStructure) {
-            if(BasicBackend.namespaceOfSymbol(symbol) == this.repositoryNamespace)
+            if(symbol == this.dataSource || symbol == this.dataRestore)
                 continue;
             const operationsOfSymbol = this.preCommitStructure[symbol];
             if(operationsOfSymbol.manifestOrRelease)
@@ -685,12 +684,23 @@ export default class Differential extends BasicBackend {
             }
             if(operationsOfSymbol.copyOperations) {
                 this.postCommitStructure.restoreDataOperations.splice(this.postCommitStructure.restoreDataOperations.length-1, 0,
-                    ...operationsOfSymbol.copyOperations.filter(operation => BasicBackend.namespaceOfSymbol(operation.dstSymbol) == this.repositoryNamespace));
+                    ...operationsOfSymbol.copyOperations.filter(operation => operation.dstSymbol == this.dataRestore));
                 maximizeMinimumLength(operationsOfSymbol.copyOperations, 'srcOffset', 1);
             }
             this.postCommitStructure.minimumLengths.push({'srcSymbol': symbol, 'forwardLength': minimumLengths[0], 'reverseLength': minimumLengths[1]});
         }
         delete this.preCommitStructure;
+        // TODO: Move into recording phase?
+        for(const type of ['replaceDataOperations', 'restoreDataOperations'])
+            for(const operation of this.postCommitStructure[type]) {
+                if(operation.srcSymbol == this.dataSource)
+                    delete operation.srcSymbol;
+                if(operation.dstSymbol == this.dataRestore)
+                    delete operation.dstSymbol;
+            }
+        for(const key in this.postCommitStructure)
+            if(this.postCommitStructure[key].length == 0)
+                delete this.postCommitStructure[key];
     }
 
     /**
@@ -704,39 +714,75 @@ export default class Differential extends BasicBackend {
         console.assert(this.postCommitStructure);
         // TODO: Validate everything first before applying anything: manifest/release symbols
         for(const [type, link] of [['linkTripleOperations', true], ['unlinkTripleOperations', false]])
-            for(const operation of this.postCommitStructure[type])
-                if((dst.getTriple(operation.triple.map(symbol => BasicBackend.relocateSymbol(symbol, checkoutRelocation))) == link) != reverse)
+            if(this.postCommitStructure[type])
+                for(const operation of this.postCommitStructure[type])
+                    if((dst.getTriple(operation.triple.map(symbol => BasicBackend.relocateSymbol(symbol, checkoutRelocation))) == link) != reverse)
+                        return false;
+        if(this.postCommitStructure.minimumLengths)
+            for(const operation of this.postCommitStructure.minimumLengths)
+                if(this.backend.getLength(BasicBackend.relocateSymbol(operation.srcSymbol, checkoutRelocation)) < operation[((reverse) ? 'reverse' : 'forward')+'Length'])
                     return false;
-        for(const operation of this.postCommitStructure.minimumLengths)
-            if(this.backend.getLength(BasicBackend.relocateSymbol(operation.srcSymbol, checkoutRelocation)) < operation[((reverse) ? 'reverse' : 'forward')+'Length'])
-                return false;
-        for(const symbol of this.postCommitStructure[(reverse) ? 'releaseSymbols' : 'manifestSymbols'])
-            dst.manifestSymbol(BasicBackend.relocateSymbol(symbol, checkoutRelocation));
-        for(const operation of (reverse) ? Array.reversed(this.postCommitStructure.decreaseLengthOperations) : this.postCommitStructure.increaseLengthOperations)
-            console.assert(dst.creaseLength(BasicBackend.relocateSymbol(operation.dstSymbol, checkoutRelocation), operation.dstOffset, (reverse) ? -operation.length : operation.length));
-        const replaceOperations = (reverse)
-            ? this.postCommitStructure.restoreDataOperations.map(operation => { return {
-                'srcSymbol': BasicBackend.relocateSymbol(operation.dstSymbol, checkoutRelocation),
-                'dstSymbol': BasicBackend.relocateSymbol(operation.srcSymbol, checkoutRelocation),
-                'srcOffset': operation.dstOffset,
-                'dstOffset': operation.srcOffset,
-                'length': operation.length
-            };})
-            : this.postCommitStructure.replaceDataOperations.map(operation => { return {
-                'srcSymbol': BasicBackend.relocateSymbol(operation.srcSymbol, checkoutRelocation),
-                'dstSymbol': BasicBackend.relocateSymbol(operation.dstSymbol, checkoutRelocation),
-                'srcOffset': operation.srcOffset,
-                'dstOffset': operation.dstOffset,
-                'length': operation.length
-            };});
-        console.assert(dst.replaceDataSimultaneously(replaceOperations));
-        for(const operation of (reverse) ? Array.reversed(this.postCommitStructure.increaseLengthOperations) : this.postCommitStructure.decreaseLengthOperations)
-            console.assert(dst.creaseLength(BasicBackend.relocateSymbol(operation.dstSymbol, checkoutRelocation), operation.dstOffset, (reverse) ? -operation.length : operation.length));
+        if(this.postCommitStructure[(reverse) ? 'releaseSymbols' : 'manifestSymbols'])
+            for(const symbol of this.postCommitStructure[(reverse) ? 'releaseSymbols' : 'manifestSymbols'])
+                dst.manifestSymbol(BasicBackend.relocateSymbol(symbol, checkoutRelocation));
+        if(this.postCommitStructure[(reverse) ? 'decreaseLengthOperations' : 'increaseLengthOperations'])
+            for(const operation of (reverse) ? Utils.reversed(this.postCommitStructure.decreaseLengthOperations) : this.postCommitStructure.increaseLengthOperations)
+                console.assert(dst.creaseLength(BasicBackend.relocateSymbol(operation.dstSymbol, checkoutRelocation), operation.dstOffset, (reverse) ? -operation.length : operation.length));
+        if(this.postCommitStructure[(reverse) ? 'restoreDataOperations' : 'replaceDataOperations']) {
+            const replaceOperations = (reverse)
+                ? this.postCommitStructure.restoreDataOperations.map(operation => { return {
+                    'srcSymbol': (operation.dstSymbol) ? BasicBackend.relocateSymbol(operation.dstSymbol, checkoutRelocation) : this.dataRestore,
+                    'dstSymbol': BasicBackend.relocateSymbol(operation.srcSymbol, checkoutRelocation),
+                    'srcOffset': operation.dstOffset,
+                    'dstOffset': operation.srcOffset,
+                    'length': operation.length
+                };})
+                : this.postCommitStructure.replaceDataOperations.map(operation => { return {
+                    'srcSymbol': (operation.srcSymbol) ? BasicBackend.relocateSymbol(operation.srcSymbol, checkoutRelocation) : this.dataSource,
+                    'dstSymbol': BasicBackend.relocateSymbol(operation.dstSymbol, checkoutRelocation),
+                    'srcOffset': operation.srcOffset,
+                    'dstOffset': operation.dstOffset,
+                    'length': operation.length
+                };});
+            console.assert(dst.replaceDataSimultaneously(replaceOperations));
+        }
+        if(this.postCommitStructure[(reverse) ? 'increaseLengthOperations' : 'decreaseLengthOperations'])
+            for(const operation of (reverse) ? Utils.reversed(this.postCommitStructure.increaseLengthOperations) : this.postCommitStructure.decreaseLengthOperations)
+                console.assert(dst.creaseLength(BasicBackend.relocateSymbol(operation.dstSymbol, checkoutRelocation), operation.dstOffset, (reverse) ? -operation.length : operation.length));
         for(const [type, link] of [['linkTripleOperations', true], ['unlinkTripleOperations', false]])
-            for(const operation of this.postCommitStructure[type])
-                console.assert(dst.setTriple(operation.triple.map(symbol => BasicBackend.relocateSymbol(symbol, checkoutRelocation)), link != reverse));
-        for(const symbol of this.postCommitStructure[(reverse) ? 'manifestSymbols' : 'releaseSymbols'])
-            console.assert(dst.releaseSymbol(BasicBackend.relocateSymbol(symbol, checkoutRelocation)));
+            if(this.postCommitStructure[type])
+                for(const operation of this.postCommitStructure[type])
+                    console.assert(dst.setTriple(operation.triple.map(symbol => BasicBackend.relocateSymbol(symbol, checkoutRelocation)), link != reverse));
+        if(this.postCommitStructure[(reverse) ? 'manifestSymbols' : 'releaseSymbols'])
+            for(const symbol of this.postCommitStructure[(reverse) ? 'manifestSymbols' : 'releaseSymbols'])
+                console.assert(dst.releaseSymbol(BasicBackend.relocateSymbol(symbol, checkoutRelocation)));
         return true;
+    }
+
+    /**
+     * Exports the commited differential as JSON
+     * @return {String} json
+     */
+    encodeJson() {
+        console.assert(this.postCommitStructure);
+        const exportStructure = Object.assign({}, this.postCommitStructure);
+        for(const type of ['dataSource', 'dataRestore'])
+            if(this.backend.getLength(this[type]) > 0)
+                exportStructure[type] = Utils.encodeAsHex(this.backend.getRawData(this[type]));
+        return JSON.stringify(exportStructure);
+    }
+
+    /**
+     * Imports content from JSON
+     * @param {String} json
+     */
+    decodeJson(json) {
+        console.assert(!this.postCommitStructure);
+        this.postCommitStructure = JSON.parse(json);
+        for(const type of ['dataSource', 'dataRestore'])
+            if(this.postCommitStructure[type]) {
+                this.backend.setRawData(this[type], Utils.decodeAsHex(this.postCommitStructure[type]));
+                delete this.postCommitStructure[type];
+            }
     }
 }

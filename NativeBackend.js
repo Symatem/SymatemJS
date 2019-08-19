@@ -201,41 +201,7 @@ const searchLookup = [
     searchMII, searchVII, searchIII
 ];
 
-function bitwiseCopy(destination, destinationOffset, source, sourceOffset, length) {
-    if(length == 0)
-        return;
-    if(destinationOffset%8 == 0 && sourceOffset%8 == 0 && length%8 == 0) {
-        destination.set(source.subarray(sourceOffset/8, (sourceOffset+length)/8), destinationOffset/8);
-        return;
-    }
-    if(destination == source && sourceOffset < destinationOffset && sourceOffset+length > destinationOffset)
-        throw new Error('bitwiseCopy with destination == source is not implemented yet'); // TODO
-    const elementLength = 32;
-    destination = new DataView(destination.buffer);
-    source = new DataView(source.buffer);
-    let sourceIndex = Math.floor(sourceOffset/elementLength)*elementLength/8,
-        destinationIndex = Math.floor(destinationOffset/elementLength)*elementLength/8;
-    const sourceShift = sourceOffset%elementLength,
-          destinationShift = destinationOffset%elementLength;
-    while(true) {
-        const mask = (length < elementLength) ? ~((-1)<<length) : -1,
-              nextSourceIndex = sourceIndex+elementLength/8,
-              nextDestinationIndex = destinationIndex+elementLength/8;
-        let element = source.getUint32(sourceIndex, true)>>>sourceShift;
-        if(nextSourceIndex < source.byteLength && sourceShift > 0)
-            element |= source.getUint32(nextSourceIndex, true)<<(elementLength-sourceShift);
-        element &= mask;
-        destination.setUint32(destinationIndex, destination.getUint32(destinationIndex, true)&(~(mask<<destinationShift))|(element<<destinationShift), true);
-        if(nextDestinationIndex < destination.byteLength && destinationShift > 0)
-            destination.setUint32(nextDestinationIndex, destination.getUint32(nextDestinationIndex, true)&(~(mask>>>(elementLength-destinationShift)))|(element>>>(elementLength-destinationShift)), true);
-        length -= elementLength;
-        if(length <= 0)
-            break;
-        sourceIndex = nextSourceIndex;
-        destinationIndex = nextDestinationIndex;
-    }
-}
-
+import Utils from './Utils.js';
 import BasicBackend from './BasicBackend.js';
 
 /** Implements a backend in JS */
@@ -246,7 +212,7 @@ export default class NativeBackend extends BasicBackend {
     }
 
     static addIdentityToPool(ranges, identity) {
-        const indexOfRange = Array.bisect(ranges.length, (index) => (ranges[index].start <= identity));
+        const indexOfRange = Utils.bisect(ranges.length, (index) => (ranges[index].start <= identity));
         const prevRange = ranges[indexOfRange-1],
               nextRange = ranges[indexOfRange];
         if(prevRange && (indexOfRange == ranges.length || identity < prevRange.start+prevRange.count))
@@ -270,7 +236,7 @@ export default class NativeBackend extends BasicBackend {
     }
 
     static removeIdentityFromPool(ranges, identity) {
-        const indexOfRange = Array.bisect(ranges.length, (index) => (ranges[index].start <= identity));
+        const indexOfRange = Utils.bisect(ranges.length, (index) => (ranges[index].start <= identity));
         const range = ranges[indexOfRange-1];
         if(!range || identity >= range.start+range.count)
             return false;
@@ -407,9 +373,9 @@ export default class NativeBackend extends BasicBackend {
         } else {
             newDataBytes[Math.floor(offset/8)] &= ~((-1)<<(offset%8));
             if(length < 0)
-                bitwiseCopy(newDataBytes, offset, handle.dataBytes, offset-length, handle.dataLength-offset+length);
+                Utils.bitwiseCopy(newDataBytes, offset, handle.dataBytes, offset-length, handle.dataLength-offset+length);
             else
-                bitwiseCopy(newDataBytes, offset+length, handle.dataBytes, offset, handle.dataLength-offset);
+                Utils.bitwiseCopy(newDataBytes, offset+length, handle.dataBytes, offset, handle.dataLength-offset);
         }
         handle.dataLength += length;
         handle.dataBytes = newDataBytes;
@@ -426,7 +392,7 @@ export default class NativeBackend extends BasicBackend {
                    ? handle.dataBytes.slice()
                    : handle.dataBytes.slice(offset/8, (offset+length)/8);
         const dataBytes = new Uint8Array(Math.ceil(length/32)*4);
-        bitwiseCopy(dataBytes, 0, handle.dataBytes, offset, length);
+        Utils.bitwiseCopy(dataBytes, 0, handle.dataBytes, offset, length);
         return dataBytes;
     }
 
@@ -442,7 +408,7 @@ export default class NativeBackend extends BasicBackend {
                 dataBytes = new Uint8Array(Math.ceil(length/32)*4);
                 dataBytes.set(prevDataBytes, 0);
             }
-            bitwiseCopy(handle.dataBytes, offset, dataBytes, 0, length);
+            Utils.bitwiseCopy(handle.dataBytes, offset, dataBytes, 0, length);
         }
         console.assert(handle.dataBytes.length%4 == 0);
         return true;
@@ -457,7 +423,7 @@ export default class NativeBackend extends BasicBackend {
         if(dstOffset%8 == 0 && srcOffset%8 == 0 && length%8 == 0)
             dstHandle.dataBytes.set(srcHandle.dataBytes.subarray(srcOffset/8, (srcOffset+length)/8), dstOffset/8);
         else
-            bitwiseCopy(dstHandle.dataBytes, dstOffset, srcHandle.dataBytes, srcOffset, length);
+            Utils.bitwiseCopy(dstHandle.dataBytes, dstOffset, srcHandle.dataBytes, srcOffset, length);
         return true;
     }
 

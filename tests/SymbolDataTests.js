@@ -1,3 +1,4 @@
+import Utils from '../Utils.js';
 import BasicBackend from '../BasicBackend.js';
 
 export function getTests(backend, rand) {
@@ -6,7 +7,7 @@ export function getTests(backend, rand) {
 
     function bitStringOfSymbol(symbol) {
         const handle = backend.getHandle(symbol);
-        return BasicBackend.bufferToBitString(handle.dataBytes, handle.dataLength);
+        return Utils.asBitString(handle.dataBytes, handle.dataLength);
     }
 
     function fillSymbol(symbol) {
@@ -62,7 +63,7 @@ export function getTests(backend, rand) {
             const [sourceString, sourceLength, sourceOffset] = fillSymbol(source),
                   length = rand.range(0, sourceLength-sourceOffset),
                   expectedString = sourceString.substr(sourceOffset, length);
-            const resultString = BasicBackend.bufferToBitString(backend.readData(source, sourceOffset, length), length);
+            const resultString = Utils.asBitString(backend.readData(source, sourceOffset, length), length);
             if(expectedString != resultString) {
                 console.warn(
                     sourceOffset, sourceLength, length,
@@ -78,7 +79,7 @@ export function getTests(backend, rand) {
             const [destinationString, destinationLength, destinationOffset] = fillSymbol(destination),
                   sourceLength = rand.range(0, Math.min(destinationLength-destinationOffset)),
                   sourceBuffer = rand.bytes(Math.ceil(sourceLength/32)*4),
-                  sourceString = BasicBackend.bufferToBitString(sourceBuffer, sourceLength),
+                  sourceString = Utils.asBitString(sourceBuffer, sourceLength),
                   expectedString = [destinationString.substr(0, destinationOffset), sourceString.substr(0, sourceLength), destinationString.substr(destinationOffset+sourceLength)].join('');
             backend.writeData(destination, destinationOffset, sourceLength, sourceBuffer);
             const resultString = bitStringOfSymbol(destination);

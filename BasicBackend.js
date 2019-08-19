@@ -1,51 +1,4 @@
-DataView.prototype.djb2Hash = function() {
-    let result = 5381;
-    for(let i = 0; i < this.byteLength; ++i)
-        result = ((result<<5)+result+this.getUint8(i))>>>0;
-    return result; // ('0000000'+result.toString(16).toUpperCase()).substr(-8);
-}
-
-String.prototype.repeat = function(count) {
-    if(count < 1)
-        return '';
-    let result = '', pattern = this.valueOf();
-    while(count > 1) {
-        if(count & 1)
-            result += pattern;
-        count >>= 1;
-        pattern += pattern;
-    }
-    return result+pattern;
-};
-
-Map.sorted = function(src, callback) {
-    return new Map(Array.from(src.entries()).sort(callback));
-};
-
-Object.sorted = function(src, callback) {
-    return Object.fromEntries(Array.from(Object.entries(src)).sort(callback));
-};
-
-Object.clone = function(obj) {
-    return Object.assign(Object.create(Object.getPrototypeOf(obj)), obj);
-};
-
-Array.reversed = function*(array) {
-    for(let i = array.length-1; i >= 0; --i)
-        yield array[i];
-};
-
-Array.bisect = function(high, compare) {
-    let low = 0;
-    while(low < high) {
-        const mid = (low+high)>>1;
-        if(compare(mid))
-            low = mid+1;
-        else
-            high = mid;
-    }
-    return low;
-};
+import Utils from './Utils.js';
 
 const queryMode = ['M', 'V', 'I'],
       queryMasks = {};
@@ -111,73 +64,6 @@ export default class BasicBackend {
     }
 
     /**
-     * Saves dataBytes as download file in browsers
-     * @param {Uint8Array} dataBytes
-     * @param {String} fileName
-     */
-    static downloadAsFile(dataBytes, fileName) {
-        const file = new Blob([dataBytes], {type: 'octet/stream'}),
-              url = URL.createObjectURL(file),
-              a = document.createElement('a');
-        a.href = url;
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    }
-
-    /**
-     * Converts Uint8Array to binary string of '0's and '1's
-     * @param {Uint8Array} buffer
-     * @return {String} binary
-     */
-    static bufferToBitString(buffer, length) {
-        const result = [];
-        for(let i = 0; i < length; ++i)
-            result.push(((buffer[Math.floor(i/8)]>>(i%8))&1) ? '1' : '0');
-        return result.join('');
-    }
-
-    /**
-     * Converts UTF8 encoded Uint8Array to text
-     * @param {Uint8Array} utf8
-     * @return {String} text
-     */
-    static utf8ArrayToText(utf8) {
-        // return new TextDecoder('utf8').decode(utf8);
-        let uri = '';
-        for(const byte of new Uint8Array(utf8)) {
-            const hex = byte.toString(16);
-            uri += '%' + ((hex.length == 1) ? '0' + hex : hex);
-        }
-        try {
-            return decodeURIComponent(uri);
-        } catch(error) {
-            return utf8;
-        }
-    }
-
-    /**
-     * Converts text to UTF8 encoded Uint8Array
-     * @param {String} text
-     * @return {Uint8Array} utf8
-     */
-    static textToUtf8Array(text) {
-        // return new TextEncoder('utf8').encode(text);
-        const uri = encodeURI(text),
-              dataBytes = [];
-        for(let i = 0; i < uri.length; ++i) {
-            if(uri[i] == '%') {
-                dataBytes.push(parseInt(uri.substr(i + 1, 2), 16));
-                i += 2;
-            } else
-                dataBytes.push(uri.charCodeAt(i));
-        }
-        return new Uint8Array(dataBytes);
-    }
-
-    /**
      * Converts JS native data types to text
      * @param {Object} dataValue
      * @return {String} text
@@ -189,12 +75,7 @@ export default class BasicBackend {
             case 'object':
                 if(dataValue instanceof Array)
                     return '['+dataValue.map(value => this.encodeText(value)).join(', ')+']';
-                let string = '';
-                for(let i = 0; i < dataValue.byteLength; ++i) {
-                    const byte = dataValue[i];
-                    string += (byte & 0xF).toString(16) + (byte >> 4).toString(16);
-                }
-                return 'hex:' + string.toUpperCase();
+                return 'hex:'+Utils.encodeAsHex(dataValue);
             default:
                 return '' + dataValue;
         }
@@ -209,12 +90,9 @@ export default class BasicBackend {
         const inner = text.match(/"((?:[^\\"]|\\.)*)"/);
         if(inner != undefined)
             return inner[1];
-        if(text.length > 4 && text.substr(0, 4) == 'hex:') {
-            const dataValue = new Uint8Array(Math.floor((text.length - 4) / 2));
-            for(let i = 0; i < dataValue.byteLength; ++i)
-                dataValue[i] = parseInt(text[i * 2 + 4], 16) | (parseInt(text[i * 2 + 5], 16) << 4);
-            return dataValue;
-        } else if(text === 'false' || text === 'true')
+        if(text.length > 4 && text.substr(0, 4) == 'hex:')
+            return Utils.decodeAsHex(text.substr(4));
+        else if(text === 'false' || text === 'true')
             return (text === 'true');
         else if(!Number.isNaN(parseFloat(text)))
             return parseFloat(text);
@@ -322,7 +200,7 @@ export default class BasicBackend {
                         return dataView.getFloat32(0, true);
                 }
             case symbolByName.UTF8:
-                return this.constructor.utf8ArrayToText(dataBytes.slice(0, feedback.length/8));
+                return Utils.encodeAsUTF8(dataBytes.slice(0, feedback.length/8));
         }
         if(!this.getTriple([encoding, symbolByName.Type, symbolByName.Composite]))
             return dataBytes;
@@ -381,7 +259,7 @@ export default class BasicBackend {
                 dataView.setFloat32(0, dataValue, true);
                 return dataBytes;
             case symbolByName.UTF8:
-                return this.constructor.textToUtf8Array(dataValue);
+                return Utils.decodeAsUTF8(dataValue);
         }
         if(!this.getTriple([encoding, symbolByName.Type, symbolByName.Composite]))
             return dataValue;
@@ -624,7 +502,7 @@ export default class BasicBackend {
      * @return {String} binary
      */
     getBitString(symbol) {
-        return this.constructor.bufferToBitString(this.getRawData(symbol), this.getLength(symbol));
+        return Utils.asBitString(this.getRawData(symbol), this.getLength(symbol));
     }
 
     /**
@@ -758,6 +636,7 @@ export default class BasicBackend {
 
 
     /**
+     * @deprecated Use Differential.encodeJson() instead.
      * Exports the specified namespaces as JSON
      * @param {Identity[]} namespaces The namespaces to export
      * @return {String} json
@@ -766,9 +645,7 @@ export default class BasicBackend {
         const entities = [];
         for(const namespaceIdentity of namespaces)
             for(const symbol of this.querySymbols(namespaceIdentity)) {
-                const length = this.getLength(symbol),
-                      data = this.getData(symbol),
-                      attributes = [];
+                const attributes = [];
                 for(const tripleA of this.queryTriples(queryMasks.MVI, [symbol, 0, 0])) {
                     const values = [];
                     for(const tripleV of this.queryTriples(queryMasks.MMV, tripleA))
@@ -778,8 +655,8 @@ export default class BasicBackend {
                 }
                 entities.push([
                     symbol,
-                    length,
-                    (data instanceof Uint8Array) ? Array.from(data.slice(0, length/8)) : data,
+                    this.getLength(symbol),
+                    Utils.encodeAsHex( this.getRawData(symbol)),
                     attributes
                 ]);
             }
@@ -789,6 +666,7 @@ export default class BasicBackend {
     }
 
     /**
+     * @deprecated Use Differential.decodeJson() instead.
      * Imports content from JSON
      * @param {String} json
      */
@@ -798,7 +676,7 @@ export default class BasicBackend {
             const entitySymbol = entity[0];
             entities.add(entitySymbol);
             if(entity[1] > 0)
-                this.setData(entitySymbol, entity[2]);
+                this.setRawData(entitySymbol, Utils.decodeAsHex(entity[2]));
             this.setLength(entitySymbol, entity[1]);
             const attributes = entity[3];
             for(let i = 0; i < attributes.length; i += 2) {

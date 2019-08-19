@@ -1,4 +1,5 @@
 import PRNG from './PRNG.js';
+import Utils from '../Utils.js';
 import BasicBackend from '../BasicBackend.js';
 import Differential from '../Differential.js';
 
@@ -106,13 +107,13 @@ export function generateJournal(backend, rand, callback) {
 
 export function stringifyCheckout(backend) {
     const namespace = backend.namespaces[checkoutNamespace];
-    namespace.handles = Object.sorted(namespace.handles);
+    namespace.handles = Utils.sorted(namespace.handles);
     for(const handleIdentity in namespace.handles) {
         const handle = namespace.handles[handleIdentity];
         for(let i = 0; i < 6; ++i) {
-            const subIndex = handle.subIndices[i] = Object.sorted(handle.subIndices[i]);
+            const subIndex = handle.subIndices[i] = Utils.sorted(handle.subIndices[i]);
             for(const symbol in subIndex)
-                subIndex[symbol] = Object.sorted(subIndex[symbol]);
+                subIndex[symbol] = Utils.sorted(subIndex[symbol]);
         }
     }
     return JSON.stringify(namespace, undefined, 4);
@@ -122,7 +123,7 @@ export function getTests(backend, rand) {
     return {
         'differential': [2, () => {
             const resultOfNothing = stringifyCheckout(backend),
-                  diff = new Differential(backend, repositoryNamespace);
+                  diff = new Differential(backend, {}, repositoryNamespace);
             generateJournal(backend, rand, (description, method, args) => {
                 diff[method](...args);
             });
