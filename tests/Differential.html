@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8"/>
+        <title>Differential Fuzzy Test Visualizer</title>
+        <script type='module'>
+            import PRNG from './PRNG.js';
+            import BasicBackend from '../BasicBackend.js';
+            import Differential from '../Differential.js';
+            import {backend, svgRoot, createElement, visualizeDifferential} from './DifferentialVisualizer.js';
+            import {repositoryNamespace, checkoutNamespace, randomizationOptions, stringifyCheckout, generateJournal} from './DifferentialTests.js';
+
+            function colorPrintTestResult(name, value) {
+                console.log(`${name}:%c ${(value) ? 'suceeded' : 'failed'}`, `color: ${(value) ? '#4A4' : '#A44'};`);
+            }
+
+            const diffs = [{'repositoryNamespace': repositoryNamespace, 'preCommitStructure': {}, 'description': 'Initial'}],
+                  symbolPool = [];
+            let rand;
+            function fillCheckout() {
+                rand = new PRNG(seed.value);
+                backend.unlinkSymbol(BasicBackend.symbolInNamespace('Namespaces', checkoutNamespace));
+                let nextSymbol = 0;
+                symbolPool.length = 0;
+                for(let i = 0; i < randomizationOptions.minSymbolCount; ++i) {
+                    const symbol = BasicBackend.concatIntoSymbol(checkoutNamespace, nextSymbol++),
+                          length = rand.range(randomizationOptions.dataLength/2, randomizationOptions.dataLength),
+                          dataBytes = rand.bytes(Math.ceil(length/32)*4);
+                    backend.setRawData(symbol, dataBytes, length);
+                    symbolPool.push(symbol);
+                }
+                for(let i = 0; i < randomizationOptions.minTripleCount; ++i) {
+                    const triple = [rand.selectUniformly(symbolPool), rand.selectUniformly(symbolPool), rand.selectUniformly(symbolPool)];
+                    backend.setTriple(triple, true);
+                }
+            }
+
+            const seed = document.getElementById('seed');
+            seed.value = Math.floor(Math.random()*(0x80000000-1));
+            seed.onblur = () => {
+                document.body.removeChild(seed);
+                console.log('Seed', seed.value);
+
+                console.time('fillCheckout()');
+                fillCheckout();
+                console.timeEnd('fillCheckout()');
+                const diff = new Differential(backend, {}, repositoryNamespace);
+                console.time('journalToDifferential()');
+                generateJournal(backend, rand, (description, method, args) => {
+                    console.log(description);
+                    diff.description = description;
+                    diff[method](...args);
+                    diffs.push(JSON.parse(JSON.stringify(diff)));
+                });
+                diff.description = 'Compress';
+                diff.compressData();
+                diffs.push(JSON.parse(JSON.stringify(diff)));
+                console.timeEnd('journalToDifferential()');
+
+                const diffSelect = document.getElementById('diffSelect');
+                let prevDiff = diffs[0];
+                diffSelect.oninput = () => {
+                    const nextDiff = diffs[diffSelect.value],
+                          symbolSlots = {};
+                    while(svgRoot.childNodes.length > 0)
+                        svgRoot.removeChild(svgRoot.childNodes[0]);
+                    document.getElementById('description').textContent = nextDiff.description;
+                    visualizeDifferential(prevDiff, symbolSlots, false);
+                    window.setTimeout(() => {
+                        visualizeDifferential(nextDiff, symbolSlots, true);
+                    }, 0);
+                    prevDiff = nextDiff;
+                };
+                diffSelect.setAttribute('max', diffs.length-1);
+                diffSelect.oninput();
+
+                const validIntegrity = diff.validateIntegrity();
+                console.time('diff.commit()');
+                diff.commit();
+                console.timeEnd('diff.commit()');
+                const resultOfJournal = stringifyCheckout(backend);
+                console.time('fillCheckout()');
+                fillCheckout();
+                console.timeEnd('fillCheckout()');
+                const resultOfNothing = stringifyCheckout(backend);
+                console.time('diff.apply(false)');
+                const forwardApply = diff.apply(false);
+                console.timeEnd('diff.apply(false)');
+                const resultOfDifferential = stringifyCheckout(backend);
+                console.time('diff.apply(true)');
+                const reverseApply = diff.apply(true);
+                console.timeEnd('diff.apply(true)');
+                const resultOfRevert = stringifyCheckout(backend);
+                colorPrintTestResult('Valid Integrity', validIntegrity);
+                colorPrintTestResult('Forward Apply', forwardApply);
+                colorPrintTestResult('Reverse Apply', reverseApply);
+                colorPrintTestResult('Forward Compare', resultOfJournal == resultOfDifferential);
+                colorPrintTestResult('Reverse Compare', resultOfNothing == resultOfRevert);
+            };
+        </script>
+    </head>
+    <body>
+        <input id="seed" />
+        <input id="diffSelect" type="range" step="1" min="0" max="0" value="0" style="width: 500px; height: 25px; position: fixed; top: 10px; right: 20px;" />
+        <div id="description" style="position: fixed; top: 40px; right: 20px;"></div>
+    </body>
+</html>
