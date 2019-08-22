@@ -121,7 +121,7 @@ export function stringifyCheckout(backend) {
 
 export function getTests(backend, rand) {
     return {
-        'differential': [2, () => {
+        'differential': [100, () => {
             const resultOfNothing = stringifyCheckout(backend),
                   diff = new Differential(backend, {}, repositoryNamespace);
             generateJournal(backend, rand, (description, method, args) => {

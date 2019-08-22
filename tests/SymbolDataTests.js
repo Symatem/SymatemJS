@@ -59,7 +59,7 @@ export function getTests(backend, rand) {
             }
             return true;
         }],
-        'readData': [1000, () => {
+        'readData': [2000, () => {
             const [sourceString, sourceLength, sourceOffset] = fillSymbol(source),
                   length = rand.range(0, sourceLength-sourceOffset),
                   expectedString = sourceString.substr(sourceOffset, length);
@@ -75,7 +75,7 @@ export function getTests(backend, rand) {
             }
             return true;
         }],
-        'writeData': [1000, () => {
+        'writeData': [1200, () => {
             const [destinationString, destinationLength, destinationOffset] = fillSymbol(destination),
                   sourceLength = rand.range(0, Math.min(destinationLength-destinationOffset)),
                   sourceBuffer = rand.bytes(Math.ceil(sourceLength/32)*4),

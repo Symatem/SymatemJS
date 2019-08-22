@@ -3,11 +3,11 @@ import BasicBackend from '../BasicBackend.js';
 export function getTests(backend, rand) {
     let triplePool = new Set();
     const symbolPool = [], maskByIndex = Object.keys(BasicBackend.queryMasks);
-    for(let i = 0; i < 10; ++i)
+    for(let i = 0; i < 100; ++i)
         symbolPool.push(backend.createSymbol(4));
 
     return {
-        'setTriple': [200, () => {
+        'setTriple': [5000, () => {
             const triple = [rand.selectUniformly(symbolPool), rand.selectUniformly(symbolPool), rand.selectUniformly(symbolPool)],
                   tripleTag = triple.toString(),
                   tripleExists = triplePool.has(tripleTag),

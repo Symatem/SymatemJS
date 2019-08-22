@@ -1,29 +1,31 @@
 {
-  "name": "SymatemJS",
-  "version": "0.0.0",
-  "authors": [
-    "Alexander Meißner"
-  ],
-  "license": "MIT",
-  "description": "Symatem JS API",
-  "module": "SymatemJS.js",
-  "main": "dist/SymatemJS.js",
-  "scripts": {
-    "docs": "documentation build SymatemJS.js -f html -o docs",
-    "lint": "documentation lint SymatemJS.js",
-    "semantic-release": "semantic-release"
-  },
-  "bugs": {
-    "url": "https://github.com/Symatem/SymatemJS/issues"
-  },
-  "homepage": "https://github.com/Symatem/SymatemJS",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/Symatem/SymatemJS.git"
-  },
-  "dependencies": {},
-  "devDependencies": {
-    "documentation": "^6.3.3",
-    "semantic-release": "^15.4.1"
-  }
+    "name": "SymatemJS",
+    "version": "0.0.0",
+    "authors": [
+        "Alexander Meißner"
+    ],
+    "license": "MIT",
+    "description": "Symatem JS API",
+    "module": "SymatemJS.js",
+    "main": "dist/SymatemJS.js",
+    "scripts": {
+        "pretest": "./mjs.sh",
+        "test": "node --experimental-modules dist/tests/Tests.mjs",
+        "docs": "documentation build SymatemJS.js -f html -o docs"
+    },
+    "bugs": {
+        "url": "https://github.com/Symatem/SymatemJS/issues"
+    },
+    "homepage": "https://github.com/Symatem/SymatemJS",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/Symatem/SymatemJS.git"
+    },
+    "dependencies": {},
+    "devDependencies": {
+        "documentation": "^12.0.2"
+    },
+    "engines": {
+        "node": ">=12.0.0"
+    }
 }
