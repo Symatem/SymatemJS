@@ -388,9 +388,7 @@ export default class NativeBackend extends BasicBackend {
             return;
         console.assert(handle.dataBytes.length%4 == 0);
         if(offset%8 == 0 && length%8 == 0)
-            return (offset == 0 && length == handle.dataLength)
-                   ? handle.dataBytes.slice()
-                   : handle.dataBytes.slice(offset/8, (offset+length)/8);
+            return handle.dataBytes.slice(offset/8, (offset+length)/8);
         const dataBytes = new Uint8Array(Math.ceil(length/32)*4);
         Utils.bitwiseCopy(dataBytes, 0, handle.dataBytes, offset, length);
         return dataBytes;

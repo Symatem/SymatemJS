@@ -1,3 +1,3 @@
 # Symatem JS
 
-[![Build Status](https://secure.travis-ci.org/Symatem/SymatemJS.svg)](http://travis-ci.org/Symatem/SymatemJS)
+[![Build Status](https://travis-ci.org/Symatem/SymatemJS.svg?branch=master)](https://travis-ci.org/Symatem/SymatemJS)
