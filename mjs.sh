@@ -1,7 +1,7 @@
 #! /bin/bash
 
-mkdir -p dist dist/tests
-FILES="*.js tests/*.js"
+mkdir -p dist dist/src dist/tests
+FILES="*.js src/*.js tests/*.js"
 for src in $FILES
 do
     dst="${src%.js}.mjs"

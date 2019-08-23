@@ -1,5 +1,4 @@
-import Utils from '../Utils.js';
-import BasicBackend from '../BasicBackend.js';
+import {Utils, BasicBackend} from '../SymatemJS.js';
 
 export function getTests(backend, rand) {
     const destination = backend.createSymbol(4),

@@ -5,8 +5,7 @@
         <title>Differential Fuzzy Test Visualizer</title>
         <script type='module'>
             import PRNG from './PRNG.js';
-            import BasicBackend from '../BasicBackend.js';
-            import Differential from '../Differential.js';
+            import {BasicBackend, Differential} from '../SymatemJS.js';
             import {backend, svgRoot, createElement, visualizeDifferential} from './DifferentialVisualizer.js';
             import {repositoryNamespace, checkoutNamespace, randomizationOptions, stringifyCheckout, generateJournal} from './DifferentialTests.js';
 

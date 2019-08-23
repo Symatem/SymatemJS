@@ -1,9 +1,10 @@
-import BasicBackend from './BasicBackend.js';
-import NativeBackend from './NativeBackend.js';
-import Differential from './Differential.js';
-import Repository from './Repository.js';
+import Utils from './src/Utils.js';
+import BasicBackend from './src/BasicBackend.js';
+import NativeBackend from './src/NativeBackend.js';
+import Differential from './src/Differential.js';
+import Repository from './src/Repository.js';
 
-export {BasicBackend, NativeBackend, Differential, Repository};
+export {Utils, BasicBackend, NativeBackend, Differential, Repository};
 
 /**
  * @typedef {Number} Identity

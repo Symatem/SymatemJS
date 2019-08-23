@@ -1,4 +1,4 @@
-import BasicBackend from '../BasicBackend.js';
+import {BasicBackend} from '../SymatemJS.js';
 
 export function getTests(backend, rand) {
     let triplePool = new Set();

@@ -1,6 +1,4 @@
-import BasicBackend from '../BasicBackend.js';
-import NativeBackend from '../NativeBackend.js';
-import Differential from '../Differential.js';
+import {BasicBackend, NativeBackend, Differential} from '../SymatemJS.js';
 
 export function createElement(tag, parentNode) {
     const svgElement = document.createElementNS('http://www.w3.org/2000/svg', tag);

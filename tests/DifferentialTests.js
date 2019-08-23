@@ -1,7 +1,5 @@
 import PRNG from './PRNG.js';
-import Utils from '../Utils.js';
-import BasicBackend from '../BasicBackend.js';
-import Differential from '../Differential.js';
+import {Utils, BasicBackend, Differential} from '../SymatemJS.js';
 
 export const repositoryNamespace = 3,
              checkoutNamespace = 4,

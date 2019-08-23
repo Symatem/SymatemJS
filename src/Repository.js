@@ -7,6 +7,7 @@ export default class Repository {
     constructor(backend, namespace) {
         this.backend = backend;
         this.namespace = namespace;
+        this.modalNamespaces = [];
         this.versions = {};
         this.materializedVersions = {};
     }
@@ -38,6 +39,8 @@ export default class Repository {
      * @param {Symbol} versionId The version to remove
      */
     removeVersion(versionId) {
+        if(this.materializedVersions[versionId])
+            this.dematerializeVersion(versionId);
         for(const parentId in this.versions[versionId].parents)
             delete this.versions[parentId].children[versionId];
         delete this.versions[versionId];
@@ -45,17 +48,35 @@ export default class Repository {
 
     /** Materializes a version (checkout)
      * @param {Symbol} versionId The version to materialize
-     * @param {RelocationTable} checkoutRelocation Relocate modal namespaces to become checkout namespaces
+     * @return {RelocationTable} Relocates modal namespaces which became checkout namespaces
      */
-    materializeVersion(versionId, checkoutRelocation) {
+    materializeVersion(versionId) {
+        const checkoutRelocation = {};
+        for(const modalNamespaceIdentity of this.modalNamespaces) {
+            const namespaceSymbol = this.createSymbol(BasicBackend.identityOfSymbol(BasicBackend.symbolByName.Namespaces)),
+                  namespaceIdentity = BasicBackend.identityOfSymbol(namespaceSymbol);
+            checkoutRelocation[modalNamespaceIdentity] = namespaceIdentity;
+        }
         this.materializedVersions[versionId] = checkoutRelocation;
+        if(Object.keys(this.versions[versionId].parents).length > 0) {
+            const path = this.findPathTo(versionId);
+            versionId = path[0];
+            for(const modalNamespaceIdentity of this.materializedVersions[versionId])
+                this.backend.copyNamespace(checkoutRelocation[modalNamespaceIdentity], this.materializedVersions[versionId][modalNamespaceIdentity]); // TODO
+            for(let i = 1; i < path.length; ++i) {
+                path[i][1].apply(path[i][2], checkoutRelocation);
+                versionId = path[i][0];
+            }
+        }
+        return checkoutRelocation;
     }
 
     /** Deletes the materialization of a version, not the vertex in the DAG
      * @param {Symbol} versionId The version to dematerialize
      */
     dematerializeVersion(versionId) {
-        this.backend.unlinkSymbol(BasicBackend.symbolInNamespace('Namespaces', this.materializedVersions[versionId]));
+        for(const namespaceIdentity of this.materializedVersions[versionId])
+            this.backend.unlinkSymbol(BasicBackend.symbolInNamespace('Namespaces', namespaceIdentity));
         delete this.materializedVersions[versionId];
     }
 
@@ -70,6 +91,7 @@ export default class Repository {
         while(queue.length > 0) {
             let versionId = queue.shift();
             if(srcVersionId == versionId || (!srcVersionId && this.materializedVersions[versionId])) {
+                path.push(versionId);
                 while(true) {
                     const discoveredBy = this.versions[versionId].discoveredBy;
                     if(discoveredBy === true)
@@ -81,12 +103,12 @@ export default class Repository {
             }
             for(const neighborId in this.versions[versionId].parents)
                 if(!this.versions[neighborId].discoveredBy) {
-                    this.versions[neighborId].discoveredBy = [versionId, this.versions[versionId].parents[neighborId]];
+                    this.versions[neighborId].discoveredBy = [versionId, this.versions[versionId].parents[neighborId], false];
                     queue.push(neighborId);
                 }
             for(const neighborId in this.versions[versionId].children)
                 if(!this.versions[neighborId].discoveredBy) {
-                    this.versions[neighborId].discoveredBy = [versionId, this.versions[versionId].children[neighborId]];
+                    this.versions[neighborId].discoveredBy = [versionId, this.versions[versionId].children[neighborId], true];
                     queue.push(neighborId);
                 }
         }

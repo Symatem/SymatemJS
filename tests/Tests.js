@@ -9,7 +9,7 @@ const testBundles = [
     DifferentialTests
 ];
 
-import NativeBackend from '../NativeBackend.js';
+import { NativeBackend } from '../SymatemJS.js';
 import PRNG from './PRNG.js';
 function runAll(seed) {
     const backend = new NativeBackend(),
@@ -17,6 +17,7 @@ function runAll(seed) {
           tests = {};
     for(let testBundle of testBundles)
         Object.assign(tests, testBundle(backend, rand));
+    console.log(rand.state);
     for(const testName in tests) {
         console.time(testName);
         for(let i = 0; i < tests[testName][0]; ++i)
