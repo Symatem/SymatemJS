@@ -192,4 +192,4 @@ export default class Utils {
         }
         return low;
     }
-}
+};

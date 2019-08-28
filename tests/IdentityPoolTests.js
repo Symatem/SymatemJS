@@ -1,4 +1,4 @@
-import {NativeBackend} from '../SymatemJS.js';
+import {IdentityPool, NativeBackend} from '../SymatemJS.js';
 
 export function getTests(backend, rand) {
     const identityPool = [{'start': 0}],
@@ -12,7 +12,7 @@ export function getTests(backend, rand) {
         'removeIdentity': [100000, () => {
             const identity = rand.range(0, maxIdentity),
                   expected = identities[identity] == true,
-                  result = NativeBackend.removeIdentityFromPool(identityPool, identity);
+                  result = IdentityPool.remove(identityPool, identity);
             delete identities[identity];
             if(expected != result) {
                 console.warn(identity, expected, result);
@@ -23,7 +23,7 @@ export function getTests(backend, rand) {
         'addIdentity': [100000, () => {
             const identity = rand.range(0, maxIdentity),
                   expected = !(identities[identity] == true),
-                  result = NativeBackend.addIdentityToPool(identityPool, identity);
+                  result = IdentityPool.insert(identityPool, identity);
             identities[identity] = true;
             if(expected != result) {
                 console.warn(identity, expected, result);

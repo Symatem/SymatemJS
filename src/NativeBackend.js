@@ -27,9 +27,9 @@ function* searchMMM(index, triple) {
     const handle = this.getHandle(triple[0]);
     if(!handle)
         return 0;
-    const subIndex = handle.subIndices[index],
-          set = subIndex[triple[1]];
-    if(!set || !set[triple[2]])
+    const betaCollection = handle.subIndices[index],
+          gammaCollection = SymbolMap.get(betaCollection, triple[1]);
+    if(!gammaCollection || !SymbolMap.get(gammaCollection, triple[2]))
         return 0;
     yield reorderTriple(tripleNormalized, index, triple);
     return 1;
@@ -39,9 +39,9 @@ function* searchMMI(index, triple) {
     const handle = this.getHandle(triple[0]);
     if(!handle)
         return 0;
-    const subIndex = handle.subIndices[index],
-          set = subIndex[triple[1]];
-    if(!set)
+    const betaCollection = handle.subIndices[index],
+          gammaCollection = SymbolMap.get(betaCollection, triple[1]);
+    if(!gammaCollection)
         return 0;
     yield reorderTriple(tripleNormalized, index, triple);
     return 1;
@@ -51,8 +51,8 @@ function* searchMII(index, triple) {
     const handle = this.getHandle(triple[0]);
     if(!handle)
         return 0;
-    const subIndex = handle.subIndices[index];
-    if(Object.keys(subIndex).length == 0)
+    const betaCollection = handle.subIndices[index];
+    if(SymbolMap.isEmpty(betaCollection))
         return 0;
     yield reorderTriple(tripleNormalized, index, triple);
     return 1;
@@ -61,8 +61,8 @@ function* searchMII(index, triple) {
 function* searchIII(index, triple) {
     for(const namespaceIdentity in this.namespaces)
         for(const handleIdentity in this.namespaces[namespaceIdentity].handles) {
-            const subIndex = this.namespaces[namespaceIdentity].handles[handleIdentity].subIndices[index];
-            if(Object.keys(subIndex).length == 0)
+            const betaCollection = this.namespaces[namespaceIdentity].handles[handleIdentity].subIndices[index];
+            if(SymbolMap.isEmpty(betaCollection))
                 continue;
             yield reorderTriple(tripleNormalized, index, triple);
             return 1;
@@ -74,12 +74,12 @@ function* searchMMV(index, triple) {
     const handle = this.getHandle(triple[0]);
     if(!handle)
         return 0;
-    const subIndex = handle.subIndices[index],
-          set = subIndex[triple[1]];
-    if(!set)
+    const betaCollection = handle.subIndices[index],
+          gammaCollection = SymbolMap.get(betaCollection, triple[1]);
+    if(!gammaCollection)
         return 0;
     let count = 0;
-    for(triple[2] in set) {
+    for(triple[2] of SymbolMap.symbols(gammaCollection)) {
         yield reorderTriple(tripleNormalized, index, triple);
         ++count;
     }
@@ -90,11 +90,11 @@ function* searchMVV(index, triple) {
     const handle = this.getHandle(triple[0]);
     if(!handle)
         return 0;
-    const subIndex = handle.subIndices[index];
+    const betaCollection = handle.subIndices[index];
     let count = 0;
-    for(triple[1] in subIndex) {
-        const set = subIndex[triple[1]];
-        for(triple[2] in set) {
+    for(const [beta, gammaCollection] of SymbolMap.entries(betaCollection)) {
+        triple[1] = beta;
+        for(triple[2] of SymbolMap.symbols(gammaCollection)) {
             yield reorderTriple(tripleNormalized, index, triple);
             ++count;
         }
@@ -106,13 +106,13 @@ function* searchMIV(index, triple) {
     const handle = this.getHandle(triple[0]);
     if(!handle)
         return 0;
-    const subIndex = handle.subIndices[index],
-          results = {};
-    for(const beta in subIndex)
-        for(const result of subIndex[beta])
-            results[result] = true;
+    const betaCollection = handle.subIndices[index],
+          results = SymbolMap.create();
+    for(const [beta, gammaCollection] of SymbolMap.entries(betaCollection))
+        for(const gamma of SymbolMap.symbols(gammaCollection))
+            SymbolMap.insert(results, gamma, true);
     let count = 0;
-    for(triple[2] in results) {
+    for(triple[2] of SymbolMap.symbols(results)) {
         yield reorderTriple(tripleNormalized, index, triple);
         ++count;
     }
@@ -123,9 +123,10 @@ function* searchMVI(index, triple) {
     const handle = this.getHandle(triple[0]);
     if(!handle)
         return 0;
-    const subIndex = handle.subIndices[index];
+    const betaCollection = handle.subIndices[index];
     let count = 0;
-    for(triple[1] in subIndex) {
+    for(const [beta, gammaCollection] of SymbolMap.entries(betaCollection)) {
+        triple[1] = beta;
         yield reorderTriple(tripleNormalized, index, triple);
         ++count;
     }
@@ -136,8 +137,8 @@ function* searchVII(index, triple) {
     let count = 0;
     for(const namespaceIdentity in this.namespaces)
         for(const handleIdentity in this.namespaces[namespaceIdentity].handles) {
-            const subIndex = this.namespaces[namespaceIdentity].handles[handleIdentity].subIndices[index];
-            if(Object.keys(subIndex).length == 0)
+            const betaCollection = this.namespaces[namespaceIdentity].handles[handleIdentity].subIndices[index];
+            if(SymbolMap.isEmpty(betaCollection))
                 continue;
             triple[0] = this.constructor.concatIntoSymbol(namespaceIdentity, handleIdentity);
             yield reorderTriple(tripleNormalized, index, triple);
@@ -150,9 +151,10 @@ function* searchVVI(index, triple) {
     let count = 0;
     for(const namespaceIdentity in this.namespaces)
         for(const handleIdentity in this.namespaces[namespaceIdentity].handles) {
-            const subIndex = this.namespaces[namespaceIdentity].handles[handleIdentity].subIndices[index];
+            const betaCollection = this.namespaces[namespaceIdentity].handles[handleIdentity].subIndices[index];
             triple[0] = this.constructor.concatIntoSymbol(namespaceIdentity, handleIdentity);
-            for(triple[1] in subIndex) {
+            for(const [beta, gammaCollection] of SymbolMap.entries(betaCollection)) {
+                triple[1] = beta;
                 yield reorderTriple(tripleNormalized, index, triple);
                 ++count;
             }
@@ -164,11 +166,11 @@ function* searchVVV(index, triple) {
     let count = 0;
     for(const namespaceIdentity in this.namespaces)
         for(const handleIdentity in this.namespaces[namespaceIdentity].handles) {
-            const subIndex = this.namespaces[namespaceIdentity].handles[handleIdentity].subIndices[index];
+            const betaCollection = this.namespaces[namespaceIdentity].handles[handleIdentity].subIndices[index];
             triple[0] = this.constructor.concatIntoSymbol(namespaceIdentity, handleIdentity);
-            for(triple[1] in subIndex) {
-                const set = subIndex[triple[1]];
-                for(triple[2] in set) {
+            for(const [beta, gammaCollection] of SymbolMap.entries(betaCollection)) {
+                triple[1] = beta;
+                for(triple[2] of SymbolMap.symbols(gammaCollection)) {
                     yield reorderTriple(tripleNormalized, index, triple);
                     ++count;
                 }
@@ -201,63 +203,13 @@ const searchLookup = [
     searchMII, searchVII, searchIII
 ];
 
-import Utils from './Utils.js';
-import BasicBackend from './BasicBackend.js';
+import {Utils, IdentityPool, SymbolMap, BasicBackend} from '../SymatemJS.js';
 
 /** Implements a backend in JS */
 export default class NativeBackend extends BasicBackend {
     constructor() {
         super();
         this.namespaces = {};
-    }
-
-    static addIdentityToPool(ranges, identity) {
-        const indexOfRange = Utils.bisect(ranges.length, (index) => (ranges[index].start <= identity));
-        const prevRange = ranges[indexOfRange-1],
-              nextRange = ranges[indexOfRange];
-        if(prevRange && (indexOfRange == ranges.length || identity < prevRange.start+prevRange.count))
-            return false;
-        const mergePrevRange = (prevRange && prevRange.start+prevRange.count == identity),
-              mergePostRange = (nextRange && identity+1 == nextRange.start);
-        if(mergePrevRange && mergePostRange) {
-            nextRange.start = prevRange.start;
-            if(nextRange.count)
-                nextRange.count += 1+prevRange.count;
-            ranges.splice(indexOfRange-1, 1);
-        } else if(mergePrevRange) {
-            ++prevRange.count;
-        } else if(mergePostRange) {
-            --nextRange.start;
-            if(nextRange.count)
-                ++nextRange.count;
-        } else
-            ranges.splice(indexOfRange, 0, {'start': identity, 'count': 1});
-        return true;
-    }
-
-    static removeIdentityFromPool(ranges, identity) {
-        const indexOfRange = Utils.bisect(ranges.length, (index) => (ranges[index].start <= identity));
-        const range = ranges[indexOfRange-1];
-        if(!range || identity >= range.start+range.count)
-            return false;
-        if(identity == range.start) {
-            ++range.start;
-            if(range.count && --range.count == 0)
-                ranges.splice(indexOfRange-1, 1);
-        } else if(identity == range.start+range.count-1)
-            --range.count;
-        else {
-            const count = identity-range.start;
-            ranges.splice(indexOfRange-1, 0, {'start': range.start, 'count': count});
-            range.start = identity+1;
-            if(range.count)
-                range.count -= 1+count;
-        }
-        return true;
-    }
-
-    static getIdentityFromPool(ranges) {
-        return ranges[0].start;
     }
 
     getHandle(symbol) {
@@ -288,14 +240,18 @@ export default class NativeBackend extends BasicBackend {
             triple[0] = this.constructor.concatIntoSymbol(namespaceIdentity, handleIdentity);
             const handle = namespace.handles[handleIdentity];
             for(let i = 0; i < 3; ++i) {
-                const subIndex = handle.subIndices[i];
-                for(triple[1] in subIndex)
-                    if(this.constructor.namespaceOfSymbol(triple[1]) != namespaceIdentity)
-                        for(triple[2] in subIndex[triple[1]])
+                const betaCollection = handle.subIndices[i];
+                for(const [beta, gammaCollection] of SymbolMap.entries(betaCollection)) {
+                    triple[1] = beta;
+                    if(this.constructor.namespaceOfSymbol(triple[1]) != namespaceIdentity) {
+                        for(triple[2] of SymbolMap.symbols(gammaCollection))
                             this.setTriple(triple, false);
-                    else for(triple[2] in subIndex[triple[1]])
-                        if(this.constructor.namespaceOfSymbol(triple[2]) != namespaceIdentity)
-                            this.setTriple(triple, false);
+                    } else {
+                        for(triple[2] of SymbolMap.symbols(gammaCollection))
+                            if(this.constructor.namespaceOfSymbol(triple[2]) != namespaceIdentity)
+                                this.setTriple(triple, false);
+                    }
+                }
             }
         }
         delete this.namespaces[namespaceIdentity];
@@ -309,7 +265,7 @@ export default class NativeBackend extends BasicBackend {
         let handle = namespace.handles[handleIdentity];
         if(handle)
             return handle;
-        console.assert(this.constructor.removeIdentityFromPool(namespace.freeIdentityPool, handleIdentity));
+        console.assert(IdentityPool.remove(namespace.freeIdentityPool, handleIdentity));
         handle = namespace.handles[handleIdentity] = {
             // namespace: namespace,
             // handleIdentity: handleIdentity,
@@ -318,13 +274,13 @@ export default class NativeBackend extends BasicBackend {
             subIndices: []
         };
         for(let i = 0; i < 6; ++i)
-            handle.subIndices.push({});
+            handle.subIndices.push(SymbolMap.create());
         return handle;
     }
 
     createSymbol(namespaceIdentity) {
         const namespace = this.manifestNamespace(namespaceIdentity);
-        let handleIdentity = this.constructor.getIdentityFromPool(namespace.freeIdentityPool);
+        let handleIdentity = IdentityPool.get(namespace.freeIdentityPool);
         const symbol = this.constructor.concatIntoSymbol(namespaceIdentity, handleIdentity);
         this.manifestSymbol(symbol);
         return symbol;
@@ -337,13 +293,13 @@ export default class NativeBackend extends BasicBackend {
         if(!namespace || !namespace.handles[handleIdentity])
             return false;
         for(let i = 0; i < 3; ++i)
-            if(Object.keys(namespace.handles[handleIdentity].subIndices[i]) > 0)
+            if(!SymbolMap.isEmpty(namespace.handles[handleIdentity].subIndices[i]))
                 return false;
         delete namespace.handles[handleIdentity];
         if(Object.keys(namespace.handles).length == 0)
             delete this.namespaces[namespaceIdentity];
         else
-            console.assert(this.constructor.addIdentityToPool(namespace.freeIdentityPool, handleIdentity));
+            console.assert(IdentityPool.insert(namespace.freeIdentityPool, handleIdentity));
         return (namespaceIdentity == this.constructor.identityOfSymbol(this.constructor.symbolByName.Namespaces))
             ? this.unlinkNamespace(handleIdentity)
             : true;
@@ -426,27 +382,22 @@ export default class NativeBackend extends BasicBackend {
     }
 
     setTriple(triple, linked) {
-        function operateSubIndex(subIndex, beta, gamma) {
+        function operateSubIndex(betaCollection, beta, gamma) {
             if(linked) {
-                let set;
-                if(!subIndex[beta]) {
-                    set = {};
-                    subIndex[beta] = set;
-                } else {
-                    set = subIndex[beta];
-                    if(set[gamma])
-                        return false;
+                let gammaCollection = SymbolMap.get(betaCollection, beta);
+                if(!gammaCollection) {
+                    gammaCollection = SymbolMap.create();
+                    SymbolMap.insert(betaCollection, beta, gammaCollection);
                 }
-                set[gamma] = true;
+                return SymbolMap.insert(gammaCollection, gamma, true);
             } else {
-                const set = subIndex[beta];
-                if(!set || !set[gamma])
+                let gammaCollection = SymbolMap.get(betaCollection, beta);
+                if(!gammaCollection || !SymbolMap.remove(gammaCollection, gamma))
                     return false;
-                delete set[gamma];
-                if(Object.keys(set).length === 0)
-                    delete subIndex[beta];
+                if(SymbolMap.isEmpty(gammaCollection))
+                    SymbolMap.remove(betaCollection, beta);
+                return true;
             }
-            return true;
         }
         if(linked) {
             this.manifestSymbol(triple[0]);
@@ -467,71 +418,65 @@ export default class NativeBackend extends BasicBackend {
     }
 
     moveTriples(translationTable) {
-        const dstSymbols = {}, subIndexUpdatesBySymbol = {};
-        for(const srcSymbol in translationTable) {
-            const dstSymbol = translationTable[srcSymbol],
-                  handle = this.getHandle(srcSymbol);
-            dstSymbols[dstSymbol] = true;
-            for(let i = 0; i < 6; ++i) {
-                const subIndex = handle.subIndices[i];
-                for(const beta in subIndex) {
-                    let subIndexUpdates = subIndexUpdatesBySymbol[beta];
-                    if(!subIndexUpdates)
-                        subIndexUpdates = subIndexUpdatesBySymbol[beta] = [];
+        const subIndexUpdatesBySymbol = SymbolMap.create();
+        for(const [srcSymbol, dstSymbol] of SymbolMap.entries(translationTable)) {
+            const handle = this.getHandle(srcSymbol);
+            for(let i = 0; i < 6; ++i)
+                for(const beta of SymbolMap.symbols(handle.subIndices[i])) {
+                    let subIndexUpdates = SymbolMap.get(subIndexUpdatesBySymbol, beta);
+                    if(!subIndexUpdates) {
+                        subIndexUpdates = [];
+                        SymbolMap.insert(subIndexUpdatesBySymbol, beta, subIndexUpdates);
+                    }
                     subIndexUpdates.push({'srcSymbol': srcSymbol, 'alphaIndex': i});
                 }
-            }
         }
-        for(const symbol in subIndexUpdatesBySymbol) {
-            const updates = subIndexUpdatesBySymbol[symbol],
-                  handle = this.getHandle(symbol);
+        for(const [symbol, updates] of SymbolMap.entries(subIndexUpdatesBySymbol)) {
+            const handle = this.getHandle(symbol);
             for(const update of updates) {
                 update.betaIndex = remapSubindexKey[update.alphaIndex];
                 update.gammaIndex = remapSubindexInverse[update.betaIndex];
                 update.betaSubIndex = handle.subIndices[update.betaIndex];
                 update.gammaSubIndex = handle.subIndices[update.gammaIndex];
-                update.betaSet = update.betaSubIndex[update.srcSymbol];
+                update.betaSet = SymbolMap.get(update.betaSubIndex, update.srcSymbol);
                 update.gammaSets = [];
-                for(const gamma in update.betaSet)
-                    update.gammaSets.push(update.gammaSubIndex[gamma]);
+                for(const gamma of SymbolMap.symbols(update.betaSet))
+                    update.gammaSets.push(SymbolMap.get(update.gammaSubIndex, gamma));
             }
             for(const update of updates) {
                 for(const gammaSet of update.gammaSets)
-                    delete gammaSet[update.srcSymbol];
-                delete update.betaSubIndex[update.srcSymbol];
+                    SymbolMap.remove(gammaSet, update.srcSymbol);
+                SymbolMap.remove(update.betaSubIndex, update.srcSymbol);
             }
             for(const update of updates) {
-                const dstSymbol = translationTable[update.srcSymbol];
+                const dstSymbol = SymbolMap.get(translationTable, update.srcSymbol);
                 for(const gammaSet of update.gammaSets)
-                    gammaSet[dstSymbol] = true;
-                update.betaSubIndex[dstSymbol] = update.betaSet;
+                    SymbolMap.insert(gammaSet, dstSymbol, true);
+                SymbolMap.insert(update.betaSubIndex, dstSymbol, update.betaSet);
             }
-            delete subIndexUpdatesBySymbol[symbol];
+            SymbolMap.remove(subIndexUpdatesBySymbol, symbol);
         }
-        const subIndicesToMerge = {};
-        for(const srcSymbol in translationTable) {
-            const dstSymbol = translationTable[srcSymbol],
-                  srcHandle = this.getHandle(srcSymbol);
-            subIndicesToMerge[srcSymbol] = srcHandle.subIndices;
+        const subIndicesToMerge = SymbolMap.create();
+        for(const [srcSymbol, dstSymbol] of SymbolMap.entries(translationTable)) {
+            const srcHandle = this.getHandle(srcSymbol);
+            SymbolMap.insert(subIndicesToMerge, srcSymbol, srcHandle.subIndices);
             srcHandle.subIndices = [];
             for(let i = 0; i < 6; ++i)
-                srcHandle.subIndices.push({});
+                srcHandle.subIndices.push(SymbolMap.create());
         }
-        for(const srcSymbol in subIndicesToMerge) {
-            const srcSubIndices = subIndicesToMerge[srcSymbol],
-                  dstHandle = this.manifestSymbol(translationTable[srcSymbol]);
+        for(const [srcSymbol, srcSubIndices] of SymbolMap.entries(subIndicesToMerge)) {
+            const dstHandle = this.manifestSymbol(SymbolMap.get(translationTable, srcSymbol));
             for(let i = 0; i < 6; ++i) {
                 const srcSubIndex = srcSubIndices[i],
                       dstSubIndex = dstHandle.subIndices[i];
-                for(const beta in srcSubIndex) {
-                    const srcSet = srcSubIndex[beta],
-                          dstSet = dstSubIndex[beta];
+                for(const [beta, srcSet] of SymbolMap.entries(srcSubIndex)) {
+                    const dstSet = SymbolMap.get(dstSubIndex, beta);
                     if(!dstSet) {
-                        dstSubIndex[beta] = srcSet;
+                        SymbolMap.insert(dstSubIndex, beta, srcSet);
                         continue;
                     }
-                    for(const gamma in srcSet)
-                        dstSet[gamma] = true;
+                    for(const gamma of SymbolMap.symbols(srcSet))
+                        SymbolMap.insert(dstSet, gamma, true);
                 }
             }
         }
@@ -556,25 +501,26 @@ export default class NativeBackend extends BasicBackend {
                   freeIdentityPool = [{'start': 0}];
             for(let handleIdentity in namespace.handles) {
                 handleIdentity = parseInt(handleIdentity);
-                if(!this.constructor.removeIdentityFromPool(freeIdentityPool, handleIdentity))
+                if(!IdentityPool.remove(freeIdentityPool, handleIdentity))
                     return false;
                 const handle = namespace.handles[handleIdentity];
                 if(handle.subIndices.length != 6)
                     return false;
                 const symbol = this.constructor.concatIntoSymbol(namespaceIdentity, handleIdentity);
                 for(let i = 0; i < 6; ++i) {
-                    const subIndex = handle.subIndices[i],
-                          invertedSubIndex = handle.subIndices[remapSubindexInverse[i]],
+                    const betaCollection = handle.subIndices[i],
+                          invertedBetaCollection = handle.subIndices[remapSubindexInverse[i]],
                           betaIndex = remapSubindexKey[i];
-                    for(const beta in subIndex) {
-                        if(!this.getHandle(beta).subIndices[betaIndex][symbol])
+                    for(const [beta, gammaCollection] of SymbolMap.entries(betaCollection)) {
+                        if(!SymbolMap.get(this.getHandle(beta).subIndices[betaIndex], symbol))
                             return false;
-                        const set = subIndex[beta];
-                        if(set.size == 0)
+                        if(SymbolMap.isEmpty(gammaCollection))
                             return false;
-                        for(const gamma in set)
-                            if(!invertedSubIndex[gamma] || !invertedSubIndex[gamma][beta])
+                        for(const gamma of SymbolMap.symbols(gammaCollection)) {
+                            const invertedGammaCollection = SymbolMap.get(invertedBetaCollection, gamma);
+                            if(!invertedGammaCollection || !SymbolMap.get(invertedGammaCollection, beta))
                                 return false;
+                        }
                     }
                 }
             }
