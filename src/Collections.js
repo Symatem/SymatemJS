@@ -61,14 +61,14 @@ export class SymbolMap {
     }
 
     static insert(collection, symbol, element) {
-        if(collection[symbol])
+        if(collection[symbol] !== undefined)
             return false;
         collection[symbol] = element;
         return true;
     }
 
     static remove(collection, symbol) {
-        if(!collection[symbol])
+        if(collection[symbol] === undefined)
             return false;
         delete collection[symbol];
         return true;
@@ -80,7 +80,7 @@ export class SymbolMap {
 
     static getOrInsert(collection, symbol, defaultElement) {
         const element = collection[symbol];
-        return (element) ? element : (collection[symbol] = defaultElement);
+        return (element !== undefined) ? element : (collection[symbol] = defaultElement);
     }
 
     static entries(collection) {
