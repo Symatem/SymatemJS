@@ -78,6 +78,11 @@ export class SymbolMap {
         return collection[symbol];
     }
 
+    static getOrInsert(collection, symbol, defaultElement) {
+        const element = collection[symbol];
+        return (element) ? element : (collection[symbol] = defaultElement);
+    }
+
     static entries(collection) {
         return Object.entries(collection);
     }
