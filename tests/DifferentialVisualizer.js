@@ -126,7 +126,7 @@ export function createSlice(diff, symbolSlot, type, second, sliceGroups, operati
     let color;
     switch(type) {
         case 'copyOperations':
-            color = (BasicBackend.namespaceOfSymbol(operation.dstSymbol) != diff.repositoryNamespace) ? '#DDF' : '#FDD';
+            color = (SymbolInternals.namespaceOfSymbol(operation.dstSymbol) != diff.repositoryNamespace) ? '#DDF' : '#FDD';
             break;
         case 'creaseLengthOperations':
             color = (operation.length < 0) ? '#F88' : '#8F8';

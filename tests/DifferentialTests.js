@@ -1,5 +1,5 @@
 import PRNG from './PRNG.js';
-import {Utils, BasicBackend, Differential} from '../SymatemJS.js';
+import {Utils, SymbolInternals, BasicBackend, Differential} from '../SymatemJS.js';
 
 export const repositoryNamespace = 3,
              checkoutNamespace = 4,
@@ -91,7 +91,7 @@ export function generateJournal(backend, rand, callback) {
                 else {
                     const triplePool = [];
                     for(const triple of backend.queryTriples(BasicBackend.queryMasks.VVV, [0, 0, 0]))
-                        if(BasicBackend.namespaceOfSymbol(triple[0]) == checkoutNamespace)
+                        if(SymbolInternals.namespaceOfSymbol(triple[0]) == checkoutNamespace)
                             triplePool.push(triple);
                     if(triplePool.length == 0)
                         continue;

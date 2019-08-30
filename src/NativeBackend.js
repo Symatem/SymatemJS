@@ -1,3 +1,5 @@
+import {Utils, SymbolInternals, IdentityPool, SymbolMap, BasicBackend} from '../SymatemJS.js';
+
 const indexByName = {
     'EAV': 0, 'AVE': 1, 'VEA': 2,
     'EVA': 3, 'AEV': 4, 'VAE': 5
@@ -140,7 +142,7 @@ function* searchVII(index, triple) {
             const betaCollection = this.namespaces[namespaceIdentity].handles[handleIdentity].subIndices[index];
             if(SymbolMap.isEmpty(betaCollection))
                 continue;
-            triple[0] = this.constructor.concatIntoSymbol(namespaceIdentity, handleIdentity);
+            triple[0] = SymbolInternals.concatIntoSymbol(namespaceIdentity, handleIdentity);
             yield reorderTriple(tripleNormalized, index, triple);
             ++count;
         }
@@ -152,7 +154,7 @@ function* searchVVI(index, triple) {
     for(const namespaceIdentity in this.namespaces)
         for(const handleIdentity in this.namespaces[namespaceIdentity].handles) {
             const betaCollection = this.namespaces[namespaceIdentity].handles[handleIdentity].subIndices[index];
-            triple[0] = this.constructor.concatIntoSymbol(namespaceIdentity, handleIdentity);
+            triple[0] = SymbolInternals.concatIntoSymbol(namespaceIdentity, handleIdentity);
             for(const [beta, gammaCollection] of SymbolMap.entries(betaCollection)) {
                 triple[1] = beta;
                 yield reorderTriple(tripleNormalized, index, triple);
@@ -167,7 +169,7 @@ function* searchVVV(index, triple) {
     for(const namespaceIdentity in this.namespaces)
         for(const handleIdentity in this.namespaces[namespaceIdentity].handles) {
             const betaCollection = this.namespaces[namespaceIdentity].handles[handleIdentity].subIndices[index];
-            triple[0] = this.constructor.concatIntoSymbol(namespaceIdentity, handleIdentity);
+            triple[0] = SymbolInternals.concatIntoSymbol(namespaceIdentity, handleIdentity);
             for(const [beta, gammaCollection] of SymbolMap.entries(betaCollection)) {
                 triple[1] = beta;
                 for(triple[2] of SymbolMap.symbols(gammaCollection)) {
@@ -203,8 +205,6 @@ const searchLookup = [
     searchMII, searchVII, searchIII
 ];
 
-import {Utils, IdentityPool, SymbolMap, BasicBackend} from '../SymatemJS.js';
-
 /** Implements a backend in JS */
 export default class NativeBackend extends BasicBackend {
     constructor() {
@@ -213,8 +213,8 @@ export default class NativeBackend extends BasicBackend {
     }
 
     getHandle(symbol) {
-        const namespace = this.namespaces[this.constructor.namespaceOfSymbol(symbol)];
-        return (namespace) ? namespace.handles[this.constructor.identityOfSymbol(symbol)] : undefined;
+        const namespace = this.namespaces[SymbolInternals.namespaceOfSymbol(symbol)];
+        return (namespace) ? namespace.handles[SymbolInternals.identityOfSymbol(symbol)] : undefined;
     }
 
     manifestNamespace(namespaceIdentity) {
@@ -226,7 +226,7 @@ export default class NativeBackend extends BasicBackend {
                 'handles': {}
             };
             this.namespaces[namespaceIdentity] = namespace;
-            this.manifestSymbol(this.constructor.symbolInNamespace('Namespaces', namespaceIdentity));
+            this.manifestSymbol(BasicBackend.symbolInNamespace('Namespaces', namespaceIdentity));
         }
         return namespace;
     }
@@ -237,18 +237,18 @@ export default class NativeBackend extends BasicBackend {
             return false;
         const triple = [];
         for(const handleIdentity in namespace.handles) {
-            triple[0] = this.constructor.concatIntoSymbol(namespaceIdentity, handleIdentity);
+            triple[0] = SymbolInternals.concatIntoSymbol(namespaceIdentity, handleIdentity);
             const handle = namespace.handles[handleIdentity];
             for(let i = 0; i < 3; ++i) {
                 const betaCollection = handle.subIndices[i];
                 for(const [beta, gammaCollection] of SymbolMap.entries(betaCollection)) {
                     triple[1] = beta;
-                    if(this.constructor.namespaceOfSymbol(triple[1]) != namespaceIdentity) {
+                    if(SymbolInternals.namespaceOfSymbol(triple[1]) != namespaceIdentity) {
                         for(triple[2] of SymbolMap.symbols(gammaCollection))
                             this.setTriple(triple, false);
                     } else {
                         for(triple[2] of SymbolMap.symbols(gammaCollection))
-                            if(this.constructor.namespaceOfSymbol(triple[2]) != namespaceIdentity)
+                            if(SymbolInternals.namespaceOfSymbol(triple[2]) != namespaceIdentity)
                                 this.setTriple(triple, false);
                     }
                 }
@@ -259,9 +259,9 @@ export default class NativeBackend extends BasicBackend {
     }
 
     manifestSymbol(symbol) {
-        const namespaceIdentity = this.constructor.namespaceOfSymbol(symbol),
+        const namespaceIdentity = SymbolInternals.namespaceOfSymbol(symbol),
               namespace = this.manifestNamespace(namespaceIdentity),
-              handleIdentity = this.constructor.identityOfSymbol(symbol);
+              handleIdentity = SymbolInternals.identityOfSymbol(symbol);
         let handle = namespace.handles[handleIdentity];
         if(handle)
             return handle;
@@ -281,15 +281,15 @@ export default class NativeBackend extends BasicBackend {
     createSymbol(namespaceIdentity) {
         const namespace = this.manifestNamespace(namespaceIdentity);
         let handleIdentity = IdentityPool.get(namespace.freeIdentityPool);
-        const symbol = this.constructor.concatIntoSymbol(namespaceIdentity, handleIdentity);
+        const symbol = SymbolInternals.concatIntoSymbol(namespaceIdentity, handleIdentity);
         this.manifestSymbol(symbol);
         return symbol;
     }
 
     releaseSymbol(symbol) {
-        const namespaceIdentity = this.constructor.namespaceOfSymbol(symbol),
+        const namespaceIdentity = SymbolInternals.namespaceOfSymbol(symbol),
               namespace = this.namespaces[namespaceIdentity],
-              handleIdentity = this.constructor.identityOfSymbol(symbol);
+              handleIdentity = SymbolInternals.identityOfSymbol(symbol);
         if(!namespace || !namespace.handles[handleIdentity])
             return false;
         for(let i = 0; i < 3; ++i)
@@ -300,7 +300,7 @@ export default class NativeBackend extends BasicBackend {
             delete this.namespaces[namespaceIdentity];
         else
             console.assert(IdentityPool.insert(namespace.freeIdentityPool, handleIdentity));
-        return (namespaceIdentity == this.constructor.identityOfSymbol(this.constructor.symbolByName.Namespaces))
+        return (namespaceIdentity == SymbolInternals.identityOfSymbol(this.constructor.symbolByName.Namespaces))
             ? this.unlinkNamespace(handleIdentity)
             : true;
     }
@@ -487,7 +487,7 @@ export default class NativeBackend extends BasicBackend {
         const namespace = this.namespaces[namespaceIdentity];
         if(namespace)
             for(const handleIdentity in namespace.handles)
-                yield BasicBackend.concatIntoSymbol(namespaceIdentity, handleIdentity);
+                yield SymbolInternals.concatIntoSymbol(namespaceIdentity, handleIdentity);
     }
 
     queryTriples(mask, triple) {
@@ -506,7 +506,7 @@ export default class NativeBackend extends BasicBackend {
                 const handle = namespace.handles[handleIdentity];
                 if(handle.subIndices.length != 6)
                     return false;
-                const symbol = this.constructor.concatIntoSymbol(namespaceIdentity, handleIdentity);
+                const symbol = SymbolInternals.concatIntoSymbol(namespaceIdentity, handleIdentity);
                 for(let i = 0; i < 6; ++i) {
                     const betaCollection = handle.subIndices[i],
                           invertedBetaCollection = handle.subIndices[remapSubindexInverse[i]],

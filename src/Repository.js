@@ -1,3 +1,5 @@
+import {SymbolInternals} from '../SymatemJS.js';
+
 /** The repository is a DAG with the versions being vertices and the differentals being edges */
 export default class Repository {
     /**
@@ -53,8 +55,8 @@ export default class Repository {
     materializeVersion(versionId) {
         const checkoutRelocation = {};
         for(const modalNamespaceIdentity of this.modalNamespaces) {
-            const namespaceSymbol = this.createSymbol(BasicBackend.identityOfSymbol(BasicBackend.symbolByName.Namespaces)),
-                  namespaceIdentity = BasicBackend.identityOfSymbol(namespaceSymbol);
+            const namespaceSymbol = this.createSymbol(SymbolInternals.identityOfSymbol(BasicBackend.symbolByName.Namespaces)),
+                  namespaceIdentity = SymbolInternals.identityOfSymbol(namespaceSymbol);
             checkoutRelocation[modalNamespaceIdentity] = namespaceIdentity;
         }
         this.materializedVersions[versionId] = checkoutRelocation;

@@ -1,6 +1,6 @@
-/** Collection of utility functions
+/** General utility functions
  */
-export default class Utils {
+export class Utils {
     /**
      * Saves a buffer as download file in browsers
      * @param {Uint8Array} buffer
@@ -191,5 +191,56 @@ export default class Utils {
                 high = mid;
         }
         return low;
+    }
+};
+
+export class IdentityPool {
+    static insert(collection, identity) {
+        const indexOfRange = Utils.bisect(collection.length, (index) => (collection[index].start <= identity));
+        const prevRange = collection[indexOfRange-1],
+              nextRange = collection[indexOfRange];
+        if(prevRange && (indexOfRange == collection.length || identity < prevRange.start+prevRange.count))
+            return false;
+        const mergePrevRange = (prevRange && prevRange.start+prevRange.count == identity),
+              mergePostRange = (nextRange && identity+1 == nextRange.start);
+        if(mergePrevRange && mergePostRange) {
+            nextRange.start = prevRange.start;
+            if(nextRange.count)
+                nextRange.count += 1+prevRange.count;
+            collection.splice(indexOfRange-1, 1);
+        } else if(mergePrevRange) {
+            ++prevRange.count;
+        } else if(mergePostRange) {
+            --nextRange.start;
+            if(nextRange.count)
+                ++nextRange.count;
+        } else
+            collection.splice(indexOfRange, 0, {'start': identity, 'count': 1});
+        return true;
+    }
+
+    static remove(collection, identity) {
+        const indexOfRange = Utils.bisect(collection.length, (index) => (collection[index].start <= identity));
+        const range = collection[indexOfRange-1];
+        if(!range || identity >= range.start+range.count)
+            return false;
+        if(identity == range.start) {
+            ++range.start;
+            if(range.count && --range.count == 0)
+                collection.splice(indexOfRange-1, 1);
+        } else if(identity == range.start+range.count-1)
+            --range.count;
+        else {
+            const count = identity-range.start;
+            collection.splice(indexOfRange-1, 0, {'start': range.start, 'count': count});
+            range.start = identity+1;
+            if(range.count)
+                range.count -= 1+count;
+        }
+        return true;
+    }
+
+    static get(collection) {
+        return collection[0].start;
     }
 };

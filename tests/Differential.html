@@ -22,7 +22,7 @@
                 let nextSymbol = 0;
                 symbolPool.length = 0;
                 for(let i = 0; i < randomizationOptions.minSymbolCount; ++i) {
-                    const symbol = BasicBackend.concatIntoSymbol(checkoutNamespace, nextSymbol++),
+                    const symbol = SymbolInternals.concatIntoSymbol(checkoutNamespace, nextSymbol++),
                           length = rand.range(randomizationOptions.dataLength/2, randomizationOptions.dataLength),
                           dataBytes = rand.bytes(Math.ceil(length/32)*4);
                     backend.setRawData(symbol, dataBytes, length);

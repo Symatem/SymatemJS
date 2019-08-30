@@ -1,4 +1,4 @@
-import Utils from './Utils.js';
+import {Utils, SymbolInternals} from '../SymatemJS.js';
 
 const queryMode = ['M', 'V', 'I'],
       queryMasks = {};
@@ -64,6 +64,38 @@ export default class BasicBackend {
     }
 
     /**
+     * Same as concatIntoSymbol but resolves the namespaceIdentity by name
+     * @param {String} namespaceName
+     * @param {Identity} identity
+     * @return {Symbol} symbol
+     */
+    static symbolInNamespace(namespaceName, identity) {
+        return SymbolInternals.concatIntoSymbol(SymbolInternals.identityOfSymbol(symbolByName[namespaceName]), identity);
+    }
+
+    /**
+     * Sorts an array of symbols in ascending order (the original is modified)
+     * @param {Symbol[]} symbols
+     */
+    static sortSymbolsArray(symbols) {
+        symbols.sort((a, b) => {
+            const namespaceIdDiff = SymbolInternals.namespaceOfSymbol(a)-SymbolInternals.namespaceOfSymbol(b);
+            return (namespaceIdDiff) ? namespaceIdDiff : SymbolInternals.identityOfSymbol(a)-SymbolInternals.identityOfSymbol(b);
+        });
+    }
+
+    /**
+     * Relocates a symbol into another namespace according to a lookup table
+     * @param {Symbol} symbol
+     * @param {RelocationTable} namespaces relocation table
+     * @return {Symbol} relocated symbol
+     */
+    static relocateSymbol(symbol, namespaces) {
+        const namespaceId = namespaces[SymbolInternals.namespaceOfSymbol(symbol)];
+        return (namespaceId) ? SymbolInternals.concatIntoSymbol(namespaceId, SymbolInternals.identityOfSymbol(symbol)) : symbol;
+    }
+
+    /**
      * Converts JS native data types to text
      * @param {Object} dataValue
      * @return {String} text
@@ -100,75 +132,6 @@ export default class BasicBackend {
             return parseInt(text);
         else if(text.toLowerCase() === 'nan')
             return NaN;
-    }
-
-    /**
-     * Validates if the input is a symbol
-     * @param {Symbol} symbol
-     * @return {Boolean}
-     */
-    static validateSymbol(symbol) {
-        return typeof symbol == 'string' && symbol.split(':').length == 2;
-    }
-
-    /**
-     * Extracts the namespaceIdentity of a symbol
-     * @param {Symbol} symbol
-     * @return {Identity} namespaceIdentity
-     */
-    static namespaceOfSymbol(symbol) {
-        return parseInt(symbol.split(':')[0]);
-    }
-
-    /**
-     * Extracts the identity of a symbol
-     * @param {Symbol} symbol
-     * @return {Identity} identity
-     */
-    static identityOfSymbol(symbol) {
-        return parseInt(symbol.split(':')[1]);
-    }
-
-    /**
-     * Concats namespaceIdentity and identity into a symbol
-     * @param {Identity} namespaceIdentity
-     * @param {Identity} identity
-     * @return {Symbol} symbol
-     */
-    static concatIntoSymbol(namespaceIdentity, identity) {
-        return [namespaceIdentity, identity].join(':');
-    }
-
-    /**
-     * Same as concatIntoSymbol but resolves the namespaceIdentity by name
-     * @param {String} namespaceName
-     * @param {Identity} identity
-     * @return {Symbol} symbol
-     */
-    static symbolInNamespace(namespaceName, identity) {
-        return BasicBackend.concatIntoSymbol(BasicBackend.identityOfSymbol(symbolByName[namespaceName]), identity);
-    }
-
-    /**
-     * Sorts an array of symbols in ascending order (the original is modified)
-     * @param {Symbol[]} symbols
-     */
-    static sortSymbolsArray(symbols) {
-        symbols.sort((a, b) => {
-            const namespaceIdDiff = BasicBackend.namespaceOfSymbol(a)-BasicBackend.namespaceOfSymbol(b);
-            return (namespaceIdDiff) ? namespaceIdDiff : BasicBackend.identityOfSymbol(a)-BasicBackend.identityOfSymbol(b);
-        });
-    }
-
-    /**
-     * Relocates a symbol into another namespace according to a lookup table
-     * @param {Symbol} symbol
-     * @param {RelocationTable} namespaces relocation table
-     * @return {Symbol} relocated symbol
-     */
-    static relocateSymbol(symbol, namespaces) {
-        const namespaceId = namespaces[BasicBackend.namespaceOfSymbol(symbol)];
-        return (namespaceId) ? BasicBackend.concatIntoSymbol(namespaceId, BasicBackend.identityOfSymbol(symbol)) : symbol;
     }
 
     /**
@@ -312,8 +275,8 @@ export default class BasicBackend {
      * @return {Identity} identity of the new namespace
      */
     registerAdditionalSymbols(namespaceName, symbolNames) {
-        const namespaceSymbol = this.createSymbol(BasicBackend.identityOfSymbol(BasicBackend.symbolByName.Namespaces)),
-              namespaceIdentity = BasicBackend.identityOfSymbol(namespaceSymbol);
+        const namespaceSymbol = this.createSymbol(SymbolInternals.identityOfSymbol(symbolByName.Namespaces)),
+              namespaceIdentity = SymbolInternals.identityOfSymbol(namespaceSymbol);
         symbolByName[namespaceName] = namespaceSymbol;
         this.setData(namespaceSymbol, namespaceName);
         for(const name of symbolNames) {
@@ -602,7 +565,7 @@ export default class BasicBackend {
                 this.setTriple(queryTriple, false);
             result.add(queryTriple[index]);
         }
-        if(this.constructor.validateSymbol(thirds)) {
+        if(SymbolInternals.validateSymbol(thirds)) {
             triple[index] = thirds;
             this.setTriple(triple, true);
         } else if(thirds)
@@ -649,12 +612,12 @@ export default class BasicBackend {
                 for(const tripleA of this.queryTriples(queryMasks.MVI, [symbol, 0, 0])) {
                     const values = [];
                     for(const tripleV of this.queryTriples(queryMasks.MMV, tripleA))
-                        values.push(tripleV[2]);
-                    attributes.push(tripleA[1]);
+                        values.push(SymbolInternals.symbolToString(tripleV[2]));
+                    attributes.push(SymbolInternals.symbolToString(tripleA[1]));
                     attributes.push(values);
                 }
                 entities.push([
-                    symbol,
+                    SymbolInternals.symbolToString(symbol),
                     this.getLength(symbol),
                     Utils.encodeAsHex( this.getRawData(symbol)),
                     attributes
@@ -672,17 +635,17 @@ export default class BasicBackend {
      */
     decodeJson(json) {
         const entities = new Set();
-        for(const entity of JSON.parse(json).symbols) {
-            const entitySymbol = entity[0];
-            entities.add(entitySymbol);
-            if(entity[1] > 0)
-                this.setRawData(entitySymbol, Utils.decodeAsHex(entity[2]));
-            this.setLength(entitySymbol, entity[1]);
-            const attributes = entity[3];
+        for(const entry of JSON.parse(json).symbols) {
+            const entity = SymbolInternals.symbolFromString(entry[0]);
+            entities.add(entity);
+            if(entry[1] > 0)
+                this.setRawData(entity, Utils.decodeAsHex(entry[2]));
+            this.setLength(entity, entry[1]);
+            const attributes = entry[3];
             for(let i = 0; i < attributes.length; i += 2) {
-                const attribute = attributes[i];
+                const attribute = SymbolInternals.symbolFromString(attributes[i]);
                 for(const value of attributes[i+1])
-                    this.setTriple([entitySymbol, attribute, value], true);
+                    this.setTriple([entity, attribute, SymbolInternals.symbolFromString(value)], true);
             }
         }
         return entities;
@@ -696,6 +659,6 @@ export default class BasicBackend {
             namespace = symbolByName[name];
             symbol = 0;
         }
-        symbolByName[name] = BasicBackend.concatIntoSymbol(namespace, symbol++);
+        symbolByName[name] = SymbolInternals.concatIntoSymbol(namespace, symbol++);
     }
 }

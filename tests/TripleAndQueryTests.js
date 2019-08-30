@@ -1,4 +1,4 @@
-import {BasicBackend} from '../SymatemJS.js';
+import {SymbolInternals, SymbolMap, BasicBackend} from '../SymatemJS.js';
 
 export function getTests(backend, rand) {
     let triplePool = new Set();
@@ -6,10 +6,18 @@ export function getTests(backend, rand) {
     for(let i = 0; i < 100; ++i)
         symbolPool.push(backend.createSymbol(4));
 
+    function tripleFromTag(tag) {
+        return tag.split(';').map(string => SymbolInternals.symbolFromString(string));
+    }
+
+    function tagFromTriple(triple) {
+        return triple.map(symbol => SymbolInternals.symbolToString(symbol)).join(';');
+    }
+
     return {
         'setTriple': [5000, () => {
             const triple = [rand.selectUniformly(symbolPool), rand.selectUniformly(symbolPool), rand.selectUniformly(symbolPool)],
-                  tripleTag = triple.toString(),
+                  tripleTag = tagFromTriple(triple),
                   tripleExists = triplePool.has(tripleTag),
                   linked = rand.selectUniformly([false, true]),
                   result = backend.setTriple(triple, linked);
@@ -30,7 +38,7 @@ export function getTests(backend, rand) {
                   iterator = backend.queryTriples(maskIndex, triple),
                   result = new Set(), expected = new Set();
             for(const tripleTag of triplePool) {
-                const tripleFromPool = tripleTag.split(',');
+                const tripleFromPool = tripleFromTag(tripleTag);
                 let select = true;
                 for(let j = 0; j < 3; ++j) {
                     if(mask[j] == 'I')
@@ -41,7 +49,7 @@ export function getTests(backend, rand) {
                     }
                 }
                 if(select)
-                    expected.add(tripleFromPool.toString());
+                    expected.add(tagFromTriple(tripleFromPool));
             }
             let noErrorsOccured = true;
             while(true) {
@@ -51,7 +59,7 @@ export function getTests(backend, rand) {
                         noErrorsOccured = false;
                     break;
                 }
-                const tripleTag = element.value.toString();
+                const tripleTag = tagFromTriple(element.value);
                 result.add(tripleTag);
                 if(!expected.has(tripleTag))
                     noErrorsOccured = false;
@@ -61,13 +69,13 @@ export function getTests(backend, rand) {
             return noErrorsOccured;
         }],
         'moveTriples': [1, () => {
-            const translationTable = {},
+            const translationTable = SymbolMap.create(),
                   dstSymbols = [],
                   srcSymbols = new Set(symbolPool);
             for(let i = 0; i < 5; ++i) {
                 const srcSymbol = rand.selectUniformly([...srcSymbols]),
                       dstSymbol = backend.createSymbol(4);
-                translationTable[srcSymbol] = dstSymbol;
+                SymbolMap.insert(translationTable, srcSymbol, dstSymbol);
                 srcSymbols.delete(srcSymbol);
                 dstSymbols.push(dstSymbol);
             }
@@ -78,21 +86,21 @@ export function getTests(backend, rand) {
                 symbolPool.push(dstSymbol);
             const renamedTriplePool = new Set();
             for(const tripleTag of triplePool) {
-                const triple = tripleTag.split(',');
+                const triple = tripleFromTag(tripleTag);
                 for(let i = 0; i < 3; ++i) {
-                    const srcSymbol = triple[i],
-                          dstSymbol = translationTable[srcSymbol];
+                    const srcSymbol = SymbolInternals.symbolFromString(triple[i]),
+                          dstSymbol = SymbolMap.get(translationTable, srcSymbol);
                     triple[i] = (dstSymbol) ? dstSymbol : srcSymbol;
                 }
-                renamedTriplePool.add(triple.toString());
+                renamedTriplePool.add(tagFromTriple(triple));
             }
             triplePool = renamedTriplePool;
             backend.moveTriples(translationTable);
             const expected = [...triplePool].sort(),
-                  result = [...backend.queryTriples(BasicBackend.queryMasks.VVV, [])].sort();
+                  result = [...backend.queryTriples(BasicBackend.queryMasks.VVV, [])].map(triple => tagFromTriple(triple)).sort();
             let noErrorsOccured = (expected.length == result.length) && backend.validateIntegrity();
             for(let i = 0; i < expected.length && noErrorsOccured; ++i)
-                if(expected[i] != result[i].toString())
+                if(expected[i] != result[i])
                     noErrorsOccured = false;
             if(!noErrorsOccured)
                 console.warn(result, expected);

@@ -1,6 +1,6 @@
-import {Utils, SymbolMap, BasicBackend} from '../SymatemJS.js';
+import {Utils, SymbolInternals, SymbolMap, BasicBackend} from '../SymatemJS.js';
 
-function getOrCreateEntry(dict, key, value={}) {
+function getOrCreateEntry(dict, key, value) {
     const entry = dict[key];
     return (entry) ? entry : (dict[key] = value);
 }
@@ -286,9 +286,9 @@ export default class Differential extends BasicBackend {
             return false;
         triple = triple.map(symbol => BasicBackend.relocateSymbol(symbol, this.recordingRelocation));
         const operationsOfSymbol = SymbolMap.getOrInsert(this.preCommitStructure, triple[0], {}),
-              betaCollection = getOrCreateEntry(operationsOfSymbol, 'tripleOperations'),
+              betaCollection = getOrCreateEntry(operationsOfSymbol, 'tripleOperations', SymbolMap.create()),
               gammaCollection = SymbolMap.getOrInsert(betaCollection, triple[1], SymbolMap.create()),
-              isLinked = gammaCollection[triple[2]];
+              isLinked = SymbolMap.get(gammaCollection, triple[2]);
         if(isLinked === link)
             return false;
         if(isLinked === undefined)
@@ -777,7 +777,35 @@ export default class Differential extends BasicBackend {
         for(const type of ['dataSource', 'dataRestore'])
             if(this.backend.getLength(this[type]) > 0)
                 exportStructure[type] = Utils.encodeAsHex(this.backend.getRawData(this[type]));
-        return JSON.stringify(exportStructure);
+        return JSON.stringify(this.postCommitStructure, (type, operations) => {
+            switch(type) {
+                case 'linkTripleOperations':
+                case 'unlinkTripleOperations':
+                    return operations.map(operation => {
+                        const result = Object.assign({}, operation);
+                        result.triple = operation.triple.map(symbol => SymbolInternals.symbolToString(symbol));
+                        return result;
+                    });
+                case 'releaseSymbols':
+                case 'manifestSymbols':
+                    return operations.map(symbol => SymbolInternals.symbolToString(symbol));
+                case 'decreaseLengthOperations':
+                case 'increaseLengthOperations':
+                case 'restoreDataOperations':
+                case 'replaceDataOperations':
+                case 'minimumLengths':
+                    return operations.map(operation => {
+                        const result = Object.assign({}, operation);
+                        if(operation.srcSymbol)
+                            result.srcSymbol = SymbolInternals.symbolToString(operation.srcSymbol);
+                        if(operation.dstSymbol)
+                            result.dstSymbol = SymbolInternals.symbolToString(operation.dstSymbol);
+                        return result;
+                    });
+                default:
+                    return operations;
+            }
+        });
     }
 
     /**
@@ -786,11 +814,35 @@ export default class Differential extends BasicBackend {
      */
     decodeJson(json) {
         console.assert(!this.postCommitStructure);
-        this.postCommitStructure = JSON.parse(json);
-        for(const type of ['dataSource', 'dataRestore'])
-            if(this.postCommitStructure[type]) {
-                this.backend.setRawData(this[type], Utils.decodeAsHex(this.postCommitStructure[type]));
-                delete this.postCommitStructure[type];
+        this.postCommitStructure = JSON.parse(json, (type, operations) => {
+            switch(type) {
+                case 'dataSource':
+                case 'dataRestore':
+                    this.backend.setRawData(this[type], Utils.decodeAsHex(operations));
+                    return;
+                case 'linkTripleOperations':
+                case 'unlinkTripleOperations':
+                    for(const operation of operations)
+                        operation.triple = operation.triple.map(symbol => SymbolInternals.symbolFromString(symbol));
+                    return operations;
+                case 'manifestSymbols':
+                case 'releaseSymbols':
+                    return operations.map(string => SymbolInternals.symbolFromString(string));
+                case 'decreaseLengthOperations':
+                case 'increaseLengthOperations':
+                case 'restoreDataOperations':
+                case 'replaceDataOperations':
+                case 'minimumLengths':
+                    for(const operation of operations) {
+                        if(operation.srcSymbol)
+                            operation.srcSymbol = SymbolInternals.symbolFromString(operation.srcSymbol);
+                        if(operation.dstSymbol)
+                            operation.dstSymbol = SymbolInternals.symbolFromString(operation.dstSymbol);
+                    }
+                    return operations;
+                default:
+                    return operations;
             }
+        });
     }
 }

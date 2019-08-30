@@ -1,11 +1,11 @@
-import Utils from './src/Utils.js';
-import {IdentityPool, SymbolMap} from './src/Collections.js';
+import {Utils, IdentityPool} from './src/Utils.js';
+import {SymbolInternals, SymbolMap} from './src/Symbol.js';
 import BasicBackend from './src/BasicBackend.js';
 import NativeBackend from './src/NativeBackend.js';
 import Differential from './src/Differential.js';
 import Repository from './src/Repository.js';
 
-export {Utils, IdentityPool, SymbolMap, BasicBackend, NativeBackend, Differential, Repository};
+export {Utils, SymbolInternals, IdentityPool, SymbolMap, BasicBackend, NativeBackend, Differential, Repository};
 
 /**
  * @typedef {Number} Identity
