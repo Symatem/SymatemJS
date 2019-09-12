@@ -19,6 +19,7 @@ export default class Differential extends BasicBackend {
         this.backend = backend;
         this.isRecordingFromBackend = true;
         this.recordingRelocation = recordingRelocation;
+        this.nextTrackingId = 0;
         this.preCommitStructure = SymbolMap.create();
         this.dataSource = this.backend.createSymbol(repositoryNamespace);
         this.dataRestore = this.backend.createSymbol(repositoryNamespace);
@@ -93,6 +94,7 @@ export default class Differential extends BasicBackend {
             const endLength = operationEndOffset-intermediateEndOffset;
             if(operation[mode+'Offset'] < intermediateOffset && intermediateEndOffset < operationEndOffset) {
                 const secondPart = {
+                    'trackingId': this.nextTrackingId++,
                     'dstSymbol': operation.dstSymbol,
                     'srcSymbol': operation.srcSymbol,
                     'length': endLength,
@@ -146,10 +148,11 @@ export default class Differential extends BasicBackend {
             const firstOperation = operations[operationIndex-1];
             if(secondOperation[mode+'Offset'] == intermediateOffset &&
                firstOperation[mode+'Offset']+firstOperation.length == secondOperation[mode+'Offset'] &&
-               firstOperation[complementaryMode+'Symbol'] == secondOperation[complementaryMode+'Symbol'] &&
+               SymbolInternals.areSymbolsEqual(firstOperation[complementaryMode+'Symbol'], secondOperation[complementaryMode+'Symbol']) &&
                firstOperation[complementaryMode+'Offset']+firstOperation.length == secondOperation[complementaryMode+'Offset'] &&
-               firstOperation.srcSymbol == secondOperation.srcSymbol) {
+               SymbolInternals.areSymbolsEqual(firstOperation.srcSymbol, secondOperation.srcSymbol)) {
                 firstOperation.length += secondOperation.length;
+                firstOperation.trackingId = Math.min(firstOperation.trackingId, secondOperation.trackingId);
                 this.removeCopyReplaceOperation(mode, secondOperation, undefined, operations, operationIndex--);
                 this.removeCopyReplaceOperation(complementaryMode, secondOperation, undefined);
                 return true;
@@ -183,6 +186,7 @@ export default class Differential extends BasicBackend {
             this.backend.creaseLength(this.dataRestore, dstOffset, length);
             this.backend.writeData(this.dataRestore, dstOffset, length, this.backend.readData(srcSymbolRecording, intermediateOffset-decreaseAccumulator, length));
             const operation = {
+                'trackingId': this.nextTrackingId++,
                 'dstSymbol': this.dataRestore,
                 'dstOffset': dstOffset,
                 'srcSymbol': srcSymbolModal,
@@ -203,9 +207,9 @@ export default class Differential extends BasicBackend {
             if(operationsOfDataRestore)
                 for(replaceOperationIndex = Math.max(0, replaceOperationIndex-1); length > 0 && replaceOperationIndex < operationsOfDataRestore.replaceOperations.length; ++replaceOperationIndex) {
                     const operation = operationsOfDataRestore.replaceOperations[replaceOperationIndex];
-                    if(operation.srcSymbol < srcSymbolModal || (operation.srcSymbol == srcSymbolModal && operation.srcOffset+operation.length <= intermediateOffset))
+                    if(SymbolInternals.compareSymbols(operation.srcSymbol, srcSymbolModal) < 0 || (SymbolInternals.areSymbolsEqual(operation.srcSymbol, srcSymbolModal) && operation.srcOffset+operation.length <= intermediateOffset))
                         continue;
-                    if(srcSymbolModal < operation.srcSymbol || intermediateOffset+length <= operation.srcOffset)
+                    if(SymbolInternals.compareSymbols(operation.srcSymbol, srcSymbolModal) > 0 || intermediateOffset+length <= operation.srcOffset)
                         break;
                     const sliceLength = operation.srcOffset-intermediateOffset;
                     addSlice(sliceLength);
@@ -323,7 +327,8 @@ export default class Differential extends BasicBackend {
         const operationsOfSymbol = SymbolMap.getOrInsert(this.preCommitStructure, dstSymbolModal, {}),
               creaseLengthOperations = getOrCreateEntry(operationsOfSymbol, 'creaseLengthOperations', []),
               dirtySymbols = new Set();
-        let operationAtIntermediateOffset,
+        let trackingId,
+            operationAtIntermediateOffset,
             [intermediateOffset, operationIndex] = this.constructor.getIntermediateOffset(creaseLengthOperations, dstOffset);
         if(operationIndex > 0) {
             operationAtIntermediateOffset = creaseLengthOperations[operationIndex-1];
@@ -350,6 +355,7 @@ export default class Differential extends BasicBackend {
                     increaseAccumulator += operation.length;
                     increaseLengthOperations.push(operation);
                 }
+                trackingId = operation.trackingId;
                 ++creaseLengthOperationsToDelete;
             }
             if(this.isRecordingFromBackend)
@@ -376,6 +382,7 @@ export default class Differential extends BasicBackend {
                     if(copyOperation.srcOffset < srcOffset) {
                         const endLength = copyOperation.srcOffset+copyOperation.length-srcOffset,
                               secondPart = {
+                            'trackingId': this.nextTrackingId++,
                             'dstSymbol': copyOperation.dstSymbol,
                             'srcSymbol': copyOperation.srcSymbol,
                             'length': endLength,
@@ -424,6 +431,7 @@ export default class Differential extends BasicBackend {
         }
         if(length != 0)
             creaseLengthOperations.splice(operationIndex, 0, {
+                'trackingId': (trackingId != undefined) ? trackingId : this.nextTrackingId++,
                 'dstSymbol': dstSymbolModal,
                 'dstOffset': intermediateOffset,
                 'length': length
@@ -463,6 +471,7 @@ export default class Differential extends BasicBackend {
             }
             if(context.dstSymbol != srcSymbol || context.dstIntermediateOffset != srcOffset)
                 addCopyReplaceOperations.push({
+                    'trackingId': this.nextTrackingId++,
                     'dstSymbol': context.dstSymbol,
                     'dstOffset': context.dstIntermediateOffset,
                     'srcSymbol': srcSymbol,
@@ -519,7 +528,7 @@ export default class Differential extends BasicBackend {
         }, skipSrcDecreaseOperations = skipDecreaseOperations.bind(this, 'src', backTrackSrc),
            skipDstDecreaseOperations = skipDecreaseOperations.bind(this, 'dst', skipSrcDecreaseOperations);
         for(const operation of replaceOperations) {
-            if(operation.length <= 0 || (operation.dstSymbol == operation.srcSymbol && operation.dstOffset == operation.srcOffset))
+            if(operation.length <= 0 || (SymbolInternals.areSymbolsEqual(operation.dstSymbol, operation.srcSymbol) && operation.dstOffset == operation.srcOffset))
                 continue;
             for(const mode of ['dst', 'src']) {
                 context[mode+'Symbol'] = BasicBackend.relocateSymbol(operation[mode+'Symbol'], this.recordingRelocation);
@@ -591,7 +600,7 @@ export default class Differential extends BasicBackend {
                 console.warn(`Empty entry preCommitStructure['${symbol}']`);
                 return false;
             }
-            if(symbol != this.dataSource && symbol != this.dataRestore)
+            if(!SymbolInternals.areSymbolsEqual(symbol, this.dataSource) && !SymbolInternals.areSymbolsEqual(symbol, this.dataRestore))
                 for(const type of ['copyOperations', 'replaceOperations', 'creaseLengthOperations'])
                     if(operationsOfSymbol[type] && operationsOfSymbol[type].length == 0) {
                         console.warn(`Empty entry preCommitStructure['${symbol}']['${type}']`);
@@ -659,7 +668,7 @@ export default class Differential extends BasicBackend {
             'minimumLengths': []
         };
         for(const [symbol, operationsOfSymbol] of SymbolMap.entries(this.preCommitStructure)) {
-            if(symbol == this.dataSource || symbol == this.dataRestore)
+            if(SymbolInternals.areSymbolsEqual(symbol, this.dataSource) || SymbolInternals.areSymbolsEqual(symbol, this.dataRestore))
                 continue;
             if(operationsOfSymbol.manifestOrRelease)
                 this.postCommitStructure[(operationsOfSymbol.manifestOrRelease == 'manifest') ? 'manifestSymbols' : 'releaseSymbols'].push(symbol);
@@ -693,7 +702,7 @@ export default class Differential extends BasicBackend {
             }
             if(operationsOfSymbol.copyOperations) {
                 this.postCommitStructure.restoreDataOperations.splice(this.postCommitStructure.restoreDataOperations.length-1, 0,
-                    ...operationsOfSymbol.copyOperations.filter(operation => operation.dstSymbol == this.dataRestore));
+                    ...operationsOfSymbol.copyOperations.filter(operation => SymbolInternals.areSymbolsEqual(operation.dstSymbol, this.dataRestore)));
                 maximizeMinimumLength(operationsOfSymbol.copyOperations, 'srcOffset', 1);
             }
             this.postCommitStructure.minimumLengths.push({'srcSymbol': symbol, 'forwardLength': minimumLengths[0], 'reverseLength': minimumLengths[1]});
@@ -701,9 +710,9 @@ export default class Differential extends BasicBackend {
         delete this.preCommitStructure;
         for(const type of ['replaceDataOperations', 'restoreDataOperations'])
             for(const operation of this.postCommitStructure[type]) {
-                if(operation.srcSymbol == this.dataSource)
+                if(SymbolInternals.areSymbolsEqual(operation.srcSymbol, this.dataSource))
                     delete operation.srcSymbol;
-                if(operation.dstSymbol == this.dataRestore)
+                if(SymbolInternals.areSymbolsEqual(operation.dstSymbol, this.dataRestore))
                     delete operation.dstSymbol;
             }
         for(const key in this.postCommitStructure)

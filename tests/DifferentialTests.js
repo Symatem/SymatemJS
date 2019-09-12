@@ -141,11 +141,11 @@ export function getTests(backend, rand) {
             }
             const resultOfDifferential = stringifyCheckout(backend);
             if(resultOfNothing != resultOfRevert) {
-                console.warn(resultOfNothing, resultOfRevert);
+                console.warn('Reverse failed', resultOfNothing, resultOfRevert);
                 return false;
             }
             if(resultOfJournal != resultOfDifferential) {
-                console.warn(resultOfJournal, resultOfDifferential);
+                console.warn('Forward failed', resultOfJournal, resultOfDifferential);
                 return false;
             }
             return true;

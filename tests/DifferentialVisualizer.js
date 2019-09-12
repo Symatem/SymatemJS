@@ -1,4 +1,4 @@
-import {BasicBackend, NativeBackend, Differential} from '../SymatemJS.js';
+import {SymbolInternals, SymbolMap, NativeBackend, Differential} from '../SymatemJS.js';
 
 export function createElement(tag, parentNode) {
     const svgElement = document.createElementNS('http://www.w3.org/2000/svg', tag);
@@ -88,21 +88,21 @@ export function createTag(tagsByName, name, parent) {
     return tagElement;
 }
 
-export function createSlice(diff, symbolSlot, type, second, sliceGroups, operation) {
-    operation.id, operation.srcOffset, operation.length
+export function createSlice(diff, symbolSlot, type, animationSlot, sliceGroups, operation) {
+    operation.trackingId, operation.srcOffset, operation.length
     const sliceElements = symbolSlot[type];
-    let sliceElement = sliceElements[operation.id], rect, leftLabel, rightLabel;
+    let sliceElement = sliceElements[operation.trackingId], rect, leftLabel, rightLabel;
     if(sliceElement) {
         rect = sliceElement.childNodes[0];
         leftLabel = sliceElement.childNodes[1];
         rightLabel = sliceElement.childNodes[2];
     } else {
-        sliceElements[operation.id] = sliceElement = createElement('g', symbolSlot);
-        let sliceGroup = sliceGroups[operation.id];
+        sliceElements[operation.trackingId] = sliceElement = createElement('g', symbolSlot);
+        let sliceGroup = sliceGroups[operation.trackingId];
         if(!sliceGroup)
-            sliceGroup = sliceGroups[operation.id] = [];
+            sliceGroup = sliceGroups[operation.trackingId] = [];
         sliceGroup.push(sliceElement);
-        if(second)
+        if(animationSlot)
             sliceElement.classList.add('fadeIn');
         sliceElement.onmouseover = () => {
             for(const sliceElement of sliceGroup) {
@@ -126,7 +126,7 @@ export function createSlice(diff, symbolSlot, type, second, sliceGroups, operati
     let color;
     switch(type) {
         case 'copyOperations':
-            color = (SymbolInternals.namespaceOfSymbol(operation.dstSymbol) != diff.repositoryNamespace) ? '#DDF' : '#FDD';
+            color = SymbolInternals.areSymbolsEqual(operation.dstSymbol, diff.dataRestore) ? '#FDD' : '#DDF';
             break;
         case 'creaseLengthOperations':
             color = (operation.length < 0) ? '#F88' : '#8F8';
@@ -137,7 +137,7 @@ export function createSlice(diff, symbolSlot, type, second, sliceGroups, operati
     }
     const offsetX = (type == 'copyOperations') ? operation.srcOffset : operation.dstOffset,
           length = Math.abs(operation.length);
-    sliceElement.second = second;
+    sliceElement.animationSlot = animationSlot;
     sliceElement.setAttribute('style', `transform: translate(${offsetX*blockSize}px, ${symbolSlot.height*lineHeight}px);`);
     rect.setAttribute('fill', color);
     rect.setAttribute('width', length*blockSize);
@@ -147,24 +147,23 @@ export function createSlice(diff, symbolSlot, type, second, sliceGroups, operati
     return sliceElement;
 }
 
-export function visualizeDifferential(diff, symbolSlots, second) {
+export function visualizeDifferential(diff, symbolSlots, animationSlot) {
     const symbolTags = {}, sliceGroups = {};
     function getSymbolSlot(symbol) {
-        let symbolSlot = symbolSlots[symbol];
+        let symbolSlot = SymbolMap.get(symbolSlots, symbol);
         if(!symbolSlot) {
             symbolSlot = createElement('g', svgRoot);
-            if(second)
+            if(animationSlot)
                 symbolSlot.classList.add('fadeIn');
             symbolSlot.tripleElements = [];
-            symbolSlots[symbol] = symbolSlot;
+            SymbolMap.insert(symbolSlots, symbol, symbolSlot);
             createTag(symbolTags, symbol, symbolSlot);
         }
         return symbolSlot;
     }
-    for(const symbol in diff.preCommitStructure) {
-        const operationsOfSymbol = diff.preCommitStructure[symbol],
-              symbolSlot = getSymbolSlot(symbol);
-        symbolSlot.second = second;
+    for(const [symbol, operationsOfSymbol] of SymbolMap.entries(diff.preCommitStructure)) {
+        const symbolSlot = getSymbolSlot(symbol);
+        symbolSlot.animationSlot = animationSlot;
         const colorByType = {'manifest': '#8F8', 'release': '#F88', 'undefined': '#CCC'};
         symbolSlot.childNodes[0].childNodes[0].setAttribute('fill', colorByType[operationsOfSymbol.manifestOrRelease]);
         symbolSlot.height = 1;
@@ -173,7 +172,7 @@ export function visualizeDifferential(diff, symbolSlots, second) {
                 if(!symbolSlot[type])
                     symbolSlot[type] = [];
                 for(const operation of operationsOfSymbol[type]) {
-                    createSlice(diff, symbolSlot, type, second, sliceGroups, operation);
+                    createSlice(diff, symbolSlot, type, animationSlot, sliceGroups, operation);
                     if(type == 'copyOperations')
                         symbolSlot.height += 1;
                 }
@@ -182,12 +181,14 @@ export function visualizeDifferential(diff, symbolSlots, second) {
             }
         const triple = [symbol];
         if(operationsOfSymbol.tripleOperations)
-            for(triple[1] in operationsOfSymbol.tripleOperations)
-                for(triple[2] in operationsOfSymbol.tripleOperations[triple[1]]) {
-                    let tripleElement = symbolSlot.tripleElements[triple.join(',')];
+            for(const [beta, gammaCollection] of SymbolMap.entries(operationsOfSymbol.tripleOperations)) {
+                triple[1] = beta;
+                for(const [gamma, link] of SymbolMap.entries(gammaCollection)) {
+                    triple[2] = gamma;
+                    let tripleElement = symbolSlot.tripleElements[triple.join(';')];
                     if(!tripleElement) {
-                        symbolSlot.tripleElements[triple.join(',')] = tripleElement = createElement('g', symbolSlot);
-                        if(second)
+                        symbolSlot.tripleElements[triple.join(';')] = tripleElement = createElement('g', symbolSlot);
+                        if(animationSlot)
                             tripleElement.classList.add('fadeIn');
                         const line = createElement('rect', tripleElement);
                         line.setAttribute('width', blockSize*16);
@@ -195,25 +196,25 @@ export function visualizeDifferential(diff, symbolSlots, second) {
                         line.setAttribute('y', blockSize*0.25);
                         line.setAttribute('rx', blockSize*0.25);
                         line.setAttribute('ry', blockSize*0.25);
-                        line.setAttribute('fill', (operationsOfSymbol.tripleOperations[triple[1]][triple[2]]) ? '#8F8' : '#F88');
+                        line.setAttribute('fill', link ? '#8F8' : '#F88');
                         for(let i = 0; i < 3; ++i) {
                             const symbolTag = createTag(symbolTags, triple[i], tripleElement);
                             symbolTag.setAttribute('style', `transform: translate(${(i*5+1)*blockSize}px, 0px);`);
                         }
                     }
-                    tripleElement.second = second;
+                    tripleElement.animationSlot = animationSlot;
                     tripleElement.setAttribute('style', `transform: translate(0px, ${symbolSlot.height*lineHeight}px);`);
                     symbolSlot.height += 1;
                 }
+            }
     }
     let offsetY = 0;
     const sortedSymbols = [];
-    for(let symbol in symbolSlots) {
-        const symbolSlot = symbolSlots[symbol];
-        if(symbolSlot.second == second) {
+    for(const [symbol, symbolSlot] of SymbolMap.entries(symbolSlots)) {
+        if(symbolSlot.animationSlot == animationSlot) {
             for(let i = symbolSlot.childNodes.length-1; i > 0; --i) {
                 const childNode = symbolSlot.childNodes[i];
-                if(childNode.second != second) {
+                if(childNode.animationSlot != animationSlot) {
                     childNode.classList.remove('fadeIn');
                     childNode.classList.add('fadeOut');
                 }
@@ -224,9 +225,9 @@ export function visualizeDifferential(diff, symbolSlots, second) {
             symbolSlot.classList.add('fadeOut');
         }
     }
-    BasicBackend.sortSymbolsArray(sortedSymbols);
+    sortedSymbols.sort(SymbolInternals.compareSymbols);
     for(const symbol of sortedSymbols) {
-        const symbolSlot = symbolSlots[symbol];
+        const symbolSlot = SymbolMap.get(symbolSlots, symbol);
         symbolSlot.setAttribute('style', `transform: translate(0px, ${offsetY*lineHeight}px);`);
         offsetY += symbolSlot.height+1;
     }

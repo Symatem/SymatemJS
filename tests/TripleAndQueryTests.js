@@ -32,24 +32,24 @@ export function getTests(backend, rand) {
             return true;
         }],
         'queryTriples': [100, () => {
-            const triple = [rand.selectUniformly(symbolPool), rand.selectUniformly(symbolPool), rand.selectUniformly(symbolPool)],
+            const queryTriple = [rand.selectUniformly(symbolPool), rand.selectUniformly(symbolPool), rand.selectUniformly(symbolPool)],
                   maskIndex = rand.range(0, 27),
                   mask = maskByIndex[maskIndex],
-                  iterator = backend.queryTriples(maskIndex, triple),
+                  iterator = backend.queryTriples(maskIndex, queryTriple),
                   result = new Set(), expected = new Set();
             for(const tripleTag of triplePool) {
-                const tripleFromPool = tripleFromTag(tripleTag);
+                const triple = tripleFromTag(tripleTag);
                 let select = true;
                 for(let j = 0; j < 3; ++j) {
                     if(mask[j] == 'I')
-                        tripleFromPool[j] = triple[j];
-                    else if(mask[j] == 'M' && tripleFromPool[j] != triple[j]) {
+                        triple[j] = queryTriple[j];
+                    else if(mask[j] == 'M' && !SymbolInternals.areSymbolsEqual(triple[j], queryTriple[j])) {
                         select = false;
                         break;
                     }
                 }
                 if(select)
-                    expected.add(tagFromTriple(tripleFromPool));
+                    expected.add(tagFromTriple(triple));
             }
             let noErrorsOccured = true;
             while(true) {
@@ -65,7 +65,11 @@ export function getTests(backend, rand) {
                     noErrorsOccured = false;
             }
             if(!noErrorsOccured)
-                console.warn(triple, mask, [...triplePool].sort(), [...backend.queryTriples(BasicBackend.queryMasks.VVV, triple)].sort(), [...result].sort(), [...expected].sort());
+                console.warn(
+                    queryTriple, mask,
+                    [...triplePool].sort(), [...backend.queryTriples(BasicBackend.queryMasks.VVV, queryTriple)].map(triple => tagFromTriple(triple)).sort(),
+                    [...result].sort(), [...expected].sort()
+                );
             return noErrorsOccured;
         }],
         'moveTriples': [1, () => {
@@ -88,7 +92,7 @@ export function getTests(backend, rand) {
             for(const tripleTag of triplePool) {
                 const triple = tripleFromTag(tripleTag);
                 for(let i = 0; i < 3; ++i) {
-                    const srcSymbol = SymbolInternals.symbolFromString(triple[i]),
+                    const srcSymbol = triple[i],
                           dstSymbol = SymbolMap.get(translationTable, srcSymbol);
                     triple[i] = (dstSymbol) ? dstSymbol : srcSymbol;
                 }

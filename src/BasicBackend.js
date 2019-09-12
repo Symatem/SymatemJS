@@ -74,17 +74,6 @@ export default class BasicBackend {
     }
 
     /**
-     * Sorts an array of symbols in ascending order (the original is modified)
-     * @param {Symbol[]} symbols
-     */
-    static sortSymbolsArray(symbols) {
-        symbols.sort((a, b) => {
-            const namespaceIdDiff = SymbolInternals.namespaceOfSymbol(a)-SymbolInternals.namespaceOfSymbol(b);
-            return (namespaceIdDiff) ? namespaceIdDiff : SymbolInternals.identityOfSymbol(a)-SymbolInternals.identityOfSymbol(b);
-        });
-    }
-
-    /**
      * Relocates a symbol into another namespace according to a lookup table
      * @param {Symbol} symbol
      * @param {RelocationTable} namespaces relocation table

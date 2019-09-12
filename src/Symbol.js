@@ -56,6 +56,29 @@ export class SymbolInternals {
     static concatIntoSymbol(namespaceIdentity, identity) {
         return [namespaceIdentity, identity].join(':');
     }
+
+    /**
+     * Compares two symbols for equivalence
+     * @param {Symbol} symbolA
+     * @param {Symbol} symbolB
+     * @return {Boolean} equal
+     */
+    static areSymbolsEqual(symbolA, symbolB) {
+        return symbolA == symbolB;
+    }
+
+    /**
+     * Compares two symbols
+     * @param {Symbol} symbolA
+     * @param {Symbol} symbolB
+     * @return {Number} result (negative: a < b, neutral: a == b, positive: a > b)
+     */
+    static compareSymbols(symbolA, symbolB) {
+        const splitA = symbolA.split(':'),
+              splitB = symbolB.split(':');
+        const namespaceIdDiff = splitA[0]-splitB[0];
+        return (namespaceIdDiff) ? namespaceIdDiff : splitA[1]-splitB[1];
+    }
 };
 
 /**

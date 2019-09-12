@@ -5,7 +5,7 @@
         <title>Differential Fuzzy Test Visualizer</title>
         <script type='module'>
             import PRNG from './PRNG.js';
-            import {BasicBackend, Differential} from '../SymatemJS.js';
+            import {SymbolInternals, SymbolMap, BasicBackend, Differential} from '../SymatemJS.js';
             import {backend, svgRoot, createElement, visualizeDifferential} from './DifferentialVisualizer.js';
             import {repositoryNamespace, checkoutNamespace, randomizationOptions, stringifyCheckout, generateJournal} from './DifferentialTests.js';
 
@@ -13,8 +13,7 @@
                 console.log(`${name}:%c ${(value) ? 'suceeded' : 'failed'}`, `color: ${(value) ? '#4A4' : '#A44'};`);
             }
 
-            const diffs = [{'repositoryNamespace': repositoryNamespace, 'preCommitStructure': {}, 'description': 'Initial'}],
-                  symbolPool = [];
+            const symbolPool = [];
             let rand;
             function fillCheckout() {
                 rand = new PRNG(seed.value);
@@ -34,6 +33,34 @@
                 }
             }
 
+            const diff = new Differential(backend, {}, repositoryNamespace),
+                  diffSnapshots = [{'preCommitStructure': SymbolMap.create(), 'description': 'Initial'}];
+            function makeDiffSnapshot(description) {
+                const diffSnapshot = {
+                    'description': description,
+                    'dataSource': diff.dataSource,
+                    'dataRestore': diff.dataRestore,
+                    'preCommitStructure': SymbolMap.create()
+                };
+                for(const [symbol, operationsOfSymbol] of SymbolMap.entries(diff.preCommitStructure)) {
+                    const operationsOfSymbolCopy = Object.assign({}, operationsOfSymbol);
+                    for(const type of ['copyOperations', 'replaceOperations', 'creaseLengthOperations'])
+                        if(operationsOfSymbol[type])
+                            operationsOfSymbolCopy[type] = operationsOfSymbol[type].map(operation => Object.assign({}, operation));
+                    if(operationsOfSymbol.tripleOperations) {
+                        operationsOfSymbolCopy.tripleOperations = SymbolMap.create();
+                        for(const [beta, gammaCollection] of SymbolMap.entries(operationsOfSymbol.tripleOperations)) {
+                            const gammaCollectionCopy = SymbolMap.create();
+                            SymbolMap.insert(operationsOfSymbolCopy.tripleOperations, beta, gammaCollectionCopy);
+                            for(const [gamma, link] of SymbolMap.entries(gammaCollection))
+                                SymbolMap.insert(gammaCollectionCopy, gamma, link);
+                        }
+                    }
+                    SymbolMap.insert(diffSnapshot.preCommitStructure, symbol, operationsOfSymbolCopy);
+                }
+                diffSnapshots.push(diffSnapshot);
+            }
+
             const seed = document.getElementById('seed');
             seed.value = Math.floor(Math.random()*(0x80000000-1));
             seed.onblur = () => {
@@ -43,24 +70,21 @@
                 console.time('fillCheckout()');
                 fillCheckout();
                 console.timeEnd('fillCheckout()');
-                const diff = new Differential(backend, {}, repositoryNamespace);
                 console.time('journalToDifferential()');
                 generateJournal(backend, rand, (description, method, args) => {
                     console.log(description);
-                    diff.description = description;
                     diff[method](...args);
-                    diffs.push(JSON.parse(JSON.stringify(diff)));
+                    makeDiffSnapshot(description);
                 });
-                diff.description = 'Compress';
                 diff.compressData();
-                diffs.push(JSON.parse(JSON.stringify(diff)));
+                makeDiffSnapshot('Compress');
                 console.timeEnd('journalToDifferential()');
 
                 const diffSelect = document.getElementById('diffSelect');
-                let prevDiff = diffs[0];
+                let prevDiff = diffSnapshots[0];
                 diffSelect.oninput = () => {
-                    const nextDiff = diffs[diffSelect.value],
-                          symbolSlots = {};
+                    const nextDiff = diffSnapshots[diffSelect.value],
+                          symbolSlots = SymbolMap.create();
                     while(svgRoot.childNodes.length > 0)
                         svgRoot.removeChild(svgRoot.childNodes[0]);
                     document.getElementById('description').textContent = nextDiff.description;
@@ -70,7 +94,7 @@
                     }, 0);
                     prevDiff = nextDiff;
                 };
-                diffSelect.setAttribute('max', diffs.length-1);
+                diffSelect.setAttribute('max', diffSnapshots.length-1);
                 diffSelect.oninput();
 
                 const validIntegrity = diff.validateIntegrity();
