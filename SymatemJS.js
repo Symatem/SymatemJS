@@ -1,5 +1,5 @@
 import {Utils, IdentityPool} from './src/Utils.js';
-import {SymbolInternals, SymbolMap} from './src/Symbol.js';
+import {SymbolInternalsColonString as SymbolInternals, SymbolMapString as SymbolMap} from './src/Symbol.js';
 import BasicBackend from './src/BasicBackend.js';
 import NativeBackend from './src/NativeBackend.js';
 import Differential from './src/Differential.js';

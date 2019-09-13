@@ -195,52 +195,56 @@ export class Utils {
 };
 
 export class IdentityPool {
+    static create() {
+        return [{'begin': 0}];
+    }
+
     static insert(collection, identity) {
-        const indexOfRange = Utils.bisect(collection.length, (index) => (collection[index].start <= identity));
-        const prevRange = collection[indexOfRange-1],
-              nextRange = collection[indexOfRange];
-        if(prevRange && (indexOfRange == collection.length || identity < prevRange.start+prevRange.count))
+        const rangeIndex = Utils.bisect(collection.length, (index) => (collection[index].begin <= identity)),
+              prevRange = collection[rangeIndex-1],
+              nextRange = collection[rangeIndex];
+        if(prevRange && (rangeIndex == collection.length || identity < prevRange.begin+prevRange.length))
             return false;
-        const mergePrevRange = (prevRange && prevRange.start+prevRange.count == identity),
-              mergePostRange = (nextRange && identity+1 == nextRange.start);
-        if(mergePrevRange && mergePostRange) {
-            nextRange.start = prevRange.start;
-            if(nextRange.count)
-                nextRange.count += 1+prevRange.count;
-            collection.splice(indexOfRange-1, 1);
+        const mergePrevRange = (prevRange && prevRange.begin+prevRange.length == identity),
+              mergeNextRange = (nextRange && identity+1 == nextRange.begin);
+        if(mergePrevRange && mergeNextRange) {
+            nextRange.begin = prevRange.begin;
+            if(rangeIndex+1 < collection.length)
+                nextRange.length += 1+prevRange.length;
+            collection.splice(rangeIndex-1, 1);
         } else if(mergePrevRange) {
-            ++prevRange.count;
-        } else if(mergePostRange) {
-            --nextRange.start;
-            if(nextRange.count)
-                ++nextRange.count;
+            ++prevRange.length;
+        } else if(mergeNextRange) {
+            --nextRange.begin;
+            if(nextRange.length)
+                ++nextRange.length;
         } else
-            collection.splice(indexOfRange, 0, {'start': identity, 'count': 1});
+            collection.splice(rangeIndex, 0, {'begin': identity, 'length': 1});
         return true;
     }
 
     static remove(collection, identity) {
-        const indexOfRange = Utils.bisect(collection.length, (index) => (collection[index].start <= identity));
-        const range = collection[indexOfRange-1];
-        if(!range || identity >= range.start+range.count)
+        const rangeIndex = Utils.bisect(collection.length, (index) => (collection[index].begin <= identity)),
+              range = collection[rangeIndex-1];
+        if(!range || identity >= range.begin+range.length)
             return false;
-        if(identity == range.start) {
-            ++range.start;
-            if(range.count && --range.count == 0)
-                collection.splice(indexOfRange-1, 1);
-        } else if(identity == range.start+range.count-1)
-            --range.count;
-        else {
-            const count = identity-range.start;
-            collection.splice(indexOfRange-1, 0, {'start': range.start, 'count': count});
-            range.start = identity+1;
-            if(range.count)
-                range.count -= 1+count;
+        if(identity == range.begin) {
+            ++range.begin;
+            if(rangeIndex < collection.length && --range.length == 0)
+                collection.splice(rangeIndex-1, 1);
+        } else if(rangeIndex < collection.length && identity == range.begin+range.length-1) {
+            --range.length;
+        } else {
+            const count = identity-range.begin;
+            collection.splice(rangeIndex-1, 0, {'begin': range.begin, 'length': count});
+            range.begin = identity+1;
+            if(range.length)
+                range.length -= 1+count;
         }
         return true;
     }
 
     static get(collection) {
-        return collection[0].start;
+        return collection[0].begin;
     }
 };

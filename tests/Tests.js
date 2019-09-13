@@ -12,18 +12,22 @@ const testBundles = [
 import { NativeBackend } from '../SymatemJS.js';
 import PRNG from './PRNG.js';
 function runAll(seed) {
-    const backend = new NativeBackend(),
-          rand = new PRNG(seed || Math.floor(Math.random()*(0x80000000-1))),
-          tests = {};
-    for(let testBundle of testBundles)
-        Object.assign(tests, testBundle(backend, rand));
-    console.log(rand.state);
-    for(const testName in tests) {
-        console.time(testName);
-        for(let i = 0; i < tests[testName][0]; ++i)
-            if(!tests[testName][1]())
-                throw new Error('Test case failed');
-        console.timeEnd(testName);
+    if(!seed)
+        seed = Math.floor(Math.random()*(0x80000000-1));
+    console.log(seed);
+    for(const backend of [new NativeBackend()]) {
+        const rand = new PRNG(seed),
+              tests = {};
+        for(let testBundle of testBundles)
+            Object.assign(tests, testBundle(backend, rand));
+        console.log(backend.constructor.name);
+        for(const testName in tests) {
+            console.time(testName);
+            for(let i = 0; i < tests[testName][0]; ++i)
+                if(!tests[testName][1]())
+                    throw new Error('Test case failed');
+            console.timeEnd(testName);
+        }
     }
 }
 runAll();

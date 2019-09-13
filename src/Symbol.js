@@ -1,7 +1,7 @@
 /**
  * Symbols are internally represented using a colon separated string.
  */
-export class SymbolInternals {
+export class SymbolInternalsColonString {
     /**
      * Validates if the input is a symbol
      * @param {Symbol} symbol
@@ -84,7 +84,7 @@ export class SymbolInternals {
 /**
  * SymbolMap of string symbols (colon notation) using JS dicts
  */
-export class SymbolMap {
+export class SymbolMapString {
     static create() {
         return {};
     }

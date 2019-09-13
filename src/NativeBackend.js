@@ -222,7 +222,7 @@ export default class NativeBackend extends BasicBackend {
         if(!namespace) {
             namespace = {
                 // 'identity': namespaceIdentity,
-                'freeIdentityPool': [{'start': 0}],
+                'freeIdentityPool': IdentityPool.create(),
                 'handles': {}
             };
             this.namespaces[namespaceIdentity] = namespace;
@@ -314,12 +314,12 @@ export default class NativeBackend extends BasicBackend {
         const handle = (offset == 0 && length > 0) ? this.manifestSymbol(symbol) : this.getHandle(symbol);
         if(!handle)
             return false;
-        const newDataBytes = new Uint8Array(Math.ceil((handle.dataLength+length)/32)*4);
         if(length < 0) {
             if(offset-length > handle.dataLength)
                 return false;
         } else if(offset > handle.dataLength)
             return false;
+        const newDataBytes = new Uint8Array(Math.ceil((handle.dataLength+length)/32)*4);
         newDataBytes.set(handle.dataBytes.subarray(0, Math.ceil(offset/8)), 0);
         if(offset%8 == 0 && length%8 == 0 && handle.dataLength%8 == 0) {
             if(length < 0)
@@ -498,7 +498,7 @@ export default class NativeBackend extends BasicBackend {
     validateIntegrity() {
         for(const namespaceIdentity in this.namespaces) {
             const namespace = this.namespaces[namespaceIdentity],
-                  freeIdentityPool = [{'start': 0}];
+                  freeIdentityPool = IdentityPool.create();
             for(let handleIdentity in namespace.handles) {
                 handleIdentity = parseInt(handleIdentity);
                 if(!IdentityPool.remove(freeIdentityPool, handleIdentity))

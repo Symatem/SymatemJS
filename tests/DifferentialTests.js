@@ -90,7 +90,7 @@ export function generateJournal(backend, rand, callback) {
                     triple = [rand.selectUniformly(symbolPool), rand.selectUniformly(symbolPool), rand.selectUniformly(symbolPool)];
                 else {
                     const triplePool = [];
-                    for(const triple of backend.queryTriples(BasicBackend.queryMasks.VVV, [0, 0, 0]))
+                    for(const triple of backend.queryTriples(BasicBackend.queryMasks.VVV, [BasicBackend.symbolByName.Void, BasicBackend.symbolByName.Void, BasicBackend.symbolByName.Void]))
                         if(SymbolInternals.namespaceOfSymbol(triple[0]) == checkoutNamespace)
                             triplePool.push(triple);
                     if(triplePool.length == 0)
@@ -103,24 +103,10 @@ export function generateJournal(backend, rand, callback) {
     }
 }
 
-export function stringifyCheckout(backend) {
-    const namespace = backend.namespaces[checkoutNamespace];
-    namespace.handles = Utils.sorted(namespace.handles);
-    for(const handleIdentity in namespace.handles) {
-        const handle = namespace.handles[handleIdentity];
-        for(let i = 0; i < 6; ++i) {
-            const subIndex = handle.subIndices[i] = Utils.sorted(handle.subIndices[i]);
-            for(const symbol in subIndex)
-                subIndex[symbol] = Utils.sorted(subIndex[symbol]);
-        }
-    }
-    return JSON.stringify(namespace, undefined, 4);
-}
-
 export function getTests(backend, rand) {
     return {
         'differential': [100, () => {
-            const resultOfNothing = stringifyCheckout(backend),
+            const resultOfNothing = backend.encodeJson([checkoutNamespace]),
                   diff = new Differential(backend, {}, repositoryNamespace);
             generateJournal(backend, rand, (description, method, args) => {
                 diff[method](...args);
@@ -129,17 +115,17 @@ export function getTests(backend, rand) {
             if(!diff.validateIntegrity())
                 return false;
             diff.commit();
-            const resultOfJournal = stringifyCheckout(backend);
+            const resultOfJournal = backend.encodeJson([checkoutNamespace]);
             if(!diff.apply(true)) {
                 console.warn('Could not apply reverse');
                 return false;
             }
-            const resultOfRevert = stringifyCheckout(backend);
+            const resultOfRevert = backend.encodeJson([checkoutNamespace]);
             if(!diff.apply(false)) {
                 console.warn('Could not apply forward');
                 return false;
             }
-            const resultOfDifferential = stringifyCheckout(backend);
+            const resultOfDifferential = backend.encodeJson([checkoutNamespace]);
             if(resultOfNothing != resultOfRevert) {
                 console.warn('Reverse failed', resultOfNothing, resultOfRevert);
                 return false;

@@ -20,13 +20,17 @@ export function getTests(backend, rand) {
                   tripleTag = tagFromTriple(triple),
                   tripleExists = triplePool.has(tripleTag),
                   linked = rand.selectUniformly([false, true]),
+                  expected = (tripleExists != linked),
                   result = backend.setTriple(triple, linked);
             if(linked)
                 triplePool.add(tripleTag);
             else
                 triplePool.delete(tripleTag);
-            if((tripleExists != linked) != result) {
-                console.warn([...triplePool].sort().join(' '), triple, tripleExists, linked, result);
+            if(expected != result) {
+                console.warn('setTriple',
+                    [...triplePool].sort().join(' '), triple,
+                    tripleExists, linked, result, expected
+                );
                 return false;
             }
             return true;
@@ -65,7 +69,7 @@ export function getTests(backend, rand) {
                     noErrorsOccured = false;
             }
             if(!noErrorsOccured)
-                console.warn(
+                console.warn('queryTriples',
                     queryTriple, mask,
                     [...triplePool].sort(), [...backend.queryTriples(BasicBackend.queryMasks.VVV, queryTriple)].map(triple => tagFromTriple(triple)).sort(),
                     [...result].sort(), [...expected].sort()
@@ -107,7 +111,7 @@ export function getTests(backend, rand) {
                 if(expected[i] != result[i])
                     noErrorsOccured = false;
             if(!noErrorsOccured)
-                console.warn(result, expected);
+                console.warn('moveTriples', result, expected);
             return noErrorsOccured;
         }]
     };

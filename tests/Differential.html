@@ -7,7 +7,7 @@
             import PRNG from './PRNG.js';
             import {SymbolInternals, SymbolMap, BasicBackend, Differential} from '../SymatemJS.js';
             import {backend, svgRoot, createElement, visualizeDifferential} from './DifferentialVisualizer.js';
-            import {repositoryNamespace, checkoutNamespace, randomizationOptions, stringifyCheckout, generateJournal} from './DifferentialTests.js';
+            import {repositoryNamespace, checkoutNamespace, randomizationOptions, generateJournal} from './DifferentialTests.js';
 
             function colorPrintTestResult(name, value) {
                 console.log(`${name}:%c ${(value) ? 'suceeded' : 'failed'}`, `color: ${(value) ? '#4A4' : '#A44'};`);
@@ -101,19 +101,19 @@
                 console.time('diff.commit()');
                 diff.commit();
                 console.timeEnd('diff.commit()');
-                const resultOfJournal = stringifyCheckout(backend);
+                const resultOfJournal = backend.encodeJson([checkoutNamespace]);
                 console.time('fillCheckout()');
                 fillCheckout();
                 console.timeEnd('fillCheckout()');
-                const resultOfNothing = stringifyCheckout(backend);
+                const resultOfNothing = backend.encodeJson([checkoutNamespace]);
                 console.time('diff.apply(false)');
                 const forwardApply = diff.apply(false);
                 console.timeEnd('diff.apply(false)');
-                const resultOfDifferential = stringifyCheckout(backend);
+                const resultOfDifferential = backend.encodeJson([checkoutNamespace]);
                 console.time('diff.apply(true)');
                 const reverseApply = diff.apply(true);
                 console.timeEnd('diff.apply(true)');
-                const resultOfRevert = stringifyCheckout(backend);
+                const resultOfRevert = backend.encodeJson([checkoutNamespace]);
                 colorPrintTestResult('Valid Integrity', validIntegrity);
                 colorPrintTestResult('Forward Apply', forwardApply);
                 colorPrintTestResult('Reverse Apply', reverseApply);

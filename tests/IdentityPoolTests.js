@@ -1,7 +1,7 @@
 import {IdentityPool, NativeBackend} from '../SymatemJS.js';
 
 export function getTests(backend, rand) {
-    const identityPool = [{'start': 0}],
+    const identityPool = IdentityPool.create(),
           identities = {},
           maxIdentity = 10000;
 

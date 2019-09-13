@@ -299,11 +299,11 @@ export default class BasicBackend {
      * @param {Symbol} symbol
      */
     unlinkSymbol(symbol) {
-        for(const triple of this.queryTriples(queryMasks.MVV, [symbol, 0, 0]))
+        for(const triple of this.queryTriples(queryMasks.MVV, [symbol, symbolByName.Void, symbolByName.Void]))
             this.setTriple(triple, false);
-        for(const triple of this.queryTriples(queryMasks.VMV, [0, symbol, 0]))
+        for(const triple of this.queryTriples(queryMasks.VMV, [symbolByName.Void, symbol, symbolByName.Void]))
             this.setTriple(triple, false);
-        for(const triple of this.queryTriples(queryMasks.VVM, [0, 0, symbol]))
+        for(const triple of this.queryTriples(queryMasks.VVM, [symbolByName.Void, symbolByName.Void, symbol]))
             this.setTriple(triple, false);
         this.setLength(symbol, 0);
         this.releaseSymbol(symbol);
@@ -596,20 +596,24 @@ export default class BasicBackend {
     encodeJson(namespaces) {
         const entities = [];
         for(const namespaceIdentity of namespaces)
-            for(const symbol of this.querySymbols(namespaceIdentity)) {
-                const attributes = [];
-                for(const tripleA of this.queryTriples(queryMasks.MVI, [symbol, 0, 0])) {
+            for(const symbol of [...this.querySymbols(namespaceIdentity)].sort(SymbolInternals.compareSymbols)) {
+                const attributes = [], betaCollection = [];
+                for(const triple of this.queryTriples(queryMasks.MVI, [symbol, symbolByName.Void, symbolByName.Void]))
+                    attributes.push(triple[1]);
+                attributes.sort(SymbolInternals.compareSymbols);
+                for(const attribute of attributes) {
                     const values = [];
-                    for(const tripleV of this.queryTriples(queryMasks.MMV, tripleA))
-                        values.push(SymbolInternals.symbolToString(tripleV[2]));
-                    attributes.push(SymbolInternals.symbolToString(tripleA[1]));
-                    attributes.push(values);
+                    betaCollection.push(SymbolInternals.symbolToString(attribute));
+                    betaCollection.push(values);
+                    for(const triple of this.queryTriples(queryMasks.MMV, [symbol, attribute, symbolByName.Void]))
+                        values.push(SymbolInternals.symbolToString(triple[2]));
+                    values.sort(SymbolInternals.compareSymbols);
                 }
                 entities.push([
                     SymbolInternals.symbolToString(symbol),
                     this.getLength(symbol),
-                    Utils.encodeAsHex( this.getRawData(symbol)),
-                    attributes
+                    Utils.encodeAsHex(this.getRawData(symbol)),
+                    betaCollection
                 ]);
             }
         return JSON.stringify({
