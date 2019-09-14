@@ -75,44 +75,6 @@ export function getTests(backend, rand) {
                     [...result].sort(), [...expected].sort()
                 );
             return noErrorsOccured;
-        }],
-        'moveTriples': [1, () => {
-            const translationTable = SymbolMap.create(),
-                  dstSymbols = [],
-                  srcSymbols = new Set(symbolPool);
-            for(let i = 0; i < 5; ++i) {
-                const srcSymbol = rand.selectUniformly([...srcSymbols]),
-                      dstSymbol = backend.createSymbol(4);
-                SymbolMap.insert(translationTable, srcSymbol, dstSymbol);
-                srcSymbols.delete(srcSymbol);
-                dstSymbols.push(dstSymbol);
-            }
-            symbolPool.length = 0;
-            for(const srcSymbol of srcSymbols)
-                symbolPool.push(srcSymbol);
-            for(const dstSymbol of dstSymbols)
-                symbolPool.push(dstSymbol);
-            const renamedTriplePool = new Set();
-            for(const tripleTag of triplePool) {
-                const triple = tripleFromTag(tripleTag);
-                for(let i = 0; i < 3; ++i) {
-                    const srcSymbol = triple[i],
-                          dstSymbol = SymbolMap.get(translationTable, srcSymbol);
-                    triple[i] = (dstSymbol) ? dstSymbol : srcSymbol;
-                }
-                renamedTriplePool.add(tagFromTriple(triple));
-            }
-            triplePool = renamedTriplePool;
-            backend.moveTriples(translationTable);
-            const expected = [...triplePool].sort(),
-                  result = [...backend.queryTriples(BasicBackend.queryMasks.VVV, [])].map(triple => tagFromTriple(triple)).sort();
-            let noErrorsOccured = (expected.length == result.length) && backend.validateIntegrity();
-            for(let i = 0; i < expected.length && noErrorsOccured; ++i)
-                if(expected[i] != result[i])
-                    noErrorsOccured = false;
-            if(!noErrorsOccured)
-                console.warn('moveTriples', result, expected);
-            return noErrorsOccured;
         }]
     };
 }

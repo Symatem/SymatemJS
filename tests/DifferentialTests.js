@@ -107,21 +107,23 @@ export function getTests(backend, rand) {
     return {
         'differential': [100, () => {
             const resultOfNothing = backend.encodeJson([checkoutNamespace]),
-                  diff = new Differential(backend, {}, repositoryNamespace);
+                  encodedDiff = new Differential(backend, {}, repositoryNamespace);
             generateJournal(backend, rand, (description, method, args) => {
-                diff[method](...args);
+                encodedDiff[method](...args);
             });
-            diff.compressData();
-            if(!diff.validateIntegrity())
+            encodedDiff.compressData();
+            if(!encodedDiff.validateIntegrity())
                 return false;
-            diff.commit();
+            encodedDiff.commit();
+            const decodedDiff = new Differential(backend, {}, repositoryNamespace);
+            decodedDiff.decodeJson(encodedDiff.encodeJson());
             const resultOfJournal = backend.encodeJson([checkoutNamespace]);
-            if(!diff.apply(true)) {
+            if(!decodedDiff.apply(true)) {
                 console.warn('Could not apply reverse');
                 return false;
             }
             const resultOfRevert = backend.encodeJson([checkoutNamespace]);
-            if(!diff.apply(false)) {
+            if(!decodedDiff.apply(false)) {
                 console.warn('Could not apply forward');
                 return false;
             }

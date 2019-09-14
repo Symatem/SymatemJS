@@ -786,7 +786,7 @@ export default class Differential extends BasicBackend {
         for(const type of ['dataSource', 'dataRestore'])
             if(this.backend.getLength(this[type]) > 0)
                 exportStructure[type] = Utils.encodeAsHex(this.backend.getRawData(this[type]));
-        return JSON.stringify(this.postCommitStructure, (type, operations) => {
+        return JSON.stringify(exportStructure, (type, operations) => {
             switch(type) {
                 case 'linkTripleOperations':
                 case 'unlinkTripleOperations':
