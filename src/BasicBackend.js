@@ -47,6 +47,17 @@ const symbolByName = {
     'Namespaces': 2,
 };
 
+{
+    let namespace, symbol;
+    for(const name of Object.getOwnPropertyNames(symbolByName)) {
+        if(namespace !== symbolByName[name]) {
+            namespace = symbolByName[name];
+            symbol = 0;
+        }
+        symbolByName[name] = SymbolInternals.concatIntoSymbol(namespace, symbol++);
+    }
+}
+
 /** Abstract super class of all backends */
 export default class BasicBackend {
     /** All 27 query masks by their name
@@ -644,14 +655,3 @@ export default class BasicBackend {
         return entities;
     }
 };
-
-{
-    let namespace, symbol;
-    for(const name of Object.getOwnPropertyNames(symbolByName)) {
-        if(namespace !== symbolByName[name]) {
-            namespace = symbolByName[name];
-            symbol = 0;
-        }
-        symbolByName[name] = SymbolInternals.concatIntoSymbol(namespace, symbol++);
-    }
-}

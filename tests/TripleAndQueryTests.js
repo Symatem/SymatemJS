@@ -1,10 +1,12 @@
 import {SymbolInternals, SymbolMap, BasicBackend} from '../SymatemJS.js';
 
 export function getTests(backend, rand) {
-    let triplePool = new Set();
-    const symbolPool = [], maskByIndex = Object.keys(BasicBackend.queryMasks);
+    const symbolPool = [],
+          triplePool = new Set(),
+          maskByIndex = Object.keys(BasicBackend.queryMasks),
+          namespaceIdentity = 4;
     for(let i = 0; i < 100; ++i)
-        symbolPool.push(backend.createSymbol(4));
+        symbolPool.push(backend.createSymbol(namespaceIdentity));
 
     function tripleFromTag(tag) {
         return tag.split(';').map(string => SymbolInternals.symbolFromString(string));
@@ -28,7 +30,9 @@ export function getTests(backend, rand) {
                 triplePool.delete(tripleTag);
             if(expected != result) {
                 console.warn('setTriple',
-                    [...triplePool].sort().join(' '), triple,
+                    tagFromTriple(triple),
+                    [...triplePool].sort().join(' '),
+                    [...backend.queryTriples(BasicBackend.queryMasks.VVV, [BasicBackend.symbolByName.Void, BasicBackend.symbolByName.Void, BasicBackend.symbolByName.Void])].map(triple => tagFromTriple(triple)).sort().join(' '),
                     tripleExists, linked, result, expected
                 );
                 return false;
@@ -70,11 +74,40 @@ export function getTests(backend, rand) {
             }
             if(!noErrorsOccured)
                 console.warn('queryTriples',
-                    queryTriple, mask,
-                    [...triplePool].sort(), [...backend.queryTriples(BasicBackend.queryMasks.VVV, queryTriple)].map(triple => tagFromTriple(triple)).sort(),
+                    tagFromTriple(queryTriple),
+                    [...triplePool].sort().join(' '),
+                    [...backend.queryTriples(BasicBackend.queryMasks.VVV, [BasicBackend.symbolByName.Void, BasicBackend.symbolByName.Void, BasicBackend.symbolByName.Void])].map(triple => tagFromTriple(triple)).sort().join(' '),
                     [...result].sort(), [...expected].sort()
                 );
             return noErrorsOccured;
+        }],
+        'unlinkNamespace': [10, () => {
+            for(let i = 0; i < 100; ++i)
+                backend.setTriple([BasicBackend.symbolByName.Void, rand.selectUniformly(symbolPool), SymbolInternals.concatIntoSymbol(1, rand.range(0, 100))], true);
+            if(!backend.unlinkSymbol(BasicBackend.symbolInNamespace('Namespaces', namespaceIdentity))) {
+                console.warn('unlinkNamespace', 'unlinkSymbol');
+                return false;
+            }
+            const symbolsResult = [...backend.querySymbols(namespaceIdentity)];
+            if(!symbolsResult.length == 0) {
+                console.warn('unlinkNamespace', 'querySymbols', symbolsResult.sort());
+                return false;
+            }
+            const triplesResult = [...backend.queryTriples(BasicBackend.queryMasks.VVV, [BasicBackend.symbolByName.Void, BasicBackend.symbolByName.Void, BasicBackend.symbolByName.Void])];
+            for(const triple of triplesResult)
+                for(let i = 0; i < 3; ++i)
+                    if(SymbolInternals.namespaceOfSymbol(triple[i]) == namespaceIdentity) {
+                        console.warn('unlinkNamespace', 'queryTriples', triple);
+                        return false;
+                    }
+            for(let i = 0; i < 100; ++i) {
+                const symbol = backend.createSymbol(namespaceIdentity);
+                if(SymbolInternals.identityOfSymbol(symbol) != i) {
+                    console.warn('unlinkNamespace', 'createSymbol', symbol);
+                    return false;
+                }
+            }
+            return true;
         }]
     };
 }

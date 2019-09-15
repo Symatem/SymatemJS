@@ -239,17 +239,17 @@ export default class NativeBackend extends BasicBackend {
         for(const handleIdentity in namespace.handles) {
             triple[0] = SymbolInternals.concatIntoSymbol(namespaceIdentity, handleIdentity);
             const handle = namespace.handles[handleIdentity];
-            for(let i = 0; i < 3; ++i) {
-                const betaCollection = handle.subIndices[i];
+            for(let triple_index = 0; triple_index < 3; ++triple_index) {
+                const betaCollection = handle.subIndices[triple_index];
                 for(const [beta, gammaCollection] of SymbolMap.entries(betaCollection)) {
                     triple[1] = beta;
                     if(SymbolInternals.namespaceOfSymbol(triple[1]) != namespaceIdentity) {
                         for(triple[2] of SymbolMap.symbols(gammaCollection))
-                            this.setTriple(triple, false);
+                            console.assert(this.setTriple(reorderTriple(tripleNormalized, triple_index, triple), false));
                     } else {
                         for(triple[2] of SymbolMap.symbols(gammaCollection))
                             if(SymbolInternals.namespaceOfSymbol(triple[2]) != namespaceIdentity)
-                                this.setTriple(triple, false);
+                                console.assert(this.setTriple(reorderTriple(tripleNormalized, triple_index, triple), false));
                     }
                 }
             }
@@ -409,12 +409,12 @@ export default class NativeBackend extends BasicBackend {
               valueHandle = this.getHandle(triple[2]);
         if(!linked && !(entityHandle && attributeHandle && valueHandle))
             return true;
-        operateSubIndex(entityHandle.subIndices[indexByName.EAV], triple[1], triple[2]);
-        operateSubIndex(attributeHandle.subIndices[indexByName.AVE], triple[2], triple[0]);
-        operateSubIndex(valueHandle.subIndices[indexByName.VEA], triple[0], triple[1]);
-        operateSubIndex(entityHandle.subIndices[indexByName.EVA], triple[2], triple[1]);
-        operateSubIndex(attributeHandle.subIndices[indexByName.AEV], triple[0], triple[2]);
-        return operateSubIndex(valueHandle.subIndices[indexByName.VAE], triple[1], triple[0]);
+        return operateSubIndex(entityHandle.subIndices[indexByName.EAV], triple[1], triple[2]) |
+               operateSubIndex(attributeHandle.subIndices[indexByName.AVE], triple[2], triple[0]) |
+               operateSubIndex(valueHandle.subIndices[indexByName.VEA], triple[0], triple[1]) |
+               operateSubIndex(entityHandle.subIndices[indexByName.EVA], triple[2], triple[1]) |
+               operateSubIndex(attributeHandle.subIndices[indexByName.AEV], triple[0], triple[2]) |
+               operateSubIndex(valueHandle.subIndices[indexByName.VAE], triple[1], triple[0]);
     }
 
     *querySymbols(namespaceIdentity) {

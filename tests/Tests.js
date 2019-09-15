@@ -14,13 +14,13 @@ import PRNG from './PRNG.js';
 function runAll(seed) {
     if(!seed)
         seed = Math.floor(Math.random()*(0x80000000-1));
-    console.log(seed);
+    console.log(`Seed: ${seed}`);
     for(const backend of [new NativeBackend()]) {
         const rand = new PRNG(seed),
               tests = {};
         for(let testBundle of testBundles)
             Object.assign(tests, testBundle(backend, rand));
-        console.log(backend.constructor.name);
+        console.log(`--- ${backend.constructor.name} ---`);
         for(const testName in tests) {
             console.time(testName);
             for(let i = 0; i < tests[testName][0]; ++i)
