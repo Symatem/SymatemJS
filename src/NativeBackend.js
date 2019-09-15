@@ -181,6 +181,24 @@ function* searchVVV(index, triple) {
     return count;
 }
 
+function operateSubIndex(betaCollection, beta, gamma, linked) {
+    if(linked) {
+        let gammaCollection = SymbolMap.get(betaCollection, beta);
+        if(!gammaCollection) {
+            gammaCollection = SymbolMap.create();
+            SymbolMap.insert(betaCollection, beta, gammaCollection);
+        }
+        return SymbolMap.insert(gammaCollection, gamma, true);
+    } else {
+        let gammaCollection = SymbolMap.get(betaCollection, beta);
+        if(!gammaCollection || !SymbolMap.remove(gammaCollection, gamma))
+            return false;
+        if(SymbolMap.isEmpty(gammaCollection))
+            SymbolMap.remove(betaCollection, beta);
+        return true;
+    }
+}
+
 const indexLookup = [
     indexByName.EAV, indexByName.AVE, indexByName.AVE,
     indexByName.VEA, indexByName.VEA, indexByName.VAE,
@@ -382,39 +400,17 @@ export default class NativeBackend extends BasicBackend {
     }
 
     setTriple(triple, linked) {
-        function operateSubIndex(betaCollection, beta, gamma) {
-            if(linked) {
-                let gammaCollection = SymbolMap.get(betaCollection, beta);
-                if(!gammaCollection) {
-                    gammaCollection = SymbolMap.create();
-                    SymbolMap.insert(betaCollection, beta, gammaCollection);
-                }
-                return SymbolMap.insert(gammaCollection, gamma, true);
-            } else {
-                let gammaCollection = SymbolMap.get(betaCollection, beta);
-                if(!gammaCollection || !SymbolMap.remove(gammaCollection, gamma))
-                    return false;
-                if(SymbolMap.isEmpty(gammaCollection))
-                    SymbolMap.remove(betaCollection, beta);
-                return true;
-            }
+        let result = false;
+        for(let tripleIndex = 0; tripleIndex < 3; ++tripleIndex) {
+            const handle = (linked) ? this.manifestSymbol(triple[tripleIndex]) : this.getHandle(triple[tripleIndex]);
+            if(!handle)
+                continue;
+            if(operateSubIndex(handle.subIndices[tripleIndex], triple[(tripleIndex+1)%3], triple[(tripleIndex+2)%3], linked))
+                result = true;
+            if(operateSubIndex(handle.subIndices[tripleIndex+3], triple[(tripleIndex+2)%3], triple[(tripleIndex+1)%3], linked))
+                result = true;
         }
-        if(linked) {
-            this.manifestSymbol(triple[0]);
-            this.manifestSymbol(triple[1]);
-            this.manifestSymbol(triple[2]);
-        }
-        const entityHandle = this.getHandle(triple[0]),
-              attributeHandle = this.getHandle(triple[1]),
-              valueHandle = this.getHandle(triple[2]);
-        if(!linked && !(entityHandle && attributeHandle && valueHandle))
-            return true;
-        return operateSubIndex(entityHandle.subIndices[indexByName.EAV], triple[1], triple[2]) |
-               operateSubIndex(attributeHandle.subIndices[indexByName.AVE], triple[2], triple[0]) |
-               operateSubIndex(valueHandle.subIndices[indexByName.VEA], triple[0], triple[1]) |
-               operateSubIndex(entityHandle.subIndices[indexByName.EVA], triple[2], triple[1]) |
-               operateSubIndex(attributeHandle.subIndices[indexByName.AEV], triple[0], triple[2]) |
-               operateSubIndex(valueHandle.subIndices[indexByName.VAE], triple[1], triple[0]);
+        return result;
     }
 
     *querySymbols(namespaceIdentity) {
