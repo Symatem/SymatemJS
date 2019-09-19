@@ -1,11 +1,12 @@
 import {Utils, IdentityPool} from './src/Utils.js';
 import {SymbolInternalsColonString as SymbolInternals, SymbolMapString as SymbolMap} from './src/Symbol.js';
 import BasicBackend from './src/BasicBackend.js';
-import NativeBackend from './src/NativeBackend.js';
+import JavaScriptBackend from './src/JavaScriptBackend.js';
+import RustWasmBackend, { loaded } from './src/RustWasmBackend.js';
 import Differential from './src/Differential.js';
 import Repository from './src/Repository.js';
 
-export {Utils, SymbolInternals, IdentityPool, SymbolMap, BasicBackend, NativeBackend, Differential, Repository};
+export {loaded, Utils, SymbolInternals, IdentityPool, SymbolMap, BasicBackend, JavaScriptBackend, RustWasmBackend, Differential, Repository};
 
 /**
  * @typedef {Number} Identity

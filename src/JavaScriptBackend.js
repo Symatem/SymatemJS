@@ -223,8 +223,8 @@ const searchLookup = [
     searchMII, searchVII, searchIII
 ];
 
-/** Implements a backend in JS */
-export default class NativeBackend extends BasicBackend {
+/** Implements a backend written in JavaScript */
+export default class JavaScriptBackend extends BasicBackend {
     constructor() {
         super();
         this.namespaces = {};

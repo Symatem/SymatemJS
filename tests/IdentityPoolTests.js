@@ -1,4 +1,4 @@
-import {IdentityPool, NativeBackend} from '../SymatemJS.js';
+import {IdentityPool} from '../SymatemJS.js';
 
 export function getTests(backend, rand) {
     const identityPool = IdentityPool.create(),

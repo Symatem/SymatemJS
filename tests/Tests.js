@@ -9,13 +9,13 @@ const testBundles = [
     DifferentialTests
 ];
 
-import { NativeBackend } from '../SymatemJS.js';
+import {loaded, JavaScriptBackend, RustWasmBackend} from '../SymatemJS.js';
 import PRNG from './PRNG.js';
 function runAll(seed) {
     if(!seed)
         seed = Math.floor(Math.random()*(0x80000000-1));
     console.log(`Seed: ${seed}`);
-    for(const backend of [new NativeBackend()]) {
+    for(const backend of [new JavaScriptBackend(), new RustWasmBackend()]) {
         const rand = new PRNG(seed),
               tests = {};
         for(let testBundle of testBundles)
@@ -30,4 +30,4 @@ function runAll(seed) {
         }
     }
 }
-runAll();
+loaded.then(runAll);

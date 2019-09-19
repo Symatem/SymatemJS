@@ -10,7 +10,7 @@ function getOrCreateEntry(dict, key, value) {
  */
 export default class Differential extends BasicBackend {
     /**
-     * @param {NativeBackend} backend
+     * @param {BasicBackend} backend
      * @param {RelocationTable} recordingRelocation Relocate recording namespaces to become modal namespaces
      * @param {Identity} repositoryNamespace The namespace identity of the repository
      */
