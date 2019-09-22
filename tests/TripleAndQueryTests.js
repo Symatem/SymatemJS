@@ -74,7 +74,7 @@ export function getTests(backend, rand) {
             }
             if(!noErrorsOccured)
                 console.warn('queryTriples',
-                    tagFromTriple(queryTriple),
+                    mask, tagFromTriple(queryTriple),
                     [...triplePool].sort().join(' '), '|',
                     [...backend.queryTriples(BasicBackend.queryMasks.VVV, [BasicBackend.symbolByName.Void, BasicBackend.symbolByName.Void, BasicBackend.symbolByName.Void])].map(triple => tagFromTriple(triple)).sort().join(' '), '|',
                     [...result].sort().join(' '), '|',

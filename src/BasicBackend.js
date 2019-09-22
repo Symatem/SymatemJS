@@ -540,27 +540,36 @@ export default class BasicBackend {
      * @param {Symbol} first Matching symbol pair
      * @param {Symbol} second Matching symbol pair
      * @param {undefined|Symbol|Set<Symbol>} thirds Varying is replaced by these (won't modify anything if undefined)
-     * @param {Number} index Varying position in the triples (0=Entity, 1=Attribute, 2=Value)
+     * @param {QueryMask} mask
      * @return {Set<Symbol>} Varying search result
      */
-    getAndSetPairs(first, second, thirds, index=2) {
-        let queryMask, triple;
-        switch(index) {
-            case 0:
-                queryMask = queryMasks.VMM;
+    getAndSetPairs(first, second, thirds, mask=queryMasks.MMV) {
+        let index, triple;
+        switch(mask) {
+            case queryMasks.VMM:
+            case queryMasks.VIM:
+            case queryMasks.VMI:
+                index = 0;
                 triple = [symbolByName.Void, first, second];
                 break;
-            case 1:
-                queryMask = queryMasks.MVM;
+            case queryMasks.MVM:
+            case queryMasks.IVM:
+            case queryMasks.MVI:
+                index = 1;
                 triple = [first, symbolByName.Void, second];
                 break;
-            case 2:
-                queryMask = queryMasks.MMV;
+            case queryMasks.MMV:
+            case queryMasks.IMV:
+            case queryMasks.MIV:
+                index = 2;
                 triple = [first, second, symbolByName.Void];
                 break;
+            default:
+                console.log(first, second, thirds, mask);
+                throw new Error('Unsupported query mask');
         }
         const result = new Set();
-        for(const queryTriple of this.queryTriples(queryMask, triple)) {
+        for(const queryTriple of this.queryTriples(mask, triple)) {
             if(thirds)
                 this.setTriple(queryTriple, false);
             result.add(queryTriple[index]);
@@ -580,11 +589,11 @@ export default class BasicBackend {
      * Returns the third symbol if exactly one triple matches the given pair otherwise Void is returned
      * @param {Symbol} first Matching symbol pair
      * @param {Symbol} second Matching symbol pair
-     * @param {Number} index Varying position in the triples (0=Entity, 1=Attribute, 2=Value)
+     * @param {QueryMask} mask
      * @return {Symbol} third symbol or Void
      */
-    getPairOptionally(first, second, index=2) {
-        const thirds = this.getAndSetPairs(first, second, undefined, index);
+    getPairOptionally(first, second, mask=queryMasks.MMV) {
+        const thirds = this.getAndSetPairs(first, second, undefined, mask);
         return (thirds.size == 1) ? thirds.values().next().value : symbolByName.Void;
     }
 
