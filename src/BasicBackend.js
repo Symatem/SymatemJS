@@ -528,10 +528,24 @@ export default class BasicBackend {
     /**
      * Tests if the given Triple exists
      * @param {Triple} triple
+     * @param {QueryMask} mask
      * @return {Boolean} linked
      */
-    getTriple(triple) {
-        const iterator = this.queryTriples(queryMasks.MMM, triple);
+    getTriple(triple, mask=queryMasks.MMM) {
+        switch(mask) {
+            case queryMasks.MMM:
+            case queryMasks.IMM:
+            case queryMasks.MIM:
+            case queryMasks.MMI:
+            case queryMasks.MII:
+            case queryMasks.IMI:
+            case queryMasks.IIM:
+            case queryMasks.III:
+                break;
+            default:
+                throw new Error('Unsupported query mask');
+        }
+        const iterator = this.queryTriples(mask, triple);
         return iterator.next().value.length === 3 && iterator.next().value === 1;
     }
 
@@ -565,7 +579,6 @@ export default class BasicBackend {
                 triple = [first, second, symbolByName.Void];
                 break;
             default:
-                console.log(first, second, thirds, mask);
                 throw new Error('Unsupported query mask');
         }
         const result = new Set();
