@@ -5,8 +5,7 @@ cache:
   directories:
     node_modules
 before_script:
-  - curl -GOL https://github.com/Symatem/SymatemRust/releases/latest/download/symatem.wasm.xz
-  - mkdir dist
-  - xz -dc symatem.wasm.xz > dist/backend.wasm
+  - mkdir dist && cd dist
+  - curl -GOL https://github.com/Symatem/SymatemRust/releases/latest/download/symatem.wasm
 script:
   npm test
