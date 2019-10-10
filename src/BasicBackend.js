@@ -621,7 +621,7 @@ export default class BasicBackend {
 
 
     /**
-     * @deprecated Use Differential.encodeJson() instead.
+     * @deprecated Use Diff.encodeJson() instead.
      * Exports the specified namespaces as JSON
      * @param {Identity[]} namespaces The namespaces to export
      * @return {String} json
@@ -655,7 +655,7 @@ export default class BasicBackend {
     }
 
     /**
-     * @deprecated Use Differential.decodeJson() instead.
+     * @deprecated Use Diff.decodeJson() instead.
      * Imports content from JSON
      * @param {String} json
      */

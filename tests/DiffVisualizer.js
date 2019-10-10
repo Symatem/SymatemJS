@@ -1,4 +1,4 @@
-import {SymbolInternals, SymbolMap, JavaScriptBackend, Differential} from '../SymatemJS.js';
+import {SymbolInternals, SymbolMap, JavaScriptBackend, Diff} from '../SymatemJS.js';
 
 export function createElement(tag, parentNode) {
     const svgElement = document.createElementNS('http://www.w3.org/2000/svg', tag);
@@ -147,7 +147,7 @@ export function createSlice(diff, symbolSlot, type, animationSlot, sliceGroups, 
     return sliceElement;
 }
 
-export function visualizeDifferential(diff, symbolSlots, animationSlot) {
+export function visualizeDiff(diff, symbolSlots, animationSlot) {
     const symbolTags = {}, sliceGroups = {};
     function getSymbolSlot(symbol) {
         let symbolSlot = SymbolMap.get(symbolSlots, symbol);

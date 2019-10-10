@@ -5,10 +5,10 @@ function getOrCreateEntry(dict, key, value) {
     return (entry) ? entry : (dict[key] = value);
 }
 
-/** Differential defining the transformation from one version to another and back.
- * To record the actions from a journal, use the differental as backend and then call commit.
+/** A transaction defining the transformation from one version to another and back.
+ * To record the actions, use the diff as backend and then call commit.
  */
-export default class Differential extends BasicBackend {
+export default class Diff extends BasicBackend {
     /**
      * @param {BasicBackend} backend
      * @param {RelocationTable} recordingRelocation Relocate recording namespaces to become modal namespaces
@@ -240,6 +240,11 @@ export default class Differential extends BasicBackend {
 
 
 
+    querySymbols(namespaceIdentity) {
+        console.assert(this.isRecordingFromBackend);
+        return this.backend.querySymbols(namespaceIdentity);
+    }
+
     queryTriples(queryMask, triple) {
         console.assert(this.isRecordingFromBackend);
         return this.backend.queryTriples(queryMask, triple);
@@ -406,7 +411,6 @@ export default class Differential extends BasicBackend {
             this.removeEmptyCopyReplaceOperations(dirtySymbols);
             intermediateOffset = nextIntermediateOffset;
         } else {
-            let mergeAccumulator = 0;
             if(operationAtIntermediateOffset) {
                 if(operationAtIntermediateOffset.length < 0) {
                     if(length >= -operationAtIntermediateOffset.length)
@@ -418,14 +422,14 @@ export default class Differential extends BasicBackend {
                     length -= annihilate;
                 } else
                     operationAtIntermediateOffset.length += length;
-                mergeAccumulator = length;
             }
             if(length > 0) {
                 this.shiftIntermediateOffsets(creaseLengthOperations, operationIndex, length);
                 this.cutAndShiftCopyReplaceOperations('src', operationsOfSymbol.copyOperations, undefined, intermediateOffset, 0, length);
                 this.cutAndShiftCopyReplaceOperations('dst', operationsOfSymbol.replaceOperations, undefined, intermediateOffset, 0, length);
-                length -= mergeAccumulator;
             }
+            if(operationAtIntermediateOffset)
+                length = 0;
         }
         if(length != 0)
             creaseLengthOperations.splice(operationIndex, 0, {
@@ -718,10 +722,10 @@ export default class Differential extends BasicBackend {
     }
 
     /**
-     * Applies this differential to a checkout
-     * @param {Boolean} reverse Set to true to revert this differential
+     * Applies this diff to a checkout
+     * @param {Boolean} reverse Set to true to revert this diff
      * @param {RelocationTable} checkoutRelocation Relocate modal namespaces to become checkout namespaces
-     * @param {BasicBackend} dst Apply to another differential or the backend (default)
+     * @param {BasicBackend} dst Apply to another diff or the backend (default)
      * @return {Boolean} True on success
      */
     apply(reverse, checkoutRelocation={}, dst=this.backend) {
@@ -776,7 +780,7 @@ export default class Differential extends BasicBackend {
     }
 
     /**
-     * Exports the commited differential as JSON
+     * Exports the commited diff as JSON
      * @return {String} json
      */
     encodeJson() {

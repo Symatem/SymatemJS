@@ -3,10 +3,10 @@ import {SymbolInternalsColonString as SymbolInternals, SymbolMapString as Symbol
 import BasicBackend from './src/BasicBackend.js';
 import JavaScriptBackend from './src/JavaScriptBackend.js';
 import RustWasmBackend, { loaded } from './src/RustWasmBackend.js';
-import Differential from './src/Differential.js';
+import Diff from './src/Diff.js';
 import Repository from './src/Repository.js';
 
-export {loaded, Utils, SymbolInternals, IdentityPool, SymbolMap, BasicBackend, JavaScriptBackend, RustWasmBackend, Differential, Repository};
+export {loaded, Utils, SymbolInternals, IdentityPool, SymbolMap, BasicBackend, JavaScriptBackend, RustWasmBackend, Diff, Repository};
 
 /**
  * @typedef {Number} Identity

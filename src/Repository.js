@@ -23,18 +23,19 @@ export default class Repository {
             ? this.versions[versionId]
             : this.versions[versionId] = {
             'id': versionId,
+            'parents': {},
             'children': {}
         };
     }
 
-    /** Adds a edges to the DAG
-     * @param {Symbol} versionId The child vertex
-     * @param {Object.<Symbol, Differential>} differentalsToParents Keys are the parent vertices and values the edges connecting them
+    /** Adds an edge to the DAG
+     * @param {Symbol} parentVersionId The parent vertex
+     * @param {Symbol} childVersionId The child vertex
+     * @param {Diff} diff The edge connecting them
      */
-    setPartentsOfVersion(versionId, differentalsToParents) {
-        this.versions[versionId].parents = differentalsToParents;
-        for(const parentId in differentalsToParents)
-            this.manifestVersion(parentId).children[versionId] = differentalsToParents[parentId];
+    addDiff(parentVersionId, childVersionId, differental) {
+        this.manifestVersion(childVersionId).parents[parentVersionId] = differental;
+        this.manifestVersion(parentVersionId).children[childVersionId] = differental;
     }
 
     /** Removes a vertex from the DAG
@@ -43,8 +44,8 @@ export default class Repository {
     removeVersion(versionId) {
         if(this.materializedVersions[versionId])
             this.dematerializeVersion(versionId);
-        for(const parentId in this.versions[versionId].parents)
-            delete this.versions[parentId].children[versionId];
+        for(const parentVersionId in this.versions[versionId].parents)
+            delete this.versions[parentVersionId].children[versionId];
         delete this.versions[versionId];
     }
 

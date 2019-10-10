@@ -1,5 +1,5 @@
 import PRNG from './PRNG.js';
-import {Utils, SymbolInternals, BasicBackend, Differential} from '../SymatemJS.js';
+import {Utils, SymbolInternals, BasicBackend, Diff} from '../SymatemJS.js';
 
 export const repositoryNamespace = 3,
              checkoutNamespace = 4,
@@ -105,9 +105,9 @@ export function generateJournal(backend, rand, callback) {
 
 export function getTests(backend, rand) {
     return {
-        'differential': [100, () => {
+        'diffRecording': [100, () => {
             const resultOfNothing = backend.encodeJson([checkoutNamespace]),
-                  encodedDiff = new Differential(backend, {}, repositoryNamespace);
+                  encodedDiff = new Diff(backend, {}, repositoryNamespace);
             generateJournal(backend, rand, (description, method, args) => {
                 encodedDiff[method](...args);
             });
@@ -115,7 +115,7 @@ export function getTests(backend, rand) {
             if(!encodedDiff.validateIntegrity())
                 return false;
             encodedDiff.commit();
-            const decodedDiff = new Differential(backend, {}, repositoryNamespace);
+            const decodedDiff = new Diff(backend, {}, repositoryNamespace);
             decodedDiff.decodeJson(encodedDiff.encodeJson());
             const resultOfJournal = backend.encodeJson([checkoutNamespace]);
             if(!decodedDiff.apply(true)) {
@@ -127,13 +127,13 @@ export function getTests(backend, rand) {
                 console.warn('Could not apply forward');
                 return false;
             }
-            const resultOfDifferential = backend.encodeJson([checkoutNamespace]);
+            const resultOfDiff = backend.encodeJson([checkoutNamespace]);
             if(resultOfNothing != resultOfRevert) {
                 console.warn('Reverse failed', resultOfNothing, resultOfRevert);
                 return false;
             }
-            if(resultOfJournal != resultOfDifferential) {
-                console.warn('Forward failed', resultOfJournal, resultOfDifferential);
+            if(resultOfJournal != resultOfDiff) {
+                console.warn('Forward failed', resultOfJournal, resultOfDiff);
                 return false;
             }
             return true;

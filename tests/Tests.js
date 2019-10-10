@@ -1,12 +1,12 @@
 import {getTests as IdentityPoolTests} from './IdentityPoolTests.js';
 import {getTests as SymbolDataTests} from './SymbolDataTests.js';
 import {getTests as TripleAndQueryTests} from './TripleAndQueryTests.js';
-import {getTests as DifferentialTests} from './DifferentialTests.js';
+import {getTests as DiffTests} from './DiffTests.js';
 const testBundles = [
     IdentityPoolTests,
     SymbolDataTests,
     TripleAndQueryTests,
-    DifferentialTests
+    DiffTests
 ];
 
 import {loaded, JavaScriptBackend, RustWasmBackend} from '../SymatemJS.js';

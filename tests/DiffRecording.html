@@ -2,12 +2,12 @@
 <html>
     <head>
         <meta charset="utf-8"/>
-        <title>Differential Fuzzy Test Visualizer</title>
+        <title>Diff Fuzzy Test Visualizer</title>
         <script type='module'>
             import PRNG from './PRNG.js';
-            import {SymbolInternals, SymbolMap, BasicBackend, Differential} from '../SymatemJS.js';
-            import {backend, svgRoot, createElement, visualizeDifferential} from './DifferentialVisualizer.js';
-            import {repositoryNamespace, checkoutNamespace, randomizationOptions, generateJournal} from './DifferentialTests.js';
+            import {SymbolInternals, SymbolMap, BasicBackend, Diff} from '../SymatemJS.js';
+            import {backend, svgRoot, createElement, visualizeDiff} from './DiffVisualizer.js';
+            import {repositoryNamespace, checkoutNamespace, randomizationOptions, generateJournal} from './DiffTests.js';
 
             function colorPrintTestResult(name, value) {
                 console.log(`${name}:%c ${(value) ? 'suceeded' : 'failed'}`, `color: ${(value) ? '#4A4' : '#A44'};`);
@@ -33,7 +33,7 @@
                 }
             }
 
-            const diff = new Differential(backend, {}, repositoryNamespace),
+            const diff = new Diff(backend, {}, repositoryNamespace),
                   diffSnapshots = [{'preCommitStructure': SymbolMap.create(), 'description': 'Initial'}];
             function makeDiffSnapshot(description) {
                 const diffSnapshot = {
@@ -70,7 +70,7 @@
                 console.time('fillCheckout()');
                 fillCheckout();
                 console.timeEnd('fillCheckout()');
-                console.time('journalToDifferential()');
+                console.time('recordDiff()');
                 generateJournal(backend, rand, (description, method, args) => {
                     console.log(description);
                     diff[method](...args);
@@ -78,7 +78,7 @@
                 });
                 diff.compressData();
                 makeDiffSnapshot('Compress');
-                console.timeEnd('journalToDifferential()');
+                console.timeEnd('recordDiff()');
 
                 const diffSelect = document.getElementById('diffSelect');
                 let prevDiff = diffSnapshots[0];
@@ -88,9 +88,9 @@
                     while(svgRoot.childNodes.length > 0)
                         svgRoot.removeChild(svgRoot.childNodes[0]);
                     document.getElementById('description').textContent = nextDiff.description;
-                    visualizeDifferential(prevDiff, symbolSlots, false);
+                    visualizeDiff(prevDiff, symbolSlots, false);
                     window.setTimeout(() => {
-                        visualizeDifferential(nextDiff, symbolSlots, true);
+                        visualizeDiff(nextDiff, symbolSlots, true);
                     }, 0);
                     prevDiff = nextDiff;
                 };
@@ -109,7 +109,7 @@
                 console.time('diff.apply(false)');
                 const forwardApply = diff.apply(false);
                 console.timeEnd('diff.apply(false)');
-                const resultOfDifferential = backend.encodeJson([checkoutNamespace]);
+                const resultOfDiff = backend.encodeJson([checkoutNamespace]);
                 console.time('diff.apply(true)');
                 const reverseApply = diff.apply(true);
                 console.timeEnd('diff.apply(true)');
@@ -117,7 +117,7 @@
                 colorPrintTestResult('Valid Integrity', validIntegrity);
                 colorPrintTestResult('Forward Apply', forwardApply);
                 colorPrintTestResult('Reverse Apply', reverseApply);
-                colorPrintTestResult('Forward Compare', resultOfJournal == resultOfDifferential);
+                colorPrintTestResult('Forward Compare', resultOfJournal == resultOfDiff);
                 colorPrintTestResult('Reverse Compare', resultOfNothing == resultOfRevert);
             };
         </script>
