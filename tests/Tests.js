@@ -11,13 +11,14 @@ const testBundles = [
 
 import {loaded, JavaScriptBackend, RustWasmBackend} from '../SymatemJS.js';
 import PRNG from './PRNG.js';
+const rand = new PRNG();
 function runAll(seed) {
     if(!seed)
-        seed = Math.floor(Math.random()*(0x80000000-1));
+        seed = rand.buffer[0];
     console.log(`Seed: ${seed}`);
     for(const backend of [new JavaScriptBackend(), new RustWasmBackend()]) {
-        const rand = new PRNG(seed),
-              tests = {};
+        rand.setSeed(seed);
+        const tests = {};
         for(let testBundle of testBundles)
             Object.assign(tests, testBundle(backend, rand));
         console.log(`--- ${backend.constructor.name} ---`);

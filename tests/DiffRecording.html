@@ -5,125 +5,138 @@
         <title>Diff Fuzzy Test Visualizer</title>
         <script type='module'>
             import PRNG from './PRNG.js';
-            import {SymbolInternals, SymbolMap, BasicBackend, Diff} from '../SymatemJS.js';
-            import {backend, svgRoot, createElement, visualizeDiff} from './DiffVisualizer.js';
-            import {repositoryNamespace, checkoutNamespace, randomizationOptions, generateJournal} from './DiffTests.js';
+            import {loaded, SymbolInternals, SymbolMap, BasicBackend, RustWasmBackend, Diff} from '../SymatemJS.js';
+            import {svgRoot, createElement, visualizeDiff} from './DiffVisualizer.js';
+            import {repositoryNamespace, checkoutNamespace, configuration, fillCheckout, makeDiffSnapshot, generateOperations} from './DiffTests.js';
 
             function colorPrintTestResult(name, value) {
                 console.log(`${name}:%c ${(value) ? 'suceeded' : 'failed'}`, `color: ${(value) ? '#4A4' : '#A44'};`);
             }
 
-            const symbolPool = [];
-            let rand;
-            function fillCheckout() {
-                rand = new PRNG(seed.value);
-                backend.unlinkSymbol(BasicBackend.symbolInNamespace('Namespaces', checkoutNamespace));
-                let nextSymbol = 0;
-                symbolPool.length = 0;
-                for(let i = 0; i < randomizationOptions.minSymbolCount; ++i) {
-                    const symbol = SymbolInternals.concatIntoSymbol(checkoutNamespace, nextSymbol++),
-                          length = rand.range(randomizationOptions.dataLength/2, randomizationOptions.dataLength),
-                          dataBytes = rand.bytes(Math.ceil(length/32)*4);
-                    backend.setRawData(symbol, dataBytes, length);
-                    symbolPool.push(symbol);
-                }
-                for(let i = 0; i < randomizationOptions.minTripleCount; ++i) {
-                    const triple = [rand.selectUniformly(symbolPool), rand.selectUniformly(symbolPool), rand.selectUniformly(symbolPool)];
-                    backend.setTriple(triple, true);
-                }
-            }
+            let performanceAccumulator = {};
+            const backend = new RustWasmBackend(),
+                  rand = new PRNG();
 
-            const diff = new Diff(backend, {}, repositoryNamespace),
-                  diffSnapshots = [{'preCommitStructure': SymbolMap.create(), 'description': 'Initial'}];
-            function makeDiffSnapshot(description) {
-                const diffSnapshot = {
-                    'description': description,
-                    'dataSource': diff.dataSource,
-                    'dataRestore': diff.dataRestore,
-                    'preCommitStructure': SymbolMap.create()
-                };
-                for(const [symbol, operationsOfSymbol] of SymbolMap.entries(diff.preCommitStructure)) {
-                    const operationsOfSymbolCopy = Object.assign({}, operationsOfSymbol);
-                    for(const type of ['copyOperations', 'replaceOperations', 'creaseLengthOperations'])
-                        if(operationsOfSymbol[type])
-                            operationsOfSymbolCopy[type] = operationsOfSymbol[type].map(operation => Object.assign({}, operation));
-                    if(operationsOfSymbol.tripleOperations) {
-                        operationsOfSymbolCopy.tripleOperations = SymbolMap.create();
-                        for(const [beta, gammaCollection] of SymbolMap.entries(operationsOfSymbol.tripleOperations)) {
-                            const gammaCollectionCopy = SymbolMap.create();
-                            SymbolMap.insert(operationsOfSymbolCopy.tripleOperations, beta, gammaCollectionCopy);
-                            for(const [gamma, link] of SymbolMap.entries(gammaCollection))
-                                SymbolMap.insert(gammaCollectionCopy, gamma, link);
-                        }
-                    }
-                    SymbolMap.insert(diffSnapshot.preCommitStructure, symbol, operationsOfSymbolCopy);
-                }
-                diffSnapshots.push(diffSnapshot);
-            }
-
-            const seed = document.getElementById('seed');
-            seed.value = Math.floor(Math.random()*(0x80000000-1));
-            seed.onblur = () => {
-                document.body.removeChild(seed);
-                console.log('Seed', seed.value);
-
-                console.time('fillCheckout()');
-                fillCheckout();
-                console.timeEnd('fillCheckout()');
-                console.time('recordDiff()');
-                generateJournal(backend, rand, (description, method, args) => {
-                    console.log(description);
+            function runTest(debugMode, seed) {
+                const symbolPool = [],
+                      diff = new Diff(backend, {}, repositoryNamespace),
+                      diffSnapshots = [{'preCommitStructure': SymbolMap.create(), 'description': 'Initial'}];
+                performance.mark('start:first fill');
+                rand.setSeed(seed);
+                fillCheckout(backend, rand, symbolPool);
+                performance.measure('first fill', 'start:first fill');
+                performance.mark('start:record');
+                generateOperations(backend, rand, (description, method, args) => {
+                    if(debugMode)
+                        console.log(description);
                     diff[method](...args);
-                    makeDiffSnapshot(description);
+                    if(debugMode)
+                        diffSnapshots.push(makeDiffSnapshot(diff, description));
                 });
                 diff.compressData();
-                makeDiffSnapshot('Compress');
-                console.timeEnd('recordDiff()');
-
-                const diffSelect = document.getElementById('diffSelect');
-                let prevDiff = diffSnapshots[0];
-                diffSelect.oninput = () => {
-                    const nextDiff = diffSnapshots[diffSelect.value],
-                          symbolSlots = SymbolMap.create();
-                    while(svgRoot.childNodes.length > 0)
-                        svgRoot.removeChild(svgRoot.childNodes[0]);
-                    document.getElementById('description').textContent = nextDiff.description;
-                    visualizeDiff(prevDiff, symbolSlots, false);
-                    window.setTimeout(() => {
-                        visualizeDiff(nextDiff, symbolSlots, true);
-                    }, 0);
-                    prevDiff = nextDiff;
-                };
-                diffSelect.setAttribute('max', diffSnapshots.length-1);
-                diffSelect.oninput();
-
-                const validIntegrity = diff.validateIntegrity();
-                console.time('diff.commit()');
+                if(debugMode)
+                    diffSnapshots.push(makeDiffSnapshot(diff, 'Compress'));
+                performance.measure('record', 'start:record');
+                if(debugMode) {
+                    const diffSelect = document.getElementById('diffSelect');
+                    let prevDiff = diffSnapshots[0];
+                    diffSelect.oninput = () => {
+                        const nextDiff = diffSnapshots[diffSelect.value],
+                              symbolSlots = SymbolMap.create();
+                        while(svgRoot.childNodes.length > 0)
+                            svgRoot.removeChild(svgRoot.childNodes[0]);
+                        document.getElementById('description').textContent = nextDiff.description;
+                        visualizeDiff(prevDiff, symbolSlots, false);
+                        window.setTimeout(() => {
+                            visualizeDiff(nextDiff, symbolSlots, true);
+                        }, 0);
+                        prevDiff = nextDiff;
+                    };
+                    diffSelect.setAttribute('max', diffSnapshots.length-1);
+                    diffSelect.oninput();
+                }
+                const validation = diff.validateIntegrity();
+                performance.mark('start:commit');
                 diff.commit();
-                console.timeEnd('diff.commit()');
+                performance.measure('commit', 'start:commit');
                 const resultOfJournal = backend.encodeJson([checkoutNamespace]);
-                console.time('fillCheckout()');
-                fillCheckout();
-                console.timeEnd('fillCheckout()');
+                performance.mark('start:second fill');
+                rand.setSeed(seed);
+                fillCheckout(backend, rand, symbolPool);
+                performance.measure('second fill', 'start:second fill');
                 const resultOfNothing = backend.encodeJson([checkoutNamespace]);
-                console.time('diff.apply(false)');
+                performance.mark('start:apply');
                 const forwardApply = diff.apply(false);
-                console.timeEnd('diff.apply(false)');
+                performance.measure('apply', 'start:apply');
                 const resultOfDiff = backend.encodeJson([checkoutNamespace]);
-                console.time('diff.apply(true)');
+                performance.mark('start:revert');
                 const reverseApply = diff.apply(true);
-                console.timeEnd('diff.apply(true)');
+                performance.measure('revert', 'start:revert');
                 const resultOfRevert = backend.encodeJson([checkoutNamespace]);
-                colorPrintTestResult('Valid Integrity', validIntegrity);
-                colorPrintTestResult('Forward Apply', forwardApply);
-                colorPrintTestResult('Reverse Apply', reverseApply);
-                colorPrintTestResult('Forward Compare', resultOfJournal == resultOfDiff);
-                colorPrintTestResult('Reverse Compare', resultOfNothing == resultOfRevert);
+                if(debugMode) {
+                    for(const entry of performance.getEntriesByType('measure'))
+                        console.log(`${entry.name}: ${entry.duration} ms`);
+                } else {
+                    for(const entry of performance.getEntriesByType('measure')) {
+                        const value = Math.log10(entry.duration);
+                        if(!performanceAccumulator[entry.name])
+                            performanceAccumulator[entry.name] = [value];
+                        else
+                            performanceAccumulator[entry.name].push(value);
+                    }
+                }
+                performance.clearMarks();
+                performance.clearMeasures();
+                diff.unlink();
+                if(debugMode) {
+                    colorPrintTestResult('Validation', validation);
+                    colorPrintTestResult('Forward Apply', forwardApply);
+                    colorPrintTestResult('Reverse Apply', reverseApply);
+                    colorPrintTestResult('Forward Compare', resultOfJournal == resultOfDiff);
+                    colorPrintTestResult('Reverse Compare', resultOfNothing == resultOfRevert);
+                } else if(!validation || !forwardApply || !reverseApply || resultOfJournal != resultOfDiff || resultOfNothing != resultOfRevert)
+                    document.location.href = seed.value;
             };
+
+            if(true) {
+                const seed = document.createElement('input');
+                document.body.insertBefore(seed, svgRoot);
+                seed.value = rand.buffer[0];
+                seed.onblur = () => {
+                    backend.initPredefinedSymbols();
+                    document.body.removeChild(seed);
+                    console.log(`Seed: ${seed.value}`);
+                    runTest(true, seed.value);
+                };
+            } else {
+                loaded.then(() => {
+                    backend.initPredefinedSymbols();
+                    const skip = 10;
+                    for(let i = 0; i < 100+skip; ++i) {
+                        console.log(`Iteration: ${i}, Seed: ${rand.buffer[0]}`);
+                        runTest(false, rand.buffer[0]);
+                        if(i == skip)
+                            performanceAccumulator = {};
+                    }
+                    for(const name in performanceAccumulator) {
+                        const values = performanceAccumulator[name];
+                        values.sort();
+                        let average = 0, variance = 0;
+                        for(const value of values)
+                            average += value;
+                        average /= values.length;
+                        for(let value of values) {
+                            value -= average;
+                            variance += value*value;
+                        }
+                        variance /= values.length;
+                        console.log(`${name}: ${average} ms, σ=${Math.sqrt(variance)}, box-plot=[${Math.log10(configuration.operationCount)} ${values[Math.round(values.length*0.5)]} ${values[Math.round(values.length*0.75)]} ${values[Math.round(values.length*0.25)]} ${values[values.length-1]} ${values[0]}]`);
+                    }
+                });
+            }
         </script>
     </head>
     <body>
-        <input id="seed" />
         <input id="diffSelect" type="range" step="1" min="0" max="0" value="0" style="width: 500px; height: 25px; position: fixed; top: 10px; right: 20px;" />
         <div id="description" style="position: fixed; top: 40px; right: 20px;"></div>
     </body>

@@ -1,4 +1,4 @@
-import {SymbolInternals, SymbolMap, JavaScriptBackend, Diff} from '../SymatemJS.js';
+import {SymbolInternals, SymbolMap, Diff} from '../SymatemJS.js';
 
 export function createElement(tag, parentNode) {
     const svgElement = document.createElementNS('http://www.w3.org/2000/svg', tag);
@@ -10,9 +10,6 @@ export function createElement(tag, parentNode) {
 export function setAttribute(node, attribute, value) {
     node.setAttributeNS('http://www.w3.org/1999/xlink', attribute, value);
 }
-
-export const backend = new JavaScriptBackend();
-backend.initPredefinedSymbols();
 
 export const blockSize = 16, lineHeight = 18, textOffsetY = 4,
              svgRoot = createElement('svg', document.body);
