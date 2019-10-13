@@ -262,8 +262,11 @@ export default class BasicBackend {
      * Fills the predefined symbols
      */
     initPredefinedSymbols() {
-        for(const name of Object.getOwnPropertyNames(symbolByName))
-            this.setData(symbolByName[name], name);
+        for(const name of Object.getOwnPropertyNames(symbolByName)) {
+            const symbol = symbolByName[name];
+            this.manifestSymbol(symbol);
+            this.setData(symbol, name);
+        }
         for(const entity of [symbolByName.BinaryNumber, symbolByName.TwosComplement, symbolByName.IEEE754, symbolByName.UTF8, symbolByName.Composite])
             this.setTriple([entity, symbolByName.Type, symbolByName.Encoding], true);
     }
@@ -349,7 +352,7 @@ export default class BasicBackend {
     setLength(symbol, newLength) {
         const length = this.getLength(symbol);
         if(newLength != length)
-            this.creaseLength(symbol, Math.min(length, newLength), newLength-length);
+            console.assert(this.creaseLength(symbol, Math.min(length, newLength), newLength-length));
         return true;
     }
 
@@ -455,7 +458,7 @@ export default class BasicBackend {
         if(!dataLength)
             dataLength = dataBytes.byteLength * 8;
         this.setLength(symbol, dataLength);
-        this.writeData(symbol, 0, dataLength, dataBytes);
+        console.assert(this.writeData(symbol, 0, dataLength, dataBytes));
         return true;
     }
 

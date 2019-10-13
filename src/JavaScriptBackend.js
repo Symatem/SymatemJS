@@ -329,7 +329,7 @@ export default class JavaScriptBackend extends BasicBackend {
     }
 
     creaseLength(symbol, offset, length) {
-        const handle = (offset == 0 && length > 0) ? this.manifestSymbol(symbol) : this.getHandle(symbol);
+        const handle = this.getHandle(symbol);
         if(!handle)
             return false;
         if(length < 0) {
@@ -369,7 +369,7 @@ export default class JavaScriptBackend extends BasicBackend {
     }
 
     writeData(symbol, offset, length, dataBytes) {
-        const handle = this.manifestSymbol(symbol);
+        const handle = this.getHandle(symbol);
         if(!handle || length < 0 || offset+length > handle.dataLength || !dataBytes)
             return false;
         if(offset%8 == 0 && length%8 == 0)
@@ -400,14 +400,14 @@ export default class JavaScriptBackend extends BasicBackend {
     }
 
     setTriple(triple, linked) {
+        const handles = triple.map(symbol => this.getHandle(symbol));
+        if(!handles[0] || !handles[1] || !handles[2])
+            return false;
         let result = false;
         for(let tripleIndex = 0; tripleIndex < 3; ++tripleIndex) {
-            const handle = (linked) ? this.manifestSymbol(triple[tripleIndex]) : this.getHandle(triple[tripleIndex]);
-            if(!handle)
-                continue;
-            if(operateSubIndex(handle.subIndices[tripleIndex], triple[(tripleIndex+1)%3], triple[(tripleIndex+2)%3], linked))
+            if(operateSubIndex(handles[tripleIndex].subIndices[tripleIndex], triple[(tripleIndex+1)%3], triple[(tripleIndex+2)%3], linked))
                 result = true;
-            if(operateSubIndex(handle.subIndices[tripleIndex+3], triple[(tripleIndex+2)%3], triple[(tripleIndex+1)%3], linked))
+            if(operateSubIndex(handles[tripleIndex].subIndices[tripleIndex+3], triple[(tripleIndex+2)%3], triple[(tripleIndex+1)%3], linked))
                 result = true;
         }
         return result;

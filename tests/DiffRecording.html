@@ -16,6 +16,9 @@
             let performanceAccumulator = {};
             const backend = new RustWasmBackend(),
                   rand = new PRNG();
+            loaded.then(() => backend.initPredefinedSymbols);
+            const seed = document.getElementById('seed');
+            seed.value = rand.buffer[0];
 
             function runTest(debugMode, seed) {
                 const symbolPool = [],
@@ -26,7 +29,7 @@
                 fillCheckout(backend, rand, symbolPool);
                 performance.measure('first fill', 'start:first fill');
                 performance.mark('start:record');
-                generateOperations(backend, rand, (description, method, args) => {
+                generateOperations(backend, rand, symbolPool, (description, method, args) => {
                     if(debugMode)
                         console.log(description);
                     diff[method](...args);
@@ -45,7 +48,7 @@
                               symbolSlots = SymbolMap.create();
                         while(svgRoot.childNodes.length > 0)
                             svgRoot.removeChild(svgRoot.childNodes[0]);
-                        document.getElementById('description').textContent = nextDiff.description;
+                        document.getElementById('description').innerText = nextDiff.description;
                         visualizeDiff(prevDiff, symbolSlots, false);
                         window.setTimeout(() => {
                             visualizeDiff(nextDiff, symbolSlots, true);
@@ -98,46 +101,43 @@
                     document.location.href = seed.value;
             };
 
-            if(true) {
-                const seed = document.createElement('input');
-                document.body.insertBefore(seed, svgRoot);
-                seed.value = rand.buffer[0];
-                seed.onblur = () => {
-                    backend.initPredefinedSymbols();
-                    document.body.removeChild(seed);
-                    console.log(`Seed: ${seed.value}`);
-                    runTest(true, seed.value);
-                };
-            } else {
-                loaded.then(() => {
-                    backend.initPredefinedSymbols();
-                    const skip = 10;
-                    for(let i = 0; i < 100+skip; ++i) {
-                        console.log(`Iteration: ${i}, Seed: ${rand.buffer[0]}`);
-                        runTest(false, rand.buffer[0]);
-                        if(i == skip)
-                            performanceAccumulator = {};
+            document.getElementById('startDebug').onclick = () => {
+                rand.setSeed(seed.value);
+                document.getElementById('controls').innerHTML = '<input id="diffSelect" type="range" step="1" min="0" max="0" value="0" style="width: 500px; height: 25px; position: fixed; top: 10px; right: 20px;" /><div id="description" style="position: fixed; top: 40px; right: 20px;"></div>';
+                console.log(`Seed: ${rand.buffer[0]}`);
+                runTest(true, rand.buffer[0]);
+            };
+
+            document.getElementById('startScaling').onclick = () => {
+                rand.setSeed(seed.value);
+                document.getElementById('controls').innerHTML = '';
+                const skip = 10;
+                for(let i = 0; i < 100+skip; ++i) {
+                    console.log(`Iteration: ${i}, Seed: ${rand.buffer[0]}`);
+                    runTest(false, rand.buffer[0]);
+                    if(i == skip)
+                        performanceAccumulator = {};
+                }
+                for(const name in performanceAccumulator) {
+                    const values = performanceAccumulator[name];
+                    values.sort();
+                    let average = 0, variance = 0;
+                    for(const value of values)
+                        average += value;
+                    average /= values.length;
+                    for(let value of values) {
+                        value -= average;
+                        variance += value*value;
                     }
-                    for(const name in performanceAccumulator) {
-                        const values = performanceAccumulator[name];
-                        values.sort();
-                        let average = 0, variance = 0;
-                        for(const value of values)
-                            average += value;
-                        average /= values.length;
-                        for(let value of values) {
-                            value -= average;
-                            variance += value*value;
-                        }
-                        variance /= values.length;
-                        console.log(`${name}: ${average} ms, σ=${Math.sqrt(variance)}, box-plot=[${Math.log10(configuration.operationCount)} ${values[Math.round(values.length*0.5)]} ${values[Math.round(values.length*0.75)]} ${values[Math.round(values.length*0.25)]} ${values[values.length-1]} ${values[0]}]`);
-                    }
-                });
-            }
+                    variance /= values.length;
+                    console.log(`${name}: ${average} ms, σ=${Math.sqrt(variance)}, box-plot=[${Math.log10(configuration.minSymbolCount)} ${values[Math.round(values.length*0.5)]} ${values[Math.round(values.length*0.75)]} ${values[Math.round(values.length*0.25)]} ${values[values.length-1]} ${values[0]}]`);
+                }
+            };
         </script>
     </head>
     <body>
-        <input id="diffSelect" type="range" step="1" min="0" max="0" value="0" style="width: 500px; height: 25px; position: fixed; top: 10px; right: 20px;" />
-        <div id="description" style="position: fixed; top: 40px; right: 20px;"></div>
+        <div id="controls">
+            <input id="seed"><input type="button" value="Debug" id="startDebug" /><input type="button" value="Scaling" id="startScaling" />
+        </div>
     </body>
 </html>
