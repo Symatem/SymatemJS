@@ -1,14 +1,15 @@
 import {SymbolInternals, BasicBackend} from '../SymatemJS.js';
 
 let module, wasm;
-const path = 'dist/backend.wasm',
-      imports = {};
+const imports = {};
 
 export const loaded = ((typeof process === 'undefined')
-? fetch('../'+path).then(response => response.arrayBuffer())
+? fetch('../dist/backend.wasm').then(response => response.arrayBuffer())
 : new Promise((resolve, reject) => {
-    import('fs').then((fs) => {
-        fs.readFile(path, undefined, (err, data) => {
+    Promise.all([import('url'), import('path'), import('fs')]).then(([url, path, fs]) => {
+        const __filename = url.fileURLToPath(import.meta.url),
+              __dirname = path.dirname(__filename);
+        fs.readFile(path.join(__dirname, '../backend.wasm'), undefined, (err, data) => {
             err ? reject(err) : resolve(data);
         });
     });

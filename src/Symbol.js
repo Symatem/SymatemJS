@@ -16,8 +16,8 @@ export class SymbolInternalsColonString {
      * @param {Symbol} symbol
      * @return {String} string
      */
-    static symbolToString(string) {
-        return string;
+    static symbolToString(symbol) {
+        return symbol;
     }
 
     /**

@@ -7,7 +7,7 @@
     "license": "MIT",
     "description": "Symatem JS API",
     "module": "SymatemJS.js",
-    "main": "dist/SymatemJS.js",
+    "main": "dist/SymatemJS.mjs",
     "scripts": {
         "preinstall": "./mjs.sh",
         "test": "node --experimental-modules dist/tests/Tests.mjs",
