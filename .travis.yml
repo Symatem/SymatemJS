@@ -4,7 +4,5 @@ node_js:
 cache:
   directories:
     node_modules
-before_script:
-  - curl --create-dirs -o dist/backend.wasm -GL https://github.com/Symatem/SymatemRust/releases/latest/download/symatem.wasm
 script:
   npm test

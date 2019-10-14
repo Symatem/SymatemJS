@@ -9,7 +9,7 @@
     "module": "SymatemJS.js",
     "main": "dist/SymatemJS.js",
     "scripts": {
-        "pretest": "./mjs.sh",
+        "preinstall": "./mjs.sh",
         "test": "node --experimental-modules dist/tests/Tests.mjs",
         "docs": "documentation build SymatemJS.js -f html -o docs"
     },
