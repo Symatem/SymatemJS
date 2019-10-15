@@ -864,4 +864,110 @@ export default class Diff extends BasicBackend {
             }
         });
     }
+
+    /**
+     * Writes the diff into the repository
+     * @param {Identity} repositoryNamespace The namespace identity of the repository
+     */
+    link(repositoryNamespace) {
+        console.assert(this.postCommitStructure && !this.symbol);
+        this.symbol = this.backend.createSymbol(repositoryNamespace);
+        this.backend.setTriple([this.symbol, BasicBackend.symbolByName.DataSource, this.dataSource], true);
+        this.backend.setTriple([this.symbol, BasicBackend.symbolByName.DataRestore, this.dataRestore], true);
+        for(const [type, attributeName] of [['manifestSymbols', 'ManifestSymbol'], ['releaseSymbols', 'ReleaseSymbol']])
+            if(this.postCommitStructure[type])
+                for(const symbol of this.postCommitStructure[type])
+                    this.backend.setTriple([this.symbol, BasicBackend.symbolByName[attributeName], symbol], true);
+        for(const [type, attributeName] of [['linkTripleOperations', 'LinkTriple'], ['unlinkTripleOperations', 'UnlinkTriple']])
+            if(this.postCommitStructure[type])
+                for(const operation of this.postCommitStructure[type]) {
+                    operation.symbol = this.backend.createSymbol(repositoryNamespace);
+                    this.backend.setTriple([this.symbol, BasicBackend.symbolByName[attributeName], operation.symbol], true);
+                    this.backend.setTriple([operation.symbol, BasicBackend.symbolByName.Entity, operation.triple[0]], true);
+                    this.backend.setTriple([operation.symbol, BasicBackend.symbolByName.Attribute, operation.triple[1]], true);
+                    this.backend.setTriple([operation.symbol, BasicBackend.symbolByName.Value, operation.triple[2]], true);
+                }
+        for(const [type, attributeName] of [['increaseLengthOperations', 'IncreaseLength'], ['decreaseLengthOperations', 'DecreaseLength']])
+            if(this.postCommitStructure[type])
+                for(const operation of this.postCommitStructure[type]) {
+                    operation.symbol = this.backend.createSymbol(repositoryNamespace);
+                    operation.dstOffsetSymbol = this.backend.createSymbol(repositoryNamespace);
+                    operation.lengthSymbol = this.backend.createSymbol(repositoryNamespace);
+                    this.backend.setTriple([this.symbol, BasicBackend.symbolByName[attributeName], operation.symbol], true);
+                    this.backend.setTriple([operation.symbol, BasicBackend.symbolByName.Destination, operation.dstSymbol], true);
+                    this.backend.setTriple([operation.symbol, BasicBackend.symbolByName.DestinationOffset, operation.dstOffsetSymbol], true);
+                    this.backend.setTriple([operation.symbol, BasicBackend.symbolByName.Length, operation.lengthSymbol], true);
+                    this.backend.setData(operation.dstOffsetSymbol, operation.dstOffset);
+                    this.backend.setData(operation.lengthSymbol, Math.abs(operation.length));
+                }
+        for(const [type, attributeName] of [['replaceDataOperations', 'ReplaceData'], ['restoreDataOperations', 'RestoreData']])
+            if(this.postCommitStructure[type])
+                for(const operation of this.postCommitStructure[type]) {
+                    operation.symbol = this.backend.createSymbol(repositoryNamespace);
+                    operation.dstOffsetSymbol = this.backend.createSymbol(repositoryNamespace);
+                    operation.srcOffsetSymbol = this.backend.createSymbol(repositoryNamespace);
+                    operation.lengthSymbol = this.backend.createSymbol(repositoryNamespace);
+                    this.backend.setTriple([this.symbol, BasicBackend.symbolByName[attributeName], operation.symbol], true);
+                    if(operation.dstSymbol)
+                        this.backend.setTriple([operation.symbol, BasicBackend.symbolByName.Destination, operation.dstSymbol], true);
+                    this.backend.setTriple([operation.symbol, BasicBackend.symbolByName.DestinationOffset, operation.dstOffsetSymbol], true);
+                    if(operation.srcSymbol)
+                        this.backend.setTriple([operation.symbol, BasicBackend.symbolByName.Source, operation.srcSymbol], true);
+                    this.backend.setTriple([operation.symbol, BasicBackend.symbolByName.SourceOffset, operation.srcOffsetSymbol], true);
+                    this.backend.setTriple([operation.symbol, BasicBackend.symbolByName.Length, operation.lengthSymbol], true);
+                    this.backend.setData(operation.dstOffsetSymbol, operation.dstOffset);
+                    this.backend.setData(operation.srcOffsetSymbol, operation.srcOffset);
+                    this.backend.setData(operation.lengthSymbol, operation.length);
+                }
+        if(this.postCommitStructure.minimumLengths)
+            for(const operation of this.postCommitStructure.minimumLengths) {
+                operation.symbol = this.backend.createSymbol(repositoryNamespace);
+                operation.forwardLengthSymbol = this.backend.createSymbol(repositoryNamespace);
+                operation.reverseLengthSymbol = this.backend.createSymbol(repositoryNamespace);
+                this.backend.setTriple([this.symbol, BasicBackend.symbolByName.MinimumLength, operation.symbol], true);
+                this.backend.setTriple([operation.symbol, BasicBackend.symbolByName.Source, operation.srcSymbol], true);
+                this.backend.setTriple([operation.symbol, BasicBackend.symbolByName.ForwardLength, operation.forwardLengthSymbol], true);
+                this.backend.setTriple([operation.symbol, BasicBackend.symbolByName.ReverseLength, operation.reverseLengthSymbol], true);
+                this.backend.setData(operation.forwardLengthSymbol, operation.forwardLength);
+                this.backend.setData(operation.reverseLengthSymbol, operation.reverseLength);
+            }
+    }
+
+    /**
+     * Removes the diff from the repository
+     */
+    unlink() {
+        console.assert(this.postCommitStructure);
+        this.backend.unlinkSymbol(this.dataSource);
+        this.backend.unlinkSymbol(this.dataRestore);
+        if(!this.symbol)
+            return;
+        for(const type of ['linkTripleOperations', 'unlinkTripleOperations'])
+            if(this.postCommitStructure[type])
+                for(const operation of this.postCommitStructure[type])
+                    this.backend.unlinkSymbol(operation.symbol);
+        for(const type of ['increaseLengthOperations', 'decreaseLengthOperations'])
+            if(this.postCommitStructure[type])
+                for(const operation of this.postCommitStructure[type]) {
+                    this.backend.unlinkSymbol(operation.dstOffsetSymbol);
+                    this.backend.unlinkSymbol(operation.lengthSymbol);
+                    this.backend.unlinkSymbol(operation.symbol);
+                }
+        for(const type of ['replaceDataOperations', 'restoreDataOperations'])
+            if(this.postCommitStructure[type])
+                for(const operation of this.postCommitStructure[type]) {
+                    this.backend.unlinkSymbol(operation.dstOffsetSymbol);
+                    this.backend.unlinkSymbol(operation.srcOffsetSymbol);
+                    this.backend.unlinkSymbol(operation.lengthSymbol);
+                    this.backend.unlinkSymbol(operation.symbol);
+                }
+        if(this.postCommitStructure.minimumLengths)
+            for(const operation of this.postCommitStructure.minimumLengths) {
+                this.backend.unlinkSymbol(operation.forwardLengthSymbol);
+                this.backend.unlinkSymbol(operation.reverseLengthSymbol);
+                this.backend.unlinkSymbol(operation.symbol);
+            }
+        this.backend.unlinkSymbol(this.symbol);
+        delete this.symbol;
+    }
 }
