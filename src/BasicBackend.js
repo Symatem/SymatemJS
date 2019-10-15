@@ -1,4 +1,4 @@
-import {Utils, SymbolInternals} from '../SymatemJS.js';
+import {Utils, SymbolInternals, SymbolMap} from '../SymatemJS.js';
 
 const queryMode = ['M', 'V', 'I'],
       queryMasks = {};
@@ -291,6 +291,15 @@ export default class BasicBackend {
     }
 
     /**
+     * Makes sure a symbol exists
+     * @param {Symbol} symbol
+     * @return {Boolean} False if it already existed
+     */
+    manifestSymbol(symbol) {
+        throw new Error('Abstract, not implemented');
+    }
+
+    /**
      * Creates a new symbol
      * @param {Identity} namespaceIdentity Identity of the namespace to create the symbol in
      * @return {Symbol} symbol
@@ -302,7 +311,7 @@ export default class BasicBackend {
     /**
      * Deletes a symbol
      * @param {Symbol} symbol
-     * @return {Boolean} True on success (changes occurred)
+     * @return {Boolean} False if it did not exist
      */
     releaseSymbol(symbol) {
         throw new Error('Abstract, not implemented');
@@ -485,17 +494,26 @@ export default class BasicBackend {
     }
 
     /**
-     * Multiple independent calls to replaceData() without influencing each other
+     * Multiple independent calls to replaceData() without influencing each other. Slices must not overlap at their destinations.
      * @param {ReplaceDataOperation[]} operations
      */
     replaceDataSimultaneously(operations) {
+        const byDstSymbol = SymbolMap.create();
         for(const operation of operations) {
             operation.dataBytes = this.readData(operation.srcSymbol, operation.srcOffset, operation.length);
             if(operation.length < 0 || !operation.dataBytes || operation.dstOffset+operation.length > this.getLength(operation.dstSymbol))
                 return false;
+            SymbolMap.getOrInsert(byDstSymbol, operation.dstSymbol, []).push(operation);
         }
-        for(const operation of operations)
-            console.assert(this.writeData(operation.dstSymbol, operation.dstOffset, operation.length, operation.dataBytes));
+        for(const [dstSymbol, operationsOfDstSymbol] of SymbolMap.entries(byDstSymbol)) {
+            operationsOfDstSymbol.sort((a, b) => a.dstOffset-b.dstOffset);
+            for(let i = 1; i < operationsOfDstSymbol.length; ++i)
+                if(operationsOfDstSymbol[i-1].dstOffset+operationsOfDstSymbol[i-1].length > operationsOfDstSymbol[i].dstOffset)
+                    return false;
+        }
+        for(const [dstSymbol, operationsOfDstSymbol] of SymbolMap.entries(byDstSymbol))
+            for(const operation of operationsOfDstSymbol)
+                console.assert(this.writeData(operation.dstSymbol, operation.dstOffset, operation.length, operation.dataBytes));
         return true;
     }
 

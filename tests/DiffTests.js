@@ -5,15 +5,15 @@ export const repositoryNamespace = 3,
              checkoutNamespace = 4,
              configuration = {
     'minSymbolCount': 10,
-    'minTripleCount': 10,
+    'minTripleCount': 100,
     'minDataLength': 10,
     'maxDataLength': 50,
     'minCreaseLength': 1,
     'maxCreaseLength': 10,
     'operationCount': 100,
     'operationProbabilities': PRNG.cumulateDistribution({
-        'manifestSymbol': 1,
-        'unlinkSymbol': 1,
+        'createSymbol': 1,
+        'unlinkSymbol': 0.5,
         'increaseLength': 1,
         'decreaseLength': 1,
         'replaceData': 1,
@@ -22,10 +22,10 @@ export const repositoryNamespace = 3,
     })
 };
 
-export function fillCheckout(backend, rand, symbolPool) {
+export function fillCheckout(backend, rand) {
     backend.unlinkSymbol(BasicBackend.symbolInNamespace('Namespaces', checkoutNamespace));
-    symbolPool.length = 0;
-    for(let i = 0; i < configuration.minSymbolCount; ++i) {
+    const symbolPool = [];
+    for(let i = 0; i < configuration.minSymbolCount*2; ++i) {
         const symbol = backend.createSymbol(checkoutNamespace),
               length = rand.range(configuration.minDataLength, configuration.maxDataLength),
               dataBytes = rand.bytes(Math.ceil(length/32)*4);
@@ -64,32 +64,33 @@ export function makeDiffSnapshot(diff, description) {
     return diffSnapshot;
 }
 
-export function generateOperations(backend, rand, symbolPool, callback) {
+export function *generateOperations(backend, rand, symbolPool) {
     for(let iteration = 0; iteration < configuration.operationCount; ++iteration) {
         const operationType = (symbolPool.length < configuration.minSymbolCount)
-                              ? 'manifestSymbol'
+                              ? 'createSymbol'
                               : rand.selectByDistribution(configuration.operationProbabilities);
         switch(operationType) {
-            case 'manifestSymbol': {
-                const symbol = backend.createSymbol(checkoutNamespace),
-                      length = rand.range(configuration.minDataLength, configuration.maxDataLength),
-                      dataBytes = rand.bytes(Math.ceil(length/32)*4);
+            case 'createSymbol': {
+                const symbol = backend.createSymbol(checkoutNamespace);
                 symbolPool.push(symbol);
-                callback(`${iteration}: Manifested the symbol ${symbol}`, 'manifestSymbol', [symbol]);
+                yield `${iteration}: Create a symbol ${symbol}`;
             } break;
             case 'unlinkSymbol': {
                 const index = rand.range(0, symbolPool.length),
                       symbol = symbolPool[index];
                 symbolPool.splice(index, 1);
-                callback(`${iteration}: Unlink the symbol ${symbol}`, 'unlinkSymbol', [symbol]);
+                backend.unlinkSymbol(symbol);
+                yield `${iteration}: Unlink the symbol ${symbol}`;
             } break;
             case 'increaseLength': {
                 const dstSymbol = rand.selectUniformly(symbolPool),
                       dstLength = backend.getLength(dstSymbol),
                       dstOffset = rand.range(0, dstLength),
                       length = rand.range(configuration.minCreaseLength, configuration.maxCreaseLength);
-                callback(`${iteration}: Increase '${dstSymbol}'[${dstOffset}] by ${length} bits`, 'creaseLength', [dstSymbol, dstOffset, length]);
-                callback(`${iteration}: Initialize ${length} bits at '${dstSymbol}'[${dstOffset}] as zeros`, 'writeData', [dstSymbol, dstOffset, length, rand.bytes(Math.ceil(length/32)*4)]);
+                backend.creaseLength(dstSymbol, dstOffset, length);
+                yield `${iteration}: Increase '${dstSymbol}'[${dstOffset}] by ${length} bits`;
+                backend.writeData(dstSymbol, dstOffset, length, rand.bytes(Math.ceil(length/32)*4));
+                yield `${iteration}: Initialize ${length} bits at '${dstSymbol}'[${dstOffset}] as zeros`;
             } break;
             case 'decreaseLength': {
                 const dstSymbol = rand.selectUniformly(symbolPool),
@@ -97,8 +98,10 @@ export function generateOperations(backend, rand, symbolPool, callback) {
                       endOffset = rand.range(0, dstLength),
                       dstOffset = rand.range(0, endOffset),
                       length = endOffset-dstOffset;
-                if(length > 0)
-                    callback(`${iteration}: Decrease '${dstSymbol}'[${dstOffset}] by ${length} bits`, 'creaseLength', [dstSymbol, dstOffset, -length]);
+                if(length > 0) {
+                    backend.creaseLength(dstSymbol, dstOffset, -length);
+                    yield `${iteration}: Decrease '${dstSymbol}'[${dstOffset}] by ${length} bits`;
+                }
             } break;
             case 'replaceData': {
                 const descriptions = [], replaceOperations = [];
@@ -117,8 +120,10 @@ export function generateOperations(backend, rand, symbolPool, callback) {
                         replaceOperations.push({'dstSymbol': dstSymbol, 'dstOffset': dstOffset, 'srcSymbol': srcSymbol, 'srcOffset': srcOffset, 'length': length});
                     }
                 }
-                if(replaceOperations.length > 0)
-                    callback(`${iteration}: ${descriptions.join('\n')}`, 'replaceDataSimultaneously', [replaceOperations]);
+                if(replaceOperations.length > 0) {
+                    backend.replaceDataSimultaneously(replaceOperations);
+                    yield `${iteration}: ${descriptions.join('\n')}`;
+                }
             } break;
             case 'writeData': {
                 const dstSymbol = rand.selectUniformly(symbolPool),
@@ -127,13 +132,16 @@ export function generateOperations(backend, rand, symbolPool, callback) {
                       maxLength = dstLength-dstOffset,
                       length = rand.range(0, maxLength),
                       dataBytes = rand.bytes(Math.ceil(length/32)*4);
-                if(length > 0)
-                    callback(`${iteration}: Replace ${length} bits at '${dstSymbol}'[${dstOffset}] by ${dataBytes}`, 'writeData', [dstSymbol, dstOffset, length, dataBytes]);
+                if(length > 0) {
+                    backend.writeData(dstSymbol, dstOffset, length, dataBytes);
+                    yield `${iteration}: Replace ${length} bits at '${dstSymbol}'[${dstOffset}] by ${dataBytes}`;
+                }
             } break;
             case 'setTriple': {
                 const linked = rand.selectUniformly([false, true]),
                       triple = [rand.selectUniformly(symbolPool), rand.selectUniformly(symbolPool), rand.selectUniformly(symbolPool)];
-                callback(`${iteration}: ${(linked) ? 'Linked' : 'Unlinked'} the triple ${triple[0]} ${triple[1]} ${triple[2]}`, 'setTriple', [triple, linked]);
+                backend.setTriple(triple, linked);
+                yield `${iteration}: ${(linked) ? 'Linked' : 'Unlinked'} the triple ${triple[0]} ${triple[1]} ${triple[2]}`;
             } break;
         }
     }
@@ -143,17 +151,15 @@ export function getTests(backend, rand) {
     return {
         'diffRecording': [100, () => {
             const resultOfNothing = backend.encodeJson([checkoutNamespace]),
-                  encodedDiff = new Diff(backend, {}, repositoryNamespace),
+                  diff = new Diff(backend, {}, repositoryNamespace),
                   symbolPool = [...backend.querySymbols(checkoutNamespace)];
-            generateOperations(backend, rand, symbolPool, (description, method, args) => {
-                encodedDiff[method](...args);
-            });
-            encodedDiff.compressData();
-            if(!encodedDiff.validateIntegrity())
+            for(const description of generateOperations(diff, rand, symbolPool));
+            diff.compressData();
+            if(!diff.validateIntegrity())
                 return false;
-            encodedDiff.commit();
+            diff.commit();
             const decodedDiff = new Diff(backend, {}, repositoryNamespace);
-            decodedDiff.decodeJson(encodedDiff.encodeJson());
+            decodedDiff.decodeJson(diff.encodeJson());
             const resultOfJournal = backend.encodeJson([checkoutNamespace]);
             if(!decodedDiff.apply(true)) {
                 console.warn('Could not apply reverse');

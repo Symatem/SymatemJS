@@ -15,27 +15,29 @@
 
             let performanceAccumulator = {};
             const backend = new RustWasmBackend(),
-                  rand = new PRNG();
+                  rand = new PRNG(),
+                  checkoutSnapshots = [];
             loaded.then(() => backend.initPredefinedSymbols);
             const seed = document.getElementById('seed');
             seed.value = rand.buffer[0];
 
             function runTest(debugMode, seed) {
-                const symbolPool = [],
-                      diff = new Diff(backend, {}, repositoryNamespace),
+                const diff = new Diff(backend, {}, repositoryNamespace),
                       diffSnapshots = [{'preCommitStructure': SymbolMap.create(), 'description': 'Initial'}];
-                performance.mark('start:first fill');
-                rand.setSeed(seed);
-                fillCheckout(backend, rand, symbolPool);
-                performance.measure('first fill', 'start:first fill');
+                if(seed != undefined) {
+                    performance.mark('start:fill');
+                    fillCheckout(backend, rand);
+                    performance.measure('fill', 'start:fill');
+                }
+                if(debugMode)
+                    checkoutSnapshots[0] = backend.encodeJson([checkoutNamespace]);
+                const symbolPool = [...backend.querySymbols(checkoutNamespace)];
                 performance.mark('start:record');
-                generateOperations(backend, rand, symbolPool, (description, method, args) => {
-                    if(debugMode)
+                for(const description of generateOperations(diff, rand, symbolPool))
+                    if(debugMode) {
                         console.log(description);
-                    diff[method](...args);
-                    if(debugMode)
                         diffSnapshots.push(makeDiffSnapshot(diff, description));
-                });
+                    }
                 diff.compressData();
                 if(debugMode)
                     diffSnapshots.push(makeDiffSnapshot(diff, 'Compress'));
@@ -58,24 +60,24 @@
                     diffSelect.setAttribute('max', diffSnapshots.length-1);
                     diffSelect.oninput();
                 }
-                const validation = diff.validateIntegrity();
+                const integrity = (debugMode) ? diff.validateIntegrity() : false;
                 performance.mark('start:commit');
                 diff.commit();
                 performance.measure('commit', 'start:commit');
-                const resultOfJournal = backend.encodeJson([checkoutNamespace]);
-                performance.mark('start:second fill');
-                rand.setSeed(seed);
-                fillCheckout(backend, rand, symbolPool);
-                performance.measure('second fill', 'start:second fill');
-                const resultOfNothing = backend.encodeJson([checkoutNamespace]);
-                performance.mark('start:apply');
-                const forwardApply = diff.apply(false);
-                performance.measure('apply', 'start:apply');
-                const resultOfDiff = backend.encodeJson([checkoutNamespace]);
+                if(debugMode)
+                    checkoutSnapshots[1] = backend.encodeJson([checkoutNamespace]);
                 performance.mark('start:revert');
                 const reverseApply = diff.apply(true);
                 performance.measure('revert', 'start:revert');
-                const resultOfRevert = backend.encodeJson([checkoutNamespace]);
+                if(debugMode)
+                    checkoutSnapshots[2] = backend.encodeJson([checkoutNamespace]);
+                performance.mark('start:apply');
+                const forwardApply = diff.apply(false);
+                performance.measure('apply', 'start:apply');
+                if(debugMode)
+                    checkoutSnapshots[3] = backend.encodeJson([checkoutNamespace]);
+                diff.apply(true);
+
                 if(debugMode) {
                     for(const entry of performance.getEntriesByType('measure'))
                         console.log(`${entry.name}: ${entry.duration} ms`);
@@ -92,13 +94,12 @@
                 performance.clearMeasures();
                 diff.unlink();
                 if(debugMode) {
-                    colorPrintTestResult('Validation', validation);
-                    colorPrintTestResult('Forward Apply', forwardApply);
+                    colorPrintTestResult('Integrity', integrity);
                     colorPrintTestResult('Reverse Apply', reverseApply);
-                    colorPrintTestResult('Forward Compare', resultOfJournal == resultOfDiff);
-                    colorPrintTestResult('Reverse Compare', resultOfNothing == resultOfRevert);
-                } else if(!validation || !forwardApply || !reverseApply || resultOfJournal != resultOfDiff || resultOfNothing != resultOfRevert)
-                    document.location.href = seed.value;
+                    colorPrintTestResult('Forward Apply', forwardApply);
+                    colorPrintTestResult('Reverse Compare', checkoutSnapshots[0] == checkoutSnapshots[2]);
+                    colorPrintTestResult('Forward Compare', checkoutSnapshots[1] == checkoutSnapshots[3]);
+                }
             };
 
             document.getElementById('startDebug').onclick = () => {
@@ -112,9 +113,9 @@
                 rand.setSeed(seed.value);
                 document.getElementById('controls').innerHTML = '';
                 const skip = 10;
-                for(let i = 0; i < 100+skip; ++i) {
+                for(let i = 0; i < skip+100; ++i) {
                     console.log(`Iteration: ${i}, Seed: ${rand.buffer[0]}`);
-                    runTest(false, rand.buffer[0]);
+                    runTest(false, (i == 0) ? rand.buffer[0] : undefined);
                     if(i == skip)
                         performanceAccumulator = {};
                 }
@@ -130,7 +131,7 @@
                         variance += value*value;
                     }
                     variance /= values.length;
-                    console.log(`${name}: ${average} ms, σ=${Math.sqrt(variance)}, box-plot=[${Math.log10(configuration.minSymbolCount)} ${values[Math.round(values.length*0.5)]} ${values[Math.round(values.length*0.75)]} ${values[Math.round(values.length*0.25)]} ${values[values.length-1]} ${values[0]}]`);
+                    console.log(`${name}: ${average} ms, σ=${Math.sqrt(variance)}, box-plot=[${Math.log10(configuration.operationCount)} ${values[Math.floor(values.length*0.5)]} ${values[Math.floor(values.length*0.75)]} ${values[Math.floor(values.length*0.25)]} ${values[values.length-1]} ${values[0]}]`);
                 }
             };
         </script>

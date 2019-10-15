@@ -282,7 +282,7 @@ export default class JavaScriptBackend extends BasicBackend {
               handleIdentity = SymbolInternals.identityOfSymbol(symbol);
         let handle = namespace.handles[handleIdentity];
         if(handle)
-            return handle;
+            return false;
         console.assert(IdentityPool.remove(namespace.freeIdentityPool, handleIdentity));
         handle = namespace.handles[handleIdentity] = {
             // namespace: namespace,
@@ -293,7 +293,7 @@ export default class JavaScriptBackend extends BasicBackend {
         };
         for(let i = 0; i < 6; ++i)
             handle.subIndices.push(SymbolMap.create());
-        return handle;
+        return true;
     }
 
     createSymbol(namespaceIdentity) {
@@ -330,12 +330,7 @@ export default class JavaScriptBackend extends BasicBackend {
 
     creaseLength(symbol, offset, length) {
         const handle = this.getHandle(symbol);
-        if(!handle)
-            return false;
-        if(length < 0) {
-            if(offset-length > handle.dataLength)
-                return false;
-        } else if(offset > handle.dataLength)
+        if(!handle || offset+Math.max(0, -length) > handle.dataLength)
             return false;
         const newDataBytes = new Uint8Array(Math.ceil((handle.dataLength+length)/32)*4);
         newDataBytes.set(handle.dataBytes.subarray(0, Math.ceil(offset/8)), 0);

@@ -260,9 +260,9 @@ export default class Diff extends BasicBackend {
         return this.backend.readData(symbol, offset, length);
     }
 
-    manifestSymbol(symbol) {
+    manifestSymbol(symbol, created) {
         console.assert(this.preCommitStructure);
-        if(this.isRecordingFromBackend && !this.backend.manifestSymbol(symbol))
+        if(this.isRecordingFromBackend && !created && !this.backend.manifestSymbol(symbol))
             return false;
         symbol = BasicBackend.relocateSymbol(symbol, this.recordingRelocation);
         const operationsOfSymbol = SymbolMap.getOrInsert(this.preCommitStructure, symbol, {});
@@ -272,6 +272,13 @@ export default class Diff extends BasicBackend {
         } else
             operationsOfSymbol.manifestOrRelease = 'manifest';
         return true;
+    }
+
+    createSymbol(namespaceIdentity) {
+        console.assert(this.isRecordingFromBackend);
+        const symbol = this.backend.createSymbol(namespaceIdentity);
+        console.assert(this.manifestSymbol(symbol, true));
+        return symbol;
     }
 
     releaseSymbol(symbol) {
@@ -740,7 +747,7 @@ export default class Diff extends BasicBackend {
                         return false;
         if(this.postCommitStructure.minimumLengths)
             for(const operation of this.postCommitStructure.minimumLengths)
-                if(this.backend.getLength(BasicBackend.relocateSymbol(operation.srcSymbol, checkoutRelocation)) < operation[((reverse) ? 'reverse' : 'forward')+'Length'])
+                if(dst.getLength(BasicBackend.relocateSymbol(operation.srcSymbol, checkoutRelocation)) < operation[((reverse) ? 'reverse' : 'forward')+'Length'])
                     return false;
         if(this.postCommitStructure[(reverse) ? 'releaseSymbols' : 'manifestSymbols'])
             for(const symbol of this.postCommitStructure[(reverse) ? 'releaseSymbols' : 'manifestSymbols'])
