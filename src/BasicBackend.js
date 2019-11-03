@@ -262,11 +262,11 @@ export default class BasicBackend {
      * Fills the predefined symbols
      */
     initPredefinedSymbols() {
-        for(const name of Object.getOwnPropertyNames(symbolByName)) {
-            const symbol = symbolByName[name];
-            this.manifestSymbol(symbol);
-            this.setData(symbol, name);
-        }
+        const names = Object.getOwnPropertyNames(symbolByName);
+        for(const name of names)
+            this.manifestSymbol(symbolByName[name]);
+        for(const name of names)
+            this.setData(symbolByName[name], name);
         for(const entity of [symbolByName.BinaryNumber, symbolByName.TwosComplement, symbolByName.IEEE754, symbolByName.UTF8, symbolByName.Composite])
             this.setTriple([entity, symbolByName.Type, symbolByName.Encoding], true);
     }

@@ -48,8 +48,7 @@ export default class RustWasmBackend extends BasicBackend {
     }
 
     manifestSymbol(symbol) {
-        wasm.manifestSymbol(SymbolInternals.namespaceOfSymbol(symbol), SymbolInternals.identityOfSymbol(symbol));
-        return true;
+        return wasm.manifestSymbol(SymbolInternals.namespaceOfSymbol(symbol), SymbolInternals.identityOfSymbol(symbol)) !== 0;
     }
 
     createSymbol(namespaceIdentity) {
