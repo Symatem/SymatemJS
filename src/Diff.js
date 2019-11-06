@@ -167,10 +167,11 @@ export default class Diff extends BasicBackend {
                 creaseLengthOperations[i].dstOffset += shift;
     }
 
-    saveDataToRestore(srcSymbolRecording, srcSymbolModal, srcOffset, length) {
-        if(!this.isRecordingFromBackend)
-            return; // TODO: read from this.backend.postCommitStructure.restoreDataOperations this.backend.dataRestore
-        console.assert(srcOffset+length <= this.backend.getLength(srcSymbolRecording));
+    saveDataToRestore(srcSymbolRecording, srcSymbolModal, srcOffset, length, dataRestoreOperation) {
+        if(this.isRecordingFromBackend)
+            console.assert(srcOffset+length <= this.backend.getLength(srcSymbolRecording));
+        else if(!dataRestoreOperation)
+            return;
         const operationsOfSymbol = SymbolMap.getOrInsert(this.preCommitStructure, srcSymbolModal, {}),
               creaseLengthOperations = operationsOfSymbol.creaseLengthOperations || [],
               mergeCopyReplaceOperations = new Set(),
@@ -182,11 +183,12 @@ export default class Diff extends BasicBackend {
         const addSlice = (length) => {
             if(length <= 0)
                 return;
-            const dstOffset = (replaceOperationIndex < operationsOfDataRestore.replaceOperations.length)
+            const srcOffset = intermediateOffset + ((this.isRecordingFromBackend) ? -decreaseAccumulator : dataRestoreOperation.dstOffset-dataRestoreOperation.srcOffset),
+                  dstOffset = (replaceOperationIndex < operationsOfDataRestore.replaceOperations.length)
                              ? operationsOfDataRestore.replaceOperations[replaceOperationIndex].dstOffset
                              : this.backend.getLength(this.dataRestore);
             this.backend.creaseLength(this.dataRestore, dstOffset, length);
-            this.backend.writeData(this.dataRestore, dstOffset, length, this.backend.readData(srcSymbolRecording, intermediateOffset-decreaseAccumulator, length));
+            this.backend.writeData(this.dataRestore, dstOffset, length, this.backend.readData(srcSymbolRecording, srcOffset, length));
             const operation = {
                 'trackingId': this.nextTrackingId++,
                 'dstSymbol': this.dataRestore,
@@ -755,22 +757,34 @@ export default class Diff extends BasicBackend {
         if(this.postCommitStructure[(reverse) ? 'decreaseLengthOperations' : 'increaseLengthOperations'])
             for(const operation of (reverse) ? Utils.reversed(this.postCommitStructure.decreaseLengthOperations) : this.postCommitStructure.increaseLengthOperations)
                 console.assert(dst.creaseLength(BasicBackend.relocateSymbol(operation.dstSymbol, checkoutRelocation), operation.dstOffset, (reverse) ? -operation.length : operation.length));
+        let dataSource = this.dataSource, dataSourceOffset = 0;
+        if(dst instanceof Diff) {
+            console.assert(!reverse);
+            dst.isRecordingFromBackend = false;
+            dataSource = dst.dataSource;
+            dataSourceOffset = this.backend.getLength(dst.dataSource);
+            const length = this.backend.getLength(this.dataSource);
+            this.backend.creaseLength(dst.dataSource, dataSourceOffset, length);
+            this.backend.replaceData(dst.dataSource, dataSourceOffset, this.dataSource, 0, length);
+            for(const operation of this.postCommitStructure.restoreDataOperations)
+                dst.saveDataToRestore(this.dataRestore, BasicBackend.relocateSymbol(operation.srcSymbol, checkoutRelocation), operation.srcOffset, operation.length, operation);
+        }
         if(this.postCommitStructure[(reverse) ? 'restoreDataOperations' : 'replaceDataOperations']) {
             const replaceOperations = (reverse)
-                ? this.postCommitStructure.restoreDataOperations.map(operation => { return {
+                ? this.postCommitStructure.restoreDataOperations.map(operation => ({
                     'srcSymbol': (operation.dstSymbol) ? BasicBackend.relocateSymbol(operation.dstSymbol, checkoutRelocation) : this.dataRestore,
                     'dstSymbol': BasicBackend.relocateSymbol(operation.srcSymbol, checkoutRelocation),
                     'srcOffset': operation.dstOffset,
                     'dstOffset': operation.srcOffset,
                     'length': operation.length
-                };})
-                : this.postCommitStructure.replaceDataOperations.map(operation => { return {
-                    'srcSymbol': (operation.srcSymbol) ? BasicBackend.relocateSymbol(operation.srcSymbol, checkoutRelocation) : this.dataSource,
+                }))
+                : this.postCommitStructure.replaceDataOperations.map(operation => ({
+                    'srcSymbol': (operation.srcSymbol) ? BasicBackend.relocateSymbol(operation.srcSymbol, checkoutRelocation) : dataSource,
                     'dstSymbol': BasicBackend.relocateSymbol(operation.dstSymbol, checkoutRelocation),
-                    'srcOffset': operation.srcOffset,
+                    'srcOffset': (operation.srcSymbol) ? operation.srcOffset : operation.srcOffset+dataSourceOffset,
                     'dstOffset': operation.dstOffset,
                     'length': operation.length
-                };});
+                }));
             console.assert(dst.replaceDataSimultaneously(replaceOperations));
         }
         if(this.postCommitStructure[(reverse) ? 'increaseLengthOperations' : 'decreaseLengthOperations'])
@@ -783,6 +797,8 @@ export default class Diff extends BasicBackend {
         if(this.postCommitStructure[(reverse) ? 'manifestSymbols' : 'releaseSymbols'])
             for(const symbol of this.postCommitStructure[(reverse) ? 'manifestSymbols' : 'releaseSymbols'])
                 console.assert(dst.releaseSymbol(BasicBackend.relocateSymbol(symbol, checkoutRelocation)));
+        if(dst instanceof Diff)
+            dst.isRecordingFromBackend = true;
         return true;
     }
 
