@@ -674,7 +674,7 @@ export default class Diff extends BasicBackend {
             'increaseLengthOperations': [],
             'decreaseLengthOperations': [],
             'replaceDataOperations': [],
-            'restoreDataOperations': [],
+            'restoreDataOperations': SymbolMap.get(this.preCommitStructure, this.dataRestore).replaceOperations,
             'minimumLengths': []
         };
         for(const [symbol, operationsOfSymbol] of SymbolMap.entries(this.preCommitStructure)) {
@@ -710,11 +710,8 @@ export default class Diff extends BasicBackend {
                 this.postCommitStructure.replaceDataOperations.splice(this.postCommitStructure.replaceDataOperations.length-1, 0, ...operationsOfSymbol.replaceOperations);
                 maximizeMinimumLength(operationsOfSymbol.replaceOperations, 'dstOffset', 0);
             }
-            if(operationsOfSymbol.copyOperations) {
-                this.postCommitStructure.restoreDataOperations.splice(this.postCommitStructure.restoreDataOperations.length-1, 0,
-                    ...operationsOfSymbol.copyOperations.filter(operation => SymbolInternals.areSymbolsEqual(operation.dstSymbol, this.dataRestore)));
+            if(operationsOfSymbol.copyOperations)
                 maximizeMinimumLength(operationsOfSymbol.copyOperations, 'srcOffset', 1);
-            }
             this.postCommitStructure.minimumLengths.push({'srcSymbol': symbol, 'forwardLength': minimumLengths[0], 'reverseLength': minimumLengths[1]});
         }
         delete this.preCommitStructure;
@@ -772,7 +769,7 @@ export default class Diff extends BasicBackend {
         if(this.postCommitStructure[(reverse) ? 'restoreDataOperations' : 'replaceDataOperations']) {
             const replaceOperations = (reverse)
                 ? this.postCommitStructure.restoreDataOperations.map(operation => ({
-                    'srcSymbol': (operation.dstSymbol) ? BasicBackend.relocateSymbol(operation.dstSymbol, checkoutRelocation) : this.dataRestore,
+                    'srcSymbol': this.dataRestore,
                     'dstSymbol': BasicBackend.relocateSymbol(operation.srcSymbol, checkoutRelocation),
                     'srcOffset': operation.dstOffset,
                     'dstOffset': operation.srcOffset,
