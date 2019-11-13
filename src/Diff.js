@@ -183,10 +183,12 @@ export default class Diff extends BasicBackend {
         const addSlice = (length) => {
             if(length <= 0)
                 return;
-            const srcOffset = intermediateOffset + ((this.isRecordingFromBackend) ? -decreaseAccumulator : dataRestoreOperation.dstOffset-dataRestoreOperation.srcOffset),
-                  dstOffset = (replaceOperationIndex < operationsOfDataRestore.replaceOperations.length)
+            const dstOffset = (replaceOperationIndex < operationsOfDataRestore.replaceOperations.length)
                              ? operationsOfDataRestore.replaceOperations[replaceOperationIndex].dstOffset
                              : this.backend.getLength(this.dataRestore);
+            let srcOffset = intermediateOffset-decreaseAccumulator;
+            if(dataRestoreOperation)
+                srcOffset += dataRestoreOperation.dstOffset-dataRestoreOperation.srcOffset;
             this.backend.creaseLength(this.dataRestore, dstOffset, length);
             this.backend.writeData(this.dataRestore, dstOffset, length, this.backend.readData(srcSymbolRecording, srcOffset, length));
             const operation = {
@@ -739,25 +741,28 @@ export default class Diff extends BasicBackend {
         // TODO: Validate everything first before applying anything: manifest/release symbols
         // manifest: Check that there are no triples yet and the size is 0
         // release: Check if all remaining triples are marked to be unlinked and the size decreases to 0
-        for(const [type, link] of [['linkTripleOperations', true], ['unlinkTripleOperations', false]])
-            if(this.postCommitStructure[type])
-                for(const operation of this.postCommitStructure[type])
-                    if((dst.getTriple(operation.triple.map(symbol => BasicBackend.relocateSymbol(symbol, checkoutRelocation))) == link) != reverse)
+        if(dst instanceof Diff) {
+            console.assert(!reverse);
+            dst.isRecordingFromBackend = false;
+        } else {
+            for(const [type, link] of [['linkTripleOperations', true], ['unlinkTripleOperations', false]])
+                if(this.postCommitStructure[type])
+                    for(const operation of this.postCommitStructure[type])
+                        if((dst.getTriple(operation.triple.map(symbol => BasicBackend.relocateSymbol(symbol, checkoutRelocation))) == link) != reverse)
+                            return false;
+            if(this.postCommitStructure.minimumLengths)
+                for(const operation of this.postCommitStructure.minimumLengths)
+                    if(dst.getLength(BasicBackend.relocateSymbol(operation.srcSymbol, checkoutRelocation)) < operation[((reverse) ? 'reverse' : 'forward')+'Length'])
                         return false;
-        if(this.postCommitStructure.minimumLengths)
-            for(const operation of this.postCommitStructure.minimumLengths)
-                if(dst.getLength(BasicBackend.relocateSymbol(operation.srcSymbol, checkoutRelocation)) < operation[((reverse) ? 'reverse' : 'forward')+'Length'])
-                    return false;
+        }
         if(this.postCommitStructure[(reverse) ? 'releaseSymbols' : 'manifestSymbols'])
             for(const symbol of this.postCommitStructure[(reverse) ? 'releaseSymbols' : 'manifestSymbols'])
-                dst.manifestSymbol(BasicBackend.relocateSymbol(symbol, checkoutRelocation));
+                console.assert(dst.manifestSymbol(BasicBackend.relocateSymbol(symbol, checkoutRelocation)));
         if(this.postCommitStructure[(reverse) ? 'decreaseLengthOperations' : 'increaseLengthOperations'])
             for(const operation of (reverse) ? Utils.reversed(this.postCommitStructure.decreaseLengthOperations) : this.postCommitStructure.increaseLengthOperations)
                 console.assert(dst.creaseLength(BasicBackend.relocateSymbol(operation.dstSymbol, checkoutRelocation), operation.dstOffset, (reverse) ? -operation.length : operation.length));
         let dataSource = this.dataSource, dataSourceOffset = 0;
         if(dst instanceof Diff) {
-            console.assert(!reverse);
-            dst.isRecordingFromBackend = false;
             dataSource = dst.dataSource;
             dataSourceOffset = this.backend.getLength(dst.dataSource);
             const length = this.backend.getLength(this.dataSource);
