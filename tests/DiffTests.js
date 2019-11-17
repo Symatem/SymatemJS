@@ -147,39 +147,50 @@ export function *generateOperations(backend, rand, symbolPool) {
     }
 }
 
+function testDiff(backend, diff, resultOfNothing) {
+    diff.compressData();
+    if(!diff.validateIntegrity())
+        return false;
+    diff.commit();
+    const decodedDiff = new Diff(backend, {}, repositoryNamespace);
+    decodedDiff.decodeJson(diff.encodeJson());
+    const resultOfRecording = backend.encodeJson([checkoutNamespace]);
+    if(!decodedDiff.apply(true)) {
+        console.warn('Could not apply reverse');
+        return false;
+    }
+    const resultOfReverse = backend.encodeJson([checkoutNamespace]);
+    if(!decodedDiff.apply(false)) {
+        console.warn('Could not apply forward');
+        return false;
+    }
+    const resultOfForward = backend.encodeJson([checkoutNamespace]);
+    if(resultOfNothing != resultOfReverse) {
+        console.warn('Reverse failed', resultOfNothing, resultOfReverse);
+        return false;
+    }
+    if(resultOfRecording != resultOfForward) {
+        console.warn('Forward failed', resultOfRecording, resultOfForward);
+        return false;
+    }
+    return true;
+}
+
 export function getTests(backend, rand) {
+    const concatDiff = new Diff(backend, {}, repositoryNamespace);
+    let concatResultOfNothing;
     return {
         'diffRecording': [100, () => {
             const resultOfNothing = backend.encodeJson([checkoutNamespace]),
                   diff = new Diff(backend, {}, repositoryNamespace),
                   symbolPool = [...backend.querySymbols(checkoutNamespace)];
+            if(!concatResultOfNothing)
+                concatResultOfNothing = resultOfNothing;
             for(const description of generateOperations(diff, rand, symbolPool));
-            diff.compressData();
-            if(!diff.validateIntegrity())
-                return false;
-            diff.commit();
-            const decodedDiff = new Diff(backend, {}, repositoryNamespace);
-            decodedDiff.decodeJson(diff.encodeJson());
-            const resultOfJournal = backend.encodeJson([checkoutNamespace]);
-            if(!decodedDiff.apply(true)) {
-                console.warn('Could not apply reverse');
-                return false;
-            }
-            const resultOfRevert = backend.encodeJson([checkoutNamespace]);
-            if(!decodedDiff.apply(false)) {
-                console.warn('Could not apply forward');
-                return false;
-            }
-            const resultOfDiff = backend.encodeJson([checkoutNamespace]);
-            if(resultOfNothing != resultOfRevert) {
-                console.warn('Reverse failed', resultOfNothing, resultOfRevert);
-                return false;
-            }
-            if(resultOfJournal != resultOfDiff) {
-                console.warn('Forward failed', resultOfJournal, resultOfDiff);
-                return false;
-            }
-            return true;
+            return testDiff(backend, diff, resultOfNothing) && diff.apply(false, {}, concatDiff);
+        }],
+        'diffConcatenation': [1, () => {
+            return testDiff(backend, concatDiff, concatResultOfNothing);
         }]
     };
 }

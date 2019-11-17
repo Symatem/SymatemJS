@@ -768,8 +768,9 @@ export default class Diff extends BasicBackend {
             const length = this.backend.getLength(this.dataSource);
             this.backend.creaseLength(dst.dataSource, dataSourceOffset, length);
             this.backend.replaceData(dst.dataSource, dataSourceOffset, this.dataSource, 0, length);
-            for(const operation of this.postCommitStructure.restoreDataOperations)
-                dst.saveDataToRestore(this.dataRestore, BasicBackend.relocateSymbol(operation.srcSymbol, checkoutRelocation), operation.srcOffset, operation.length, operation);
+            if(this.postCommitStructure.restoreDataOperations)
+                for(const operation of this.postCommitStructure.restoreDataOperations)
+                    dst.saveDataToRestore(this.dataRestore, BasicBackend.relocateSymbol(operation.srcSymbol, checkoutRelocation), operation.srcOffset, operation.length, operation);
         }
         if(this.postCommitStructure[(reverse) ? 'restoreDataOperations' : 'replaceDataOperations']) {
             const replaceOperations = (reverse)
