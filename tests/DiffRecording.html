@@ -9,116 +9,28 @@
             import {svgRoot, createElement, visualizeDiff} from './DiffVisualizer.js';
             import {repositoryNamespace, checkoutNamespace, configuration, fillCheckout, makeDiffSnapshot, generateOperations} from './DiffTests.js';
 
-            function colorPrintTestResult(name, value) {
-                console.log(`${name}:%c ${(value) ? 'suceeded' : 'failed'}`, `color: ${(value) ? '#4A4' : '#A44'};`);
-            }
-
             let performanceAccumulator = {};
             const backend = new RustWasmBackend(),
                   rand = new PRNG(),
-                  checkoutSnapshots = [];
+                  checkoutSnapshots = [],
+                  diffSnapshots = [];
             loaded.then(() => backend.initPredefinedSymbols);
             const seed = document.getElementById('seed');
             seed.value = rand.buffer[0];
 
-            function runTest(debugMode, seed) {
-                const diff = new Diff(backend, {}, repositoryNamespace),
-                      diffSnapshots = [{'preCommitStructure': SymbolMap.create(), 'description': 'Initial'}];
-                if(seed != undefined) {
-                    performance.mark('start:fill');
-                    fillCheckout(backend, rand);
-                    performance.measure('fill', 'start:fill');
-                }
-                if(debugMode)
-                    checkoutSnapshots[0] = backend.encodeJson([checkoutNamespace]);
-                const symbolPool = [...backend.querySymbols(checkoutNamespace)];
-                performance.mark('start:record');
-                for(const description of generateOperations(diff, rand, symbolPool))
-                    if(debugMode) {
-                        console.log(description);
-                        diffSnapshots.push(makeDiffSnapshot(diff, description));
-                    }
-                diff.compressData();
-                if(debugMode)
-                    diffSnapshots.push(makeDiffSnapshot(diff, 'Compress'));
-                performance.measure('record', 'start:record');
-                if(debugMode) {
-                    const diffSelect = document.getElementById('diffSelect');
-                    let prevDiff = diffSnapshots[0];
-                    diffSelect.oninput = () => {
-                        const nextDiff = diffSnapshots[diffSelect.value],
-                              symbolSlots = SymbolMap.create();
-                        while(svgRoot.childNodes.length > 0)
-                            svgRoot.removeChild(svgRoot.childNodes[0]);
-                        document.getElementById('description').innerText = nextDiff.description;
-                        visualizeDiff(prevDiff, symbolSlots, false);
-                        window.setTimeout(() => {
-                            visualizeDiff(nextDiff, symbolSlots, true);
-                        }, 0);
-                        prevDiff = nextDiff;
-                    };
-                    diffSelect.setAttribute('max', diffSnapshots.length-1);
-                    diffSelect.oninput();
-                }
-                const integrity = (debugMode) ? diff.validateIntegrity() : false;
-                performance.mark('start:commit');
-                diff.commit();
-                performance.measure('commit', 'start:commit');
-                if(debugMode)
-                    checkoutSnapshots[1] = backend.encodeJson([checkoutNamespace]);
-                performance.mark('start:revert');
-                const reverseApply = diff.apply(true);
-                performance.measure('revert', 'start:revert');
-                if(debugMode)
-                    checkoutSnapshots[2] = backend.encodeJson([checkoutNamespace]);
-                performance.mark('start:apply');
-                const forwardApply = diff.apply(false);
-                performance.measure('apply', 'start:apply');
-                if(debugMode)
-                    checkoutSnapshots[3] = backend.encodeJson([checkoutNamespace]);
-                diff.apply(true);
-
-                if(debugMode) {
-                    for(const entry of performance.getEntriesByType('measure'))
-                        console.log(`${entry.name}: ${entry.duration} ms`);
-                } else {
-                    for(const entry of performance.getEntriesByType('measure')) {
-                        const value = Math.log10(entry.duration);
-                        if(!performanceAccumulator[entry.name])
-                            performanceAccumulator[entry.name] = [value];
-                        else
-                            performanceAccumulator[entry.name].push(value);
-                    }
-                }
-                performance.clearMarks();
-                performance.clearMeasures();
-                diff.unlink();
-                if(debugMode) {
-                    colorPrintTestResult('Integrity', integrity);
-                    colorPrintTestResult('Reverse Apply', reverseApply);
-                    colorPrintTestResult('Forward Apply', forwardApply);
-                    colorPrintTestResult('Reverse Compare', checkoutSnapshots[0] == checkoutSnapshots[2]);
-                    colorPrintTestResult('Forward Compare', checkoutSnapshots[1] == checkoutSnapshots[3]);
-                }
-            };
-
-            document.getElementById('startDebug').onclick = () => {
+            function prepare() {
                 rand.setSeed(seed.value);
-                document.getElementById('controls').innerHTML = '<input id="diffSelect" type="range" step="1" min="0" max="0" value="0" style="width: 500px; height: 25px; position: fixed; top: 10px; right: 20px;" /><div id="description" style="position: fixed; top: 40px; right: 20px;"></div>';
-                console.log(`Seed: ${rand.buffer[0]}`);
-                runTest(true, rand.buffer[0]);
-            };
+                performance.mark('start:fill');
+                fillCheckout(backend, rand);
+                performance.measure('fill', 'start:fill');
+            }
 
-            document.getElementById('startScaling').onclick = () => {
-                rand.setSeed(seed.value);
-                document.getElementById('controls').innerHTML = '';
-                const skip = 10;
-                for(let i = 0; i < skip+100; ++i) {
-                    console.log(`Iteration: ${i}, Seed: ${rand.buffer[0]}`);
-                    runTest(false, (i == 0) ? rand.buffer[0] : undefined);
-                    if(i == skip)
-                        performanceAccumulator = {};
-                }
+            function colorPrintTestResult(name, value, concatDiff) {
+                console.log(`${name}:%c ${(value) ? 'suceeded' : 'failed'}`, `color: ${(value) ? '#4A4' : '#A44'};`);
+            }
+
+            function printPerformanceMeasurements() {
+                console.log('Performance Measurements:');
                 for(const name in performanceAccumulator) {
                     const values = performanceAccumulator[name];
                     values.sort();
@@ -133,6 +45,109 @@
                     variance /= values.length;
                     console.log(`${name}: ${average} ms, σ=${Math.sqrt(variance)}, box-plot=[${Math.log10(configuration.operationCount)} ${values[Math.floor(values.length*0.5)]} ${values[Math.floor(values.length*0.75)]} ${values[Math.floor(values.length*0.25)]} ${values[values.length-1]} ${values[0]}]`);
                 }
+            }
+
+            function testDiff(debugMode, diff, offset) {
+                performance.mark('start:compress');
+                diff.compressData();
+                if(debugMode)
+                    diffSnapshots.push(makeDiffSnapshot(diff, 'Compress'));
+                performance.measure('compress', 'start:compress');
+                const integrity = (debugMode) ? diff.validateIntegrity() : false;
+                performance.mark('start:commit');
+                diff.commit();
+                performance.measure('commit', 'start:commit');
+                if(debugMode)
+                    checkoutSnapshots[offset+1] = backend.encodeJson([checkoutNamespace]);
+                performance.mark('start:revert');
+                const reverseApply = diff.apply(true);
+                performance.measure('revert', 'start:revert');
+                if(debugMode)
+                    checkoutSnapshots[offset+2] = backend.encodeJson([checkoutNamespace]);
+                performance.mark('start:apply');
+                const forwardApply = diff.apply(false);
+                performance.measure('apply', 'start:apply');
+                if(debugMode) {
+                    checkoutSnapshots[offset+3] = backend.encodeJson([checkoutNamespace]);
+                    colorPrintTestResult('Integrity', integrity);
+                    colorPrintTestResult('Reverse Apply', reverseApply);
+                    colorPrintTestResult('Forward Apply', forwardApply);
+                    colorPrintTestResult('Reverse Compare', checkoutSnapshots[offset  ] == checkoutSnapshots[offset+2]);
+                    colorPrintTestResult('Forward Compare', checkoutSnapshots[offset+1] == checkoutSnapshots[offset+3]);
+                }
+            }
+
+            function testRecording(debugMode, seed, concatDiff) {
+                const diff = new Diff(backend, {}, repositoryNamespace);
+                if(debugMode) {
+                    checkoutSnapshots[0] = backend.encodeJson([checkoutNamespace]);
+                    diffSnapshots.push(makeDiffSnapshot(diff, 'Initial'));
+                }
+                const symbolPool = [...backend.querySymbols(checkoutNamespace)];
+                performance.mark('start:record');
+                for(const description of generateOperations(diff, rand, symbolPool))
+                    if(debugMode) {
+                        console.log(description);
+                        diffSnapshots.push(makeDiffSnapshot(diff, description));
+                    }
+                performance.measure('record', 'start:record');
+                testDiff(debugMode, diff, 0);
+                if(concatDiff)
+                    diff.apply(false, {}, concatDiff);
+                else
+                    diff.apply(true);
+                for(const entry of performance.getEntriesByType('measure')) {
+                    const value = Math.log10(entry.duration);
+                    if(!performanceAccumulator[entry.name])
+                        performanceAccumulator[entry.name] = [value];
+                    else
+                        performanceAccumulator[entry.name].push(value);
+                }
+                performance.clearMarks();
+                performance.clearMeasures();
+                diff.unlink();
+            };
+
+            document.getElementById('startDebug').onclick = () => {
+                console.log(`Seed: ${rand.buffer[0]}`);
+                prepare();
+                document.getElementById('controls').innerHTML = '<input id="diffSelect" type="range" step="1" min="0" max="0" value="0" style="width: 500px; height: 25px; position: fixed; top: 10px; right: 20px;" /><div id="description" style="position: fixed; top: 40px; right: 20px;"></div>';
+                const concatDiff = new Diff(backend, {}, repositoryNamespace);
+                checkoutSnapshots[4] = backend.encodeJson([checkoutNamespace]);
+                for(let i = 0; i < 10; ++i)
+                    testRecording(true, rand.buffer[0], concatDiff);
+                console.log('Concatenation:');
+                testDiff(true, concatDiff, 4);
+                printPerformanceMeasurements();
+                const diffSelect = document.getElementById('diffSelect');
+                let prevDiff = diffSnapshots[0];
+                diffSelect.oninput = () => {
+                    const nextDiff = diffSnapshots[diffSelect.value],
+                          symbolSlots = SymbolMap.create();
+                    while(svgRoot.childNodes.length > 0)
+                        svgRoot.removeChild(svgRoot.childNodes[0]);
+                    document.getElementById('description').innerText = nextDiff.description;
+                    visualizeDiff(prevDiff, symbolSlots, false);
+                    window.setTimeout(() => {
+                        visualizeDiff(nextDiff, symbolSlots, true);
+                    }, 0);
+                    prevDiff = nextDiff;
+                };
+                diffSelect.setAttribute('max', diffSnapshots.length-1);
+                diffSelect.oninput();
+            };
+
+            document.getElementById('startScaling').onclick = () => {
+                prepare();
+                document.getElementById('controls').innerHTML = '';
+                const skip = 10;
+                for(let i = 0; i < skip+100; ++i) {
+                    console.log(`Iteration: ${i}, Seed: ${rand.buffer[0]}`);
+                    testRecording(false, (i == 0) ? rand.buffer[0] : undefined);
+                    if(i == skip)
+                        performanceAccumulator = {};
+                }
+                printPerformanceMeasurements();
             };
         </script>
     </head>
