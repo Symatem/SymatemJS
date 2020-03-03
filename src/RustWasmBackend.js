@@ -12,13 +12,14 @@ export const loaded = ((typeof process === 'undefined')
         fs.readFile(path.join(__dirname, '../backend.wasm'), undefined, (err, data) => {
             err ? reject(err) : resolve(data);
         });
-    });
+    }).catch(err => reject(err));
 }))
 .then(arrayBuffer => WebAssembly.instantiate(arrayBuffer, imports))
 .then(result => {
     module = result.module;
     wasm = result.instance.exports;
-});
+})
+.catch((err) => console.error(err));
 
 let cachedUint8Memory = null;
 function getUint8Memory() {

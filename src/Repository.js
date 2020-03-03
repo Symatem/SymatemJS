@@ -1,6 +1,6 @@
 import {SymbolInternals} from '../SymatemJS.js';
 
-/** The repository is a DAG with the versions being vertices and the differentals being edges */
+/** The repository is a DAG with the versions being vertices and the diffs being edges */
 export default class Repository {
     /**
      * @param {BasicBackend} backend
@@ -33,17 +33,16 @@ export default class Repository {
      * @param {Symbol} childVersionId The child vertex
      * @param {Diff} diff The edge connecting them
      */
-    addDiff(parentVersionId, childVersionId, differental) {
-        this.manifestVersion(childVersionId).parents[parentVersionId] = differental;
-        this.manifestVersion(parentVersionId).children[childVersionId] = differental;
+    addDiff(parentVersionId, childVersionId, diff) {
+        this.manifestVersion(childVersionId).parents[parentVersionId] = diff;
+        this.manifestVersion(parentVersionId).children[childVersionId] = diff;
     }
 
     /** Removes a vertex from the DAG
      * @param {Symbol} versionId The version to remove
      */
     removeVersion(versionId) {
-        if(this.materializedVersions[versionId])
-            this.dematerializeVersion(versionId);
+        this.dematerializeVersion(versionId);
         for(const parentVersionId in this.versions[versionId].parents)
             delete this.versions[parentVersionId].children[versionId];
         delete this.versions[versionId];
@@ -74,10 +73,12 @@ export default class Repository {
         return checkoutRelocation;
     }
 
-    /** Deletes the materialization of a version, not the vertex in the DAG
+    /** Deletes the materialization of a version, but not the version itself
      * @param {Symbol} versionId The version to dematerialize
      */
     dematerializeVersion(versionId) {
+        if(!this.materializedVersions[versionId])
+            return;
         for(const namespaceIdentity of this.materializedVersions[versionId])
             this.backend.unlinkSymbol(BasicBackend.symbolInNamespace('Namespaces', namespaceIdentity));
         delete this.materializedVersions[versionId];
