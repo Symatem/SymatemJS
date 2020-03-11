@@ -2,7 +2,10 @@ import PRNG from './PRNG.js';
 import {Utils, SymbolInternals, SymbolMap, BasicBackend, Diff} from '../SymatemJS.js';
 
 export const repositoryNamespace = 3,
-             checkoutNamespace = 4,
+             modalNamespace = 4,
+             checkoutNamespace = 5,
+             recordingRelocation = {[checkoutNamespace]: modalNamespace},
+             checkoutRelocation = {[modalNamespace]: checkoutNamespace},
              configuration = {
     'minSymbolCount': 10,
     'minTripleCount': 100,
@@ -152,15 +155,15 @@ function testDiff(backend, diff, resultOfNothing) {
     if(!diff.validateIntegrity())
         return false;
     diff.commit();
-    const decodedDiff = new Diff(backend, {}, repositoryNamespace);
+    const decodedDiff = new Diff(backend, recordingRelocation, repositoryNamespace);
     decodedDiff.decodeJson(diff.encodeJson());
     const resultOfRecording = backend.encodeJson([checkoutNamespace]);
-    if(!decodedDiff.apply(true)) {
+    if(!decodedDiff.apply(true, checkoutRelocation)) {
         console.warn('Could not apply reverse');
         return false;
     }
     const resultOfReverse = backend.encodeJson([checkoutNamespace]);
-    if(!decodedDiff.apply(false)) {
+    if(!decodedDiff.apply(false, checkoutRelocation)) {
         console.warn('Could not apply forward');
         return false;
     }
@@ -177,12 +180,12 @@ function testDiff(backend, diff, resultOfNothing) {
 }
 
 export function getTests(backend, rand) {
-    const concatDiff = new Diff(backend, {}, repositoryNamespace);
+    const concatDiff = new Diff(backend, recordingRelocation, repositoryNamespace);
     let concatResultOfNothing;
     return {
         'diffRecording': [100, () => {
             const resultOfNothing = backend.encodeJson([checkoutNamespace]),
-                  diff = new Diff(backend, {}, repositoryNamespace),
+                  diff = new Diff(backend, recordingRelocation, repositoryNamespace),
                   symbolPool = [...backend.querySymbols(checkoutNamespace)];
             if(!concatResultOfNothing)
                 concatResultOfNothing = resultOfNothing;

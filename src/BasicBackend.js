@@ -685,6 +685,7 @@ export default class BasicBackend {
         for(const entry of JSON.parse(json).symbols) {
             const entity = SymbolInternals.symbolFromString(entry[0]);
             entities.add(entity);
+            this.manifestSymbol(entity);
             if(entry[1] > 0)
                 this.setRawData(entity, Utils.decodeAsHex(entry[2]));
             this.setLength(entity, entry[1]);

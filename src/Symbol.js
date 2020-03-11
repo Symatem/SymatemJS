@@ -89,6 +89,10 @@ export class SymbolMapString {
         return {};
     }
 
+    static count(collection) {
+        return Object.keys(collection).length;
+    }
+
     static isEmpty(collection) {
         return Object.keys(collection).length == 0;
     }
