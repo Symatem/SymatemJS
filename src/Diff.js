@@ -928,7 +928,7 @@ export default class Diff extends BasicBackend {
                         this.backend.getPairOptionally(triple[2], BasicBackend.symbolByName.Value)
                     ]
                 });
-        for(const [type, attributeName] of [['increaseLengthOperations', 'IncreaseLength'], ['decreaseLengthOperations', 'DecreaseLength']])
+        for(const [type, attributeName] of [['increaseLengthOperations', 'IncreaseLength'], ['decreaseLengthOperations', 'DecreaseLength']]) {
             for(const triple of this.backend.queryTriples(BasicBackend.queryMasks.MMV, [this.symbol, BasicBackend.symbolByName[attributeName], BasicBackend.symbolByName.Void])) {
                 const operation = {
                     'symbol': triple[2],
@@ -940,6 +940,8 @@ export default class Diff extends BasicBackend {
                 operation.length = this.backend.getData(operation.lengthSymbol);
                 this.postCommitStructure[type].push(operation);
             }
+            this.postCommitStructure[type].sort(attributeName == 'IncreaseLength' ? (a, b) => a.dstOffset-b.dstOffset : (a, b) => b.dstOffset-a.dstOffset);
+        }
         for(const [type, attributeName] of [['replaceDataOperations', 'ReplaceData'], ['restoreDataOperations', 'RestoreData']])
             for(const triple of this.backend.queryTriples(BasicBackend.queryMasks.MMV, [this.symbol, BasicBackend.symbolByName[attributeName], BasicBackend.symbolByName.Void])) {
                 const operation = {

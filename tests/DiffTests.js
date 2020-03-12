@@ -150,26 +150,31 @@ export function *generateOperations(backend, rand, symbolPool) {
     }
 }
 
-function testDiff(backend, diff, resultOfNothing) {
+function testDiff(backend, diff, initialState) {
     diff.compressData();
     if(!diff.validateIntegrity())
         return false;
     diff.commit();
-    const decodedDiff = new Diff(backend, recordingRelocation, repositoryNamespace);
-    decodedDiff.decodeJson(diff.encodeJson());
-    const resultOfRecording = backend.encodeJson([checkoutNamespace]);
-    if(!decodedDiff.apply(true, checkoutRelocation)) {
+    const originalJson = diff.encodeJson(),
+          decodedDiff = new Diff(backend, recordingRelocation, repositoryNamespace);
+    decodedDiff.decodeJson(originalJson);
+    decodedDiff.link();
+    const loadedDiff = new Diff(backend, recordingRelocation, repositoryNamespace, decodedDiff.symbol),
+          loadedJson = loadedDiff.encodeJson(),
+          resultOfRecording = backend.encodeJson([checkoutNamespace]);
+    if(!loadedDiff.apply(true, checkoutRelocation)) {
         console.warn('Could not apply reverse');
         return false;
     }
     const resultOfReverse = backend.encodeJson([checkoutNamespace]);
-    if(!decodedDiff.apply(false, checkoutRelocation)) {
+    if(!loadedDiff.apply(false, checkoutRelocation)) {
         console.warn('Could not apply forward');
         return false;
     }
     const resultOfForward = backend.encodeJson([checkoutNamespace]);
-    if(resultOfNothing != resultOfReverse) {
-        console.warn('Reverse failed', resultOfNothing, resultOfReverse);
+    loadedDiff.unlink();
+    if(initialState != resultOfReverse) {
+        console.warn('Reverse failed', initialState, resultOfReverse);
         return false;
     }
     if(resultOfRecording != resultOfForward) {
@@ -181,19 +186,29 @@ function testDiff(backend, diff, resultOfNothing) {
 
 export function getTests(backend, rand) {
     const concatDiff = new Diff(backend, recordingRelocation, repositoryNamespace);
-    let concatResultOfNothing;
+    let concatInitialState;
     return {
         'diffRecording': [100, () => {
-            const resultOfNothing = backend.encodeJson([checkoutNamespace]),
+            const initialState = backend.encodeJson([checkoutNamespace]),
                   diff = new Diff(backend, recordingRelocation, repositoryNamespace),
                   symbolPool = [...backend.querySymbols(checkoutNamespace)];
-            if(!concatResultOfNothing)
-                concatResultOfNothing = resultOfNothing;
+            if(!concatInitialState)
+                concatInitialState = initialState;
             for(const description of generateOperations(diff, rand, symbolPool));
-            return testDiff(backend, diff, resultOfNothing) && diff.apply(false, {}, concatDiff);
+            if(!testDiff(backend, diff, initialState))
+                return false;
+            if(!diff.apply(false, {}, concatDiff)) {
+                console.warn('Could not concat diffs');
+                return false;
+            }
+            diff.unlink();
+            return true;
         }],
         'diffConcatenation': [1, () => {
-            return testDiff(backend, concatDiff, concatResultOfNothing);
+            if(!testDiff(backend, concatDiff, concatInitialState))
+                return false;
+            concatDiff.unlink();
+            return true;
         }]
     };
 }

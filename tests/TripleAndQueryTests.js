@@ -63,10 +63,16 @@ export function getTests(backend, rand) {
             while(true) {
                 const element = iterator.next();
                 if(element.done) {
-                    if(element.value != result.size || element.value != expected.size)
+                    if(result.size != expected.size)
                         noErrorsOccured = false;
                     break;
                 }
+                if(element.value.reduce((value, symbol) => {
+                    if(SymbolInternals.namespaceOfSymbol(symbol) == namespaceIdentity)
+                        ++value;
+                    return value;
+                }, 0) < 3)
+                    continue;
                 const tripleTag = tagFromTriple(element.value);
                 result.add(tripleTag);
                 if(!expected.has(tripleTag))
@@ -94,7 +100,12 @@ export function getTests(backend, rand) {
                 console.warn('unlinkNamespace', 'querySymbols', symbolsResult.sort().join(' '));
                 return false;
             }
-            const triplesResult = [...backend.queryTriples(BasicBackend.queryMasks.VVV, [BasicBackend.symbolByName.Void, BasicBackend.symbolByName.Void, BasicBackend.symbolByName.Void])];
+            const triplesResult = [...backend.queryTriples(BasicBackend.queryMasks.VVV, [BasicBackend.symbolByName.Void, BasicBackend.symbolByName.Void, BasicBackend.symbolByName.Void])].filter((triple) => {
+                for(const symbol of triple)
+                    if(SymbolInternals.namespaceOfSymbol(symbol) != namespaceIdentity)
+                        return false;
+                return true;
+            });
             if(!triplesResult.length == 0) {
                 console.warn('unlinkNamespace', 'queryTriples', triplesResult.sort().join(' '));
                 return false;
