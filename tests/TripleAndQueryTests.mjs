@@ -1,4 +1,4 @@
-import {SymbolInternals, SymbolMap, BasicBackend} from '../SymatemJS.js';
+import {SymbolInternals, SymbolMap, BasicBackend} from '../SymatemJS.mjs';
 
 export function getTests(backend, rand) {
     const symbolPool = [],

@@ -1,4 +1,4 @@
-import {Utils, BasicBackend} from '../SymatemJS.js';
+import {Utils, BasicBackend} from '../SymatemJS.mjs';
 
 export function getTests(backend, rand) {
     const destination = backend.createSymbol(4),

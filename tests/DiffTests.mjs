@@ -1,5 +1,5 @@
-import PRNG from './PRNG.js';
-import {Utils, SymbolInternals, SymbolMap, BasicBackend, Diff} from '../SymatemJS.js';
+import PRNG from './PRNG.mjs';
+import {Utils, SymbolInternals, SymbolMap, BasicBackend, Diff} from '../SymatemJS.mjs';
 
 export const repositoryNamespace = 3,
              modalNamespace = 4,

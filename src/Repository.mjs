@@ -1,4 +1,4 @@
-import {SymbolInternals} from '../SymatemJS.js';
+import {SymbolInternals} from '../SymatemJS.mjs';
 
 /** The repository is a DAG with the versions being vertices and the diffs being edges */
 export default class Repository {

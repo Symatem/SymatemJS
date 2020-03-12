@@ -1,10 +1,10 @@
-import {Utils, IdentityPool} from './src/Utils.js';
-import {SymbolInternalsColonString as SymbolInternals, SymbolMapString as SymbolMap} from './src/Symbol.js';
-import BasicBackend from './src/BasicBackend.js';
-import JavaScriptBackend from './src/JavaScriptBackend.js';
-import RustWasmBackend, { loaded } from './src/RustWasmBackend.js';
-import Diff from './src/Diff.js';
-import Repository from './src/Repository.js';
+import {Utils, IdentityPool} from './src/Utils.mjs';
+import {SymbolInternalsColonString as SymbolInternals, SymbolMapString as SymbolMap} from './src/Symbol.mjs';
+import BasicBackend from './src/BasicBackend.mjs';
+import JavaScriptBackend from './src/JavaScriptBackend.mjs';
+import RustWasmBackend, { loaded } from './src/RustWasmBackend.mjs';
+import Diff from './src/Diff.mjs';
+import Repository from './src/Repository.mjs';
 
 export {loaded, Utils, SymbolInternals, IdentityPool, SymbolMap, BasicBackend, JavaScriptBackend, RustWasmBackend, Diff, Repository};
 

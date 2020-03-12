@@ -1,4 +1,4 @@
-import {Utils, SymbolInternals, SymbolMap} from '../SymatemJS.js';
+import {Utils, SymbolInternals, SymbolMap} from '../SymatemJS.mjs';
 
 const queryMode = ['M', 'V', 'I'],
       queryMasks = {};

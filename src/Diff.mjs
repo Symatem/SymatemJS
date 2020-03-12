@@ -1,4 +1,4 @@
-import {Utils, SymbolInternals, SymbolMap, BasicBackend} from '../SymatemJS.js';
+import {Utils, SymbolInternals, SymbolMap, BasicBackend} from '../SymatemJS.mjs';
 
 function getOrCreateEntry(dict, key, value) {
     const entry = dict[key];

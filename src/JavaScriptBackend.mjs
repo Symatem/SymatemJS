@@ -1,4 +1,4 @@
-import {Utils, SymbolInternals, IdentityPool, SymbolMap, BasicBackend} from '../SymatemJS.js';
+import {Utils, SymbolInternals, IdentityPool, SymbolMap, BasicBackend} from '../SymatemJS.mjs';
 
 const indexByName = {
     'EAV': 0, 'AVE': 1, 'VEA': 2,

@@ -1,7 +1,7 @@
-import {getTests as IdentityPoolTests} from './IdentityPoolTests.js';
-import {getTests as SymbolDataTests} from './SymbolDataTests.js';
-import {getTests as TripleAndQueryTests} from './TripleAndQueryTests.js';
-import {getTests as DiffTests} from './DiffTests.js';
+import {getTests as IdentityPoolTests} from './IdentityPoolTests.mjs';
+import {getTests as SymbolDataTests} from './SymbolDataTests.mjs';
+import {getTests as TripleAndQueryTests} from './TripleAndQueryTests.mjs';
+import {getTests as DiffTests} from './DiffTests.mjs';
 const testBundles = [
     IdentityPoolTests,
     SymbolDataTests,
@@ -9,8 +9,8 @@ const testBundles = [
     DiffTests
 ];
 
-import {loaded, JavaScriptBackend, RustWasmBackend} from '../SymatemJS.js';
-import PRNG from './PRNG.js';
+import {loaded, JavaScriptBackend, RustWasmBackend} from '../SymatemJS.mjs';
+import PRNG from './PRNG.mjs';
 const rand = new PRNG();
 function runAll(seed) {
     if(!seed)

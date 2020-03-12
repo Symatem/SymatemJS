@@ -1,4 +1,4 @@
-import {SymbolInternals, BasicBackend} from '../SymatemJS.js';
+import {SymbolInternals, BasicBackend} from '../SymatemJS.mjs';
 
 let module, wasm;
 const imports = {};
@@ -9,7 +9,7 @@ export const loaded = ((typeof process === 'undefined')
     Promise.all([import('url'), import('path'), import('fs')]).then(([url, path, fs]) => {
         const __filename = url.fileURLToPath(import.meta.url),
               __dirname = path.dirname(__filename);
-        fs.readFile(path.join(__dirname, '../backend.wasm'), undefined, (err, data) => {
+        fs.readFile(path.join(__dirname, '../dist/backend.wasm'), undefined, (err, data) => {
             err ? reject(err) : resolve(data);
         });
     }).catch(err => reject(err));
