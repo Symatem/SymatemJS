@@ -665,7 +665,7 @@ export default class Diff extends BasicBackend {
             operation.srcOffset -= decreaseAccumulator;
             lastOffset = Math.max(lastOffset, nextOffset);
         }
-        this.backend.setLength(this.dataSource, lastOffset);
+        this.backend.setLength(this.dataSource, lastOffset-decreaseAccumulator);
         // TODO: Compress redundancy in data source and restore by finding equal slices and map them to the same place
     }
 
@@ -818,9 +818,11 @@ export default class Diff extends BasicBackend {
     encodeJson() {
         console.assert(this.postCommitStructure);
         const exportStructure = Object.assign({}, this.postCommitStructure);
-        for(const type of ['dataSource', 'dataRestore'])
-            if(this.backend.getLength(this[type]) > 0)
-                exportStructure[type] = Utils.encodeAsHex(this.backend.getRawData(this[type]));
+        for(const type of ['dataSource', 'dataRestore']) {
+            const length = this.backend.getLength(this[type]);
+            if(length > 0)
+                exportStructure[type] = Utils.encodeAsHex(new Uint8Array(this.backend.getRawData(this[type]).buffer, 0, Math.ceil(length/8)));
+        }
         return JSON.stringify(exportStructure, (type, operations) => {
             switch(type) {
                 case 'linkTripleOperations':

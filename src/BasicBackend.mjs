@@ -647,9 +647,10 @@ export default class BasicBackend {
      * @param {Identity[]} namespaces The namespaces to export
      * @return {String} json
      */
-    encodeJson(namespaces) {
-        const entities = [];
-        for(const namespaceIdentity of namespaces)
+    encodeJson(namespaceIdentities) {
+        const namespaces = {};
+        for(const namespaceIdentity of namespaceIdentities) {
+            const entries = namespaces[namespaceIdentity] = [];
             for(const symbol of [...this.querySymbols(namespaceIdentity)].sort(SymbolInternals.compareSymbols)) {
                 const attributes = [], betaCollection = [];
                 for(const triple of this.queryTriples(queryMasks.MVI, [symbol, symbolByName.Void, symbolByName.Void]))
@@ -663,16 +664,16 @@ export default class BasicBackend {
                         values.push(SymbolInternals.symbolToString(triple[2]));
                     values.sort(SymbolInternals.compareSymbols);
                 }
-                entities.push([
-                    SymbolInternals.symbolToString(symbol),
-                    this.getLength(symbol),
-                    Utils.encodeAsHex(this.getRawData(symbol)),
+                const length = this.getLength(symbol);
+                entries.push([
+                    SymbolInternals.identityOfSymbol(symbol),
+                    length,
+                    Utils.encodeAsHex(new Uint8Array(this.getRawData(symbol).buffer, 0, Math.ceil(length/8))),
                     betaCollection
                 ]);
             }
-        return JSON.stringify({
-            'symbols': entities
-        }, undefined, '\t');
+        }
+        return JSON.stringify(namespaces, undefined, '\t');
     }
 
     /**
@@ -682,20 +683,25 @@ export default class BasicBackend {
      */
     decodeJson(json) {
         const entities = new Set();
-        for(const entry of JSON.parse(json).symbols) {
-            const entity = SymbolInternals.symbolFromString(entry[0]);
-            entities.add(entity);
-            this.manifestSymbol(entity);
-            if(entry[1] > 0)
-                this.setRawData(entity, Utils.decodeAsHex(entry[2]));
-            this.setLength(entity, entry[1]);
-            const attributes = entry[3];
-            for(let i = 0; i < attributes.length; i += 2) {
-                const attribute = SymbolInternals.symbolFromString(attributes[i]);
-                for(const value of attributes[i+1])
-                    this.setTriple([entity, attribute, SymbolInternals.symbolFromString(value)], true);
+        for(const [namespaceIdentity, entries] of Object.entries(JSON.parse(json)))
+            for(const entry of entries) {
+                const entity = SymbolInternals.concatIntoSymbol(namespaceIdentity, entry[0]);
+                entities.add(entity);
+                this.manifestSymbol(entity);
+                if(entry[1] > 0)
+                    this.setRawData(entity, Utils.decodeAsHex(entry[2]));
+                this.setLength(entity, entry[1]);
+                const attributes = entry[3];
+                for(let i = 0; i < attributes.length; i += 2) {
+                    const attribute = SymbolInternals.symbolFromString(attributes[i]);
+                    this.manifestSymbol(attribute);
+                    for(const valueStr of attributes[i+1]) {
+                        const value = SymbolInternals.symbolFromString(valueStr);
+                        this.manifestSymbol(value);
+                        this.setTriple([entity, attribute, value], true);
+                    }
+                }
             }
-        }
         return entities;
     }
 };

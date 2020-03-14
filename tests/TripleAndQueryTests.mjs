@@ -24,10 +24,6 @@ export function getTests(backend, rand) {
                   linked = rand.selectUniformly([false, true]),
                   expected = (tripleExists != linked),
                   result = backend.setTriple(triple, linked);
-            if(linked)
-                triplePool.add(tripleTag);
-            else
-                triplePool.delete(tripleTag);
             if(expected != result) {
                 console.warn('setTriple',
                     tagFromTriple(triple),
@@ -37,6 +33,10 @@ export function getTests(backend, rand) {
                 );
                 return false;
             }
+            if(linked)
+                triplePool.add(tripleTag);
+            else
+                triplePool.delete(tripleTag);
             return true;
         }],
         'queryTriples': [100, () => {
