@@ -78,7 +78,7 @@
             }
 
             function testRecording(debugMode, seed, concatDiff) {
-                const diff = new Diff(backend, {}, repositoryNamespace);
+                const diff = new Diff(backend, repositoryNamespace, {});
                 if(debugMode) {
                     checkoutSnapshots[0] = backend.encodeJson([checkoutNamespace]);
                     diffSnapshots.push(makeDiffSnapshot(diff, 'Initial'));
@@ -112,7 +112,7 @@
                 console.log(`Seed: ${rand.buffer[0]}`);
                 prepare();
                 document.getElementById('controls').innerHTML = '<input id="diffSelect" type="range" step="1" min="0" max="0" value="0" style="width: 500px; height: 25px; position: fixed; top: 10px; right: 20px;" /><div id="description" style="position: fixed; top: 40px; right: 20px;"></div>';
-                const concatDiff = new Diff(backend, {}, repositoryNamespace);
+                const concatDiff = new Diff(backend, repositoryNamespace, {});
                 checkoutSnapshots[4] = backend.encodeJson([checkoutNamespace]);
                 for(let i = 0; i < 10; ++i)
                     testRecording(true, rand.buffer[0], concatDiff);

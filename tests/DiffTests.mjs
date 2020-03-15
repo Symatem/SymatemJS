@@ -156,10 +156,9 @@ function testDiff(backend, diff, initialState) {
         return false;
     diff.commit();
     const originalJson = diff.encodeJson(),
-          decodedDiff = new Diff(backend, recordingRelocation, repositoryNamespace);
-    decodedDiff.decodeJson(originalJson);
+          decodedDiff = new Diff(backend, repositoryNamespace, recordingRelocation, originalJson);
     decodedDiff.link();
-    const loadedDiff = new Diff(backend, recordingRelocation, repositoryNamespace, decodedDiff.symbol),
+    const loadedDiff = new Diff(backend, repositoryNamespace, recordingRelocation, decodedDiff.symbol),
           loadedJson = loadedDiff.encodeJson(),
           resultOfRecording = backend.encodeJson([checkoutNamespace]);
     if(!loadedDiff.apply(true, checkoutRelocation)) {
@@ -185,12 +184,12 @@ function testDiff(backend, diff, initialState) {
 }
 
 export function getTests(backend, rand) {
-    const concatDiff = new Diff(backend, recordingRelocation, repositoryNamespace);
+    const concatDiff = new Diff(backend, repositoryNamespace, recordingRelocation);
     let concatInitialState;
     return {
         'diffRecording': [100, () => {
             const initialState = backend.encodeJson([checkoutNamespace]),
-                  diff = new Diff(backend, recordingRelocation, repositoryNamespace),
+                  diff = new Diff(backend, repositoryNamespace, recordingRelocation),
                   symbolPool = [...backend.querySymbols(checkoutNamespace)];
             if(!concatInitialState)
                 concatInitialState = initialState;

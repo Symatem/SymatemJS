@@ -11,18 +11,21 @@ function getOrCreateEntry(dict, key, value) {
 export default class Diff extends BasicBackend {
     /**
      * @param {BasicBackend} backend
-     * @param {RelocationTable} recordingRelocation Relocate recording namespaces to become modal namespaces
      * @param {Identity} repositoryNamespace The namespace identity of the repository
-     * @param {Symbol} symbol Optionally the symbol to load the diff from
+     * @param {RelocationTable} recordingRelocation Relocate recording namespaces to become modal namespaces
+     * @param {String|Symbol} [source] Optionally a JSON string or symbol to load the diff from. If none is provided the diff will be setup for recording instead
      */
-    constructor(backend, recordingRelocation, repositoryNamespace, symbol) {
+    constructor(backend, repositoryNamespace, recordingRelocation, source) {
         super();
         this.backend = backend;
         this.recordingRelocation = recordingRelocation;
         this.repositoryNamespace = repositoryNamespace;
-        if(symbol)
-            this.load(symbol);
-        else {
+        if(source) {
+            if(SymbolInternals.validateSymbol(source))
+                this.load(source);
+            else
+                this.decodeJson(source);
+        } else {
             this.isRecordingFromBackend = true;
             this.nextTrackingId = 0;
             this.dataSource = this.backend.createSymbol(this.repositoryNamespace);
@@ -861,7 +864,7 @@ export default class Diff extends BasicBackend {
     }
 
     /**
-     * Imports content from JSON
+     * Imports content from JSON. Don't call this method directly, use the constructor instead
      * @param {String} json
      */
     decodeJson(json) {
@@ -870,6 +873,7 @@ export default class Diff extends BasicBackend {
             switch(type) {
                 case 'dataSource':
                 case 'dataRestore':
+                    this[type] = this.backend.createSymbol(this.repositoryNamespace);
                     this.backend.setRawData(this[type], Utils.decodeAsHex(operations));
                     return;
                 case 'linkTripleOperations':
@@ -899,7 +903,7 @@ export default class Diff extends BasicBackend {
     }
 
     /**
-     * Loads the diff from the repository
+     * Loads the diff from the repository. Don't call this method directly, use the constructor instead
      */
     load(symbol) {
         console.assert(!this.postCommitStructure);
