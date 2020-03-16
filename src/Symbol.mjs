@@ -8,7 +8,7 @@ export class SymbolInternalsColonString {
      * @return {Boolean}
      */
     static validateSymbol(symbol) {
-        return typeof symbol == 'string' && symbol.split(':').length == 2;
+        return typeof symbol == 'string' && /^[0-9]+:[0-9]+$/.test(symbol);
     }
 
     /**

@@ -10,7 +10,7 @@
     "scripts": {
         "preinstall": "curl --create-dirs -o dist/backend.wasm -GL https://github.com/Symatem/SymatemRust/releases/latest/download/symatem.wasm",
         "test": "node tests/Tests.mjs",
-        "docs": "documentation build SymatemJS.js -f html -o docs"
+        "docs": "documentation build SymatemJS.mjs -f html -o docs"
     },
     "bugs": {
         "url": "https://github.com/Symatem/SymatemJS/issues"

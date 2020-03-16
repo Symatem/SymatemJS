@@ -1,12 +1,7 @@
 import PRNG from './PRNG.mjs';
 import {Utils, SymbolInternals, SymbolMap, BasicBackend, Diff} from '../SymatemJS.mjs';
 
-export const repositoryNamespace = 3,
-             modalNamespace = 4,
-             checkoutNamespace = 5,
-             recordingRelocation = {[checkoutNamespace]: modalNamespace},
-             checkoutRelocation = {[modalNamespace]: checkoutNamespace},
-             configuration = {
+export const configuration = {
     'minSymbolCount': 10,
     'minTripleCount': 100,
     'minDataLength': 10,
@@ -26,10 +21,10 @@ export const repositoryNamespace = 3,
 };
 
 export function fillCheckout(backend, rand) {
-    backend.unlinkSymbol(BasicBackend.symbolInNamespace('Namespaces', checkoutNamespace));
+    backend.clearNamespace(configuration.checkoutNamespace);
     const symbolPool = [];
     for(let i = 0; i < configuration.minSymbolCount*2; ++i) {
-        const symbol = backend.createSymbol(checkoutNamespace),
+        const symbol = backend.createSymbol(configuration.checkoutNamespace),
               length = rand.range(configuration.minDataLength, configuration.maxDataLength),
               dataBytes = rand.bytes(Math.ceil(length/32)*4);
         backend.setRawData(symbol, dataBytes, length);
@@ -74,7 +69,7 @@ export function *generateOperations(backend, rand, symbolPool) {
                               : rand.selectByDistribution(configuration.operationProbabilities);
         switch(operationType) {
             case 'createSymbol': {
-                const symbol = backend.createSymbol(checkoutNamespace);
+                const symbol = backend.createSymbol(configuration.checkoutNamespace);
                 symbolPool.push(symbol);
                 yield `${iteration}: Create a symbol ${symbol}`;
             } break;
@@ -156,21 +151,21 @@ function testDiff(backend, diff, initialState) {
         return false;
     diff.commit();
     const originalJson = diff.encodeJson(),
-          decodedDiff = new Diff(backend, repositoryNamespace, recordingRelocation, originalJson);
+          decodedDiff = new Diff(backend, configuration.repositoryNamespace, configuration.recordingRelocation, originalJson);
     decodedDiff.link();
-    const loadedDiff = new Diff(backend, repositoryNamespace, recordingRelocation, decodedDiff.symbol),
+    const loadedDiff = new Diff(backend, configuration.repositoryNamespace, configuration.recordingRelocation, decodedDiff.symbol),
           loadedJson = loadedDiff.encodeJson(),
-          resultOfRecording = backend.encodeJson([checkoutNamespace]);
-    if(!loadedDiff.apply(true, checkoutRelocation)) {
+          resultOfRecording = backend.encodeJson([configuration.checkoutNamespace]);
+    if(!loadedDiff.apply(true, configuration.checkoutRelocation)) {
         console.warn('Could not apply reverse');
         return false;
     }
-    const resultOfReverse = backend.encodeJson([checkoutNamespace]);
-    if(!loadedDiff.apply(false, checkoutRelocation)) {
+    const resultOfReverse = backend.encodeJson([configuration.checkoutNamespace]);
+    if(!loadedDiff.apply(false, configuration.checkoutRelocation)) {
         console.warn('Could not apply forward');
         return false;
     }
-    const resultOfForward = backend.encodeJson([checkoutNamespace]);
+    const resultOfForward = backend.encodeJson([configuration.checkoutNamespace]);
     loadedDiff.unlink();
     if(initialState != resultOfReverse) {
         console.warn('Reverse failed', initialState, resultOfReverse);
@@ -184,13 +179,18 @@ function testDiff(backend, diff, initialState) {
 }
 
 export function getTests(backend, rand) {
-    const concatDiff = new Diff(backend, repositoryNamespace, recordingRelocation);
+    configuration.repositoryNamespace = SymbolInternals.identityOfSymbol(backend.createSymbol(BasicBackend.metaNamespaceIdentity));
+    configuration.modalNamespace = SymbolInternals.identityOfSymbol(backend.createSymbol(BasicBackend.metaNamespaceIdentity));
+    configuration.checkoutNamespace = SymbolInternals.identityOfSymbol(backend.createSymbol(BasicBackend.metaNamespaceIdentity));
+    configuration.recordingRelocation = {[configuration.checkoutNamespace]: configuration.modalNamespace};
+    configuration.checkoutRelocation = {[configuration.modalNamespace]: configuration.checkoutNamespace};
+    const concatDiff = new Diff(backend, configuration.repositoryNamespace, configuration.recordingRelocation);
     let concatInitialState;
     return {
         'diffRecording': [100, () => {
-            const initialState = backend.encodeJson([checkoutNamespace]),
-                  diff = new Diff(backend, repositoryNamespace, recordingRelocation),
-                  symbolPool = [...backend.querySymbols(checkoutNamespace)];
+            const initialState = backend.encodeJson([configuration.checkoutNamespace]),
+                  diff = new Diff(backend, configuration.repositoryNamespace, configuration.recordingRelocation),
+                  symbolPool = [...backend.querySymbols(configuration.checkoutNamespace)];
             if(!concatInitialState)
                 concatInitialState = initialState;
             for(const description of generateOperations(diff, rand, symbolPool));

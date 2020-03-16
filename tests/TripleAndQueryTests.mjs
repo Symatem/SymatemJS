@@ -4,7 +4,7 @@ export function getTests(backend, rand) {
     const symbolPool = [],
           triplePool = new Set(),
           maskByIndex = Object.keys(BasicBackend.queryMasks),
-          namespaceIdentity = 4;
+          namespaceIdentity = SymbolInternals.identityOfSymbol(backend.createSymbol(BasicBackend.metaNamespaceIdentity));
     for(let i = 0; i < 100; ++i)
         symbolPool.push(backend.createSymbol(namespaceIdentity));
 
@@ -28,7 +28,7 @@ export function getTests(backend, rand) {
                 console.warn('setTriple',
                     tagFromTriple(triple),
                     [...triplePool].sort().join(' '), '|',
-                    [...backend.queryTriples(BasicBackend.queryMasks.VVV, [BasicBackend.symbolByName.Void, BasicBackend.symbolByName.Void, BasicBackend.symbolByName.Void])].map(triple => tagFromTriple(triple)).sort().join(' '),
+                    [...backend.queryTriples(BasicBackend.queryMasks.VVV, [backend.symbolByName.Void, backend.symbolByName.Void, backend.symbolByName.Void])].map(triple => tagFromTriple(triple)).sort().join(' '),
                     tripleExists, linked, result, expected
                 );
                 return false;
@@ -82,38 +82,35 @@ export function getTests(backend, rand) {
                 console.warn('queryTriples',
                     mask, tagFromTriple(queryTriple),
                     [...triplePool].sort().join(' '), '|',
-                    [...backend.queryTriples(BasicBackend.queryMasks.VVV, [BasicBackend.symbolByName.Void, BasicBackend.symbolByName.Void, BasicBackend.symbolByName.Void])].map(triple => tagFromTriple(triple)).sort().join(' '), '|',
+                    [...backend.queryTriples(BasicBackend.queryMasks.VVV, [backend.symbolByName.Void, backend.symbolByName.Void, backend.symbolByName.Void])].map(triple => tagFromTriple(triple)).sort().join(' '), '|',
                     [...result].sort().join(' '), '|',
                     [...expected].sort().join(' ')
                 );
             return noErrorsOccured;
         }],
-        'unlinkNamespace': [10, () => {
+        'clearNamespace': [10, () => {
             for(let i = 0; i < 100; ++i)
-                backend.setTriple([BasicBackend.symbolByName.Void, rand.selectUniformly(symbolPool), SymbolInternals.concatIntoSymbol(1, rand.range(0, 100))], true);
-            if(!backend.unlinkSymbol(BasicBackend.symbolInNamespace('Namespaces', namespaceIdentity))) {
-                console.warn('unlinkNamespace', 'unlinkSymbol');
-                return false;
-            }
+                backend.setTriple([backend.symbolByName.Void, rand.selectUniformly(symbolPool), SymbolInternals.concatIntoSymbol(1, rand.range(0, 100))], true);
+            backend.clearNamespace(namespaceIdentity);
             const symbolsResult = [...backend.querySymbols(namespaceIdentity)];
             if(!symbolsResult.length == 0) {
-                console.warn('unlinkNamespace', 'querySymbols', symbolsResult.sort().join(' '));
+                console.warn('clearNamespace', 'querySymbols', symbolsResult.sort().join(' '));
                 return false;
             }
-            const triplesResult = [...backend.queryTriples(BasicBackend.queryMasks.VVV, [BasicBackend.symbolByName.Void, BasicBackend.symbolByName.Void, BasicBackend.symbolByName.Void])].filter((triple) => {
+            const triplesResult = [...backend.queryTriples(BasicBackend.queryMasks.VVV, [backend.symbolByName.Void, backend.symbolByName.Void, backend.symbolByName.Void])].filter((triple) => {
                 for(const symbol of triple)
                     if(SymbolInternals.namespaceOfSymbol(symbol) != namespaceIdentity)
                         return false;
                 return true;
             });
             if(!triplesResult.length == 0) {
-                console.warn('unlinkNamespace', 'queryTriples', triplesResult.sort().join(' '));
+                console.warn('clearNamespace', 'queryTriples', triplesResult.sort().join(' '));
                 return false;
             }
             for(let i = 0; i < 100; ++i) {
                 const symbol = backend.createSymbol(namespaceIdentity);
                 if(SymbolInternals.identityOfSymbol(symbol) != i) {
-                    console.warn('unlinkNamespace', 'createSymbol', symbol);
+                    console.warn('clearNamespace', 'createSymbol', symbol);
                     return false;
                 }
             }

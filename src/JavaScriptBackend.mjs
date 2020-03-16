@@ -104,7 +104,7 @@ function* searchMVV(index, triple) {
     return count;
 }
 
-function* searchMIV(index, triple) {
+/*function* searchMIV(index, triple) {
     const handle = this.getHandle(triple[0]);
     if(!handle)
         return 0;
@@ -119,7 +119,7 @@ function* searchMIV(index, triple) {
         ++count;
     }
     return count;
-}
+}*/
 
 function* searchMVI(index, triple) {
     const handle = this.getHandle(triple[0]);
@@ -239,88 +239,63 @@ export default class JavaScriptBackend extends BasicBackend {
         let namespace = this.namespaces[namespaceIdentity];
         if(!namespace) {
             namespace = {
-                // 'identity': namespaceIdentity,
                 'freeIdentityPool': IdentityPool.create(),
                 'handles': {}
             };
             this.namespaces[namespaceIdentity] = namespace;
-            this.manifestSymbol(BasicBackend.symbolInNamespace('Namespaces', namespaceIdentity));
         }
         return namespace;
     }
 
-    unlinkNamespace(namespaceIdentity) {
-        const namespace = this.namespaces[namespaceIdentity];
-        if(!namespace)
-            return false;
-        const triple = [];
-        for(const handleIdentity in namespace.handles) {
-            triple[0] = SymbolInternals.concatIntoSymbol(namespaceIdentity, handleIdentity);
-            const handle = namespace.handles[handleIdentity];
-            for(let triple_index = 0; triple_index < 3; ++triple_index) {
-                const betaCollection = handle.subIndices[triple_index];
-                for(const [beta, gammaCollection] of SymbolMap.entries(betaCollection)) {
-                    triple[1] = beta;
-                    if(SymbolInternals.namespaceOfSymbol(triple[1]) != namespaceIdentity) {
-                        for(triple[2] of SymbolMap.symbols(gammaCollection))
-                            console.assert(this.setTriple(reorderTriple(tripleNormalized, triple_index, triple), false));
-                    } else {
-                        for(triple[2] of SymbolMap.symbols(gammaCollection))
-                            if(SymbolInternals.namespaceOfSymbol(triple[2]) != namespaceIdentity)
-                                console.assert(this.setTriple(reorderTriple(tripleNormalized, triple_index, triple), false));
-                    }
-                }
-            }
-        }
-        delete this.namespaces[namespaceIdentity];
-        return true;
-    }
-
     manifestSymbol(symbol) {
         const namespaceIdentity = SymbolInternals.namespaceOfSymbol(symbol),
-              namespace = this.manifestNamespace(namespaceIdentity),
               handleIdentity = SymbolInternals.identityOfSymbol(symbol);
+        if(namespaceIdentity == this.constructor.metaNamespaceIdentity && handleIdentity == this.constructor.metaNamespaceIdentity)
+            this.manifestNamespace(this.constructor.metaNamespaceIdentity);
+        const namespace = this.namespaces[namespaceIdentity];
+        console.assert(namespace);
         let handle = namespace.handles[handleIdentity];
         if(handle)
             return false;
         console.assert(IdentityPool.remove(namespace.freeIdentityPool, handleIdentity));
         handle = namespace.handles[handleIdentity] = {
-            // namespace: namespace,
-            // handleIdentity: handleIdentity,
             dataLength: 0,
             dataBytes: new Uint8Array(),
             subIndices: []
         };
         for(let i = 0; i < 6; ++i)
             handle.subIndices.push(SymbolMap.create());
+        if(namespaceIdentity == this.constructor.metaNamespaceIdentity)
+            this.manifestNamespace(handleIdentity);
         return true;
     }
 
     createSymbol(namespaceIdentity) {
-        const namespace = this.manifestNamespace(namespaceIdentity);
+        const namespace = this.namespaces[namespaceIdentity];
+        console.assert(namespace);
         let handleIdentity = IdentityPool.get(namespace.freeIdentityPool);
         const symbol = SymbolInternals.concatIntoSymbol(namespaceIdentity, handleIdentity);
-        this.manifestSymbol(symbol);
+        console.assert(this.manifestSymbol(symbol));
         return symbol;
     }
 
     releaseSymbol(symbol) {
         const namespaceIdentity = SymbolInternals.namespaceOfSymbol(symbol),
               namespace = this.namespaces[namespaceIdentity],
-              handleIdentity = SymbolInternals.identityOfSymbol(symbol);
-        if(!namespace || !namespace.handles[handleIdentity])
+              handleIdentity = SymbolInternals.identityOfSymbol(symbol),
+              handle = namespace.handles[handleIdentity];
+        if(!namespace || !handle)
             return false;
-        for(let i = 0; i < 3; ++i)
-            if(!SymbolMap.isEmpty(namespace.handles[handleIdentity].subIndices[i]))
-                return false;
+        if(namespaceIdentity == SymbolInternals.identityOfSymbol(this.symbolByName.Namespaces))
+            console.assert(this.namespaces[handleIdentity] && Object.keys(this.namespaces[handleIdentity].handles).length == 0);
+        console.assert(handle.dataLength == 0);
+        for(let i = 0; i < 6; ++i)
+            console.assert(SymbolMap.isEmpty(handle.subIndices[i]));
         delete namespace.handles[handleIdentity];
-        if(Object.keys(namespace.handles).length == 0)
-            delete this.namespaces[namespaceIdentity];
-        else
-            console.assert(IdentityPool.insert(namespace.freeIdentityPool, handleIdentity));
-        return (namespaceIdentity == SymbolInternals.identityOfSymbol(this.constructor.symbolByName.Namespaces))
-            ? this.unlinkNamespace(handleIdentity)
-            : true;
+        console.assert(IdentityPool.insert(namespace.freeIdentityPool, handleIdentity));
+        if(namespaceIdentity == SymbolInternals.identityOfSymbol(this.symbolByName.Namespaces))
+            console.assert(this.namespaces[handleIdentity]);
+        return true;
     }
 
     getLength(symbol) {
