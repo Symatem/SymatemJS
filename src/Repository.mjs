@@ -1,123 +1,202 @@
-import {SymbolInternals} from '../SymatemJS.mjs';
+import {SymbolInternals, SymbolMap, BasicBackend, Diff} from '../SymatemJS.mjs';
 
-/** The repository is a DAG with the versions being vertices and the diffs being edges */
+/** The repository is a DAG with the versions being vertices and the edges containing the diffs */
 export default class Repository {
     /**
      * @param {BasicBackend} backend
      * @param {Identity} namespace
+     * @param {RelocationTable} relocationTable
      */
-    constructor(backend, namespace) {
+    constructor(backend, namespace, relocationTable) {
         this.backend = backend;
         this.namespace = namespace;
-        this.modalNamespaces = [];
-        this.versions = {};
-        this.materializedVersions = {};
+        this.relocationTable = relocationTable;
+        for(const [recordingNamespaceIdentity, modalNamespaceIdentity] of Object.entries(this.relocationTable)) {
+            this.backend.manifestSymbol(this.backend.symbolInNamespace('Namespaces', recordingNamespaceIdentity))
+            this.backend.manifestSymbol(this.backend.symbolInNamespace('Namespaces', modalNamespaceIdentity))
+        }
+    }
+
+    /** Gets the list of versions in this repository
+     * @return {Symbol[]} versions
+     */
+    getVersions() {
+        const versions = [];
+        for(const triple of this.backend.queryTriples(BasicBackend.queryMasks.VMM, [this.backend.symbolByName.Void, this.backend.symbolByName.Type, this.backend.symbolByName.Version]))
+            versions.push(triple[0]);
+        return versions;
+    }
+
+    /** Gets the list of edges in this repository
+     * @return {Symbol[]} diffss
+     */
+    getEdges() {
+        const edges = [];
+        for(const triple of this.backend.queryTriples(BasicBackend.queryMasks.VMM, [this.backend.symbolByName.Void, this.backend.symbolByName.Type, this.backend.symbolByName.Edge]))
+            edges.push(triple[0]);
+        return edges;
+    }
+
+    /** Gets a versions relatives and their diffs
+     * @param {Symbol} version The version to query
+     * @param {Symbol} kind Parent or Child
+     * @return {SymbolMap} Relatives as keys and diffs as values
+     */
+    getRelatives(version, kind) {
+        const result = SymbolMap.create();
+        for(const triple of this.backend.queryTriples(BasicBackend.queryMasks.MMV, [version, kind, this.backend.symbolByName.Void])) {
+            const relative = this.backend.getPairOptionally(triple[2], kind);
+            SymbolMap.insert(result, relative, triple[2]);
+        }
+        return result;
     }
 
     /** Adds a vertex to the DAG and returns it
-     * @param {Symbol} versionId The version to remove
-     * @param {Object} version
+     * @return {Symbol} version
      */
-    manifestVersion(versionId) {
-        return (this.versions[versionId])
-            ? this.versions[versionId]
-            : this.versions[versionId] = {
-            'id': versionId,
-            'parents': {},
-            'children': {}
-        };
+    createVersion() {
+        const version = this.backend.createSymbol(this.namespace);
+        this.backend.setTriple([version, this.backend.symbolByName.Type, this.backend.symbolByName.Version], true);
+        return version;
+    }
+
+    /** Removes a vertex, its materialization and all its connecting edges from the DAG
+     * @param {Symbol} version The version to remove
+     */
+    removeVersion(version) {
+        for(const [relative, edge] of SymbolMap.entries(this.getRelatives(version, this.backend.symbolByName.Parent)))
+            this.removeEdge(edge);
+        for(const [relative, edge] of SymbolMap.entries(this.getRelatives(version, this.backend.symbolByName.Child)))
+            this.removeEdge(edge);
+        this.dematerializeVersion(version);
+        this.backend.unlinkSymbol(version);
     }
 
     /** Adds an edge to the DAG
-     * @param {Symbol} parentVersionId The parent vertex
-     * @param {Symbol} childVersionId The child vertex
-     * @param {Diff} diff The edge connecting them
+     * @param {Symbol} parentVersion The parent vertex
+     * @param {Symbol} childVersion The child vertex
+     * @param {Diff} diff The diff of the edge
+     * @return {Symbol} The created edge
      */
-    addDiff(parentVersionId, childVersionId, diff) {
-        this.manifestVersion(childVersionId).parents[parentVersionId] = diff;
-        this.manifestVersion(parentVersionId).children[childVersionId] = diff;
+    addEdge(parentVersion, childVersion, diff) {
+        const edge = this.backend.createSymbol(this.namespace);
+        this.backend.setTriple([edge, this.backend.symbolByName.Type, this.backend.symbolByName.Edge], true);
+        this.backend.setTriple([edge, this.backend.symbolByName.Parent, parentVersion], true);
+        this.backend.setTriple([edge, this.backend.symbolByName.Child, childVersion], true);
+        if(diff)
+            this.backend.setTriple([edge, this.backend.symbolByName.Diff, diff.symbol], true);
+        this.backend.setTriple([childVersion, this.backend.symbolByName.Parent, edge], true);
+        this.backend.setTriple([parentVersion, this.backend.symbolByName.Child, edge], true);
+        return edge;
     }
 
-    /** Removes a vertex from the DAG
-     * @param {Symbol} versionId The version to remove
+    /** Find an edge by its vertices
+     * @param {Symbol} parentVersion The parent vertex
+     * @param {Symbol} childVersion The child vertex
+     * @return {Symbol} The edge or Void
      */
-    removeVersion(versionId) {
-        this.dematerializeVersion(versionId);
-        for(const parentVersionId in this.versions[versionId].parents)
-            delete this.versions[parentVersionId].children[versionId];
-        delete this.versions[versionId];
+    getEdge(parentVersion, childVersion) {
+        for(const [relative, edge] of SymbolMap.entries(this.getRelatives(parentVersion, this.backend.symbolByName.Child)))
+            if(relative == childVersion)
+                return edge;
+        return this.backend.symbolByName.Void;
+    }
+
+    /** Removes an edge from the DAG
+     * @param {Symbol} edge The edge
+     */
+    removeEdge(edge) {
+        const diffSymbol = this.backend.getPairOptionally(edge, this.backend.symbolByName.Diff);
+        this.backend.unlinkSymbol(edge);
+        if(diffSymbol == this.backend.symbolByName.Void || this.backend.getTriple([this.backend.symbolByName.Void, this.backend.symbolByName.Diff, diffSymbol], BasicBackend.queryMask.VMM))
+            return;
+        const diff = new Diff(this.backend, this.relocationTable, this.namespace, diffSymbol);
+        diff.unlink();
     }
 
     /** Materializes a version (checkout)
-     * @param {Symbol} versionId The version to materialize
+     * @param {Symbol} version The version to materialize
      * @return {RelocationTable} Relocates modal namespaces which became checkout namespaces
      */
-    materializeVersion(versionId) {
-        const checkoutRelocation = {};
-        for(const modalNamespaceIdentity of this.modalNamespaces) {
-            const namespaceSymbol = this.createSymbol(SymbolInternals.identityOfSymbol(BasicBackend.symbolByName.Namespaces)),
-                  namespaceIdentity = SymbolInternals.identityOfSymbol(namespaceSymbol);
-            checkoutRelocation[modalNamespaceIdentity] = namespaceIdentity;
+    materializeVersion(version) {
+        console.assert(!this.backend.getTriple([version, this.backend.symbolByName.Materialization, this.backend.symbolByName.Void], BasicBackend.queryMasks.MMI));
+        const path = SymbolMap.count(this.getRelatives(version, this.backend.symbolByName.Parent)) > 0 ? this.findPath(version) : undefined,
+              checkoutRelocation = {},
+              dstMaterialization = this.backend.createSymbol(this.namespace);
+        this.backend.setTriple([version, this.backend.symbolByName.Materialization, dstMaterialization], true);
+        for(const [recordingNamespaceIdentity, modalNamespaceIdentity] of Object.entries(this.relocationTable)) {
+            const materializationNamespaceSymbol = this.backend.createSymbol(SymbolInternals.identityOfSymbol(this.backend.symbolByName.Namespaces));
+            checkoutRelocation[modalNamespaceIdentity] = SymbolInternals.identityOfSymbol(materializationNamespaceSymbol);
+            this.backend.setTriple([dstMaterialization, this.backend.symbolInNamespace('Namespaces', modalNamespaceIdentity), materializationNamespaceSymbol], true);
         }
-        this.materializedVersions[versionId] = checkoutRelocation;
-        if(Object.keys(this.versions[versionId].parents).length > 0) {
-            const path = this.findPathTo(versionId);
-            versionId = path[0];
-            for(const modalNamespaceIdentity of this.materializedVersions[versionId])
-                this.backend.copyNamespace(checkoutRelocation[modalNamespaceIdentity], this.materializedVersions[versionId][modalNamespaceIdentity]); // TODO
+        if(path) {
+            console.assert(path.length > 1);
+            version = path[0].version;
+            const srcMaterialization = this.backend.getPairOptionally(version, this.backend.symbolByName.Materialization),
+                  cloneRelocation = {};
+            for(const triple of this.backend.queryTriples(BasicBackend.queryMasks.MVV, [srcMaterialization, this.backend.symbolByName.Void, this.backend.symbolByName.Void]))
+                cloneRelocation[SymbolInternals.identityOfSymbol(triple[2])] = checkoutRelocation[SymbolInternals.identityOfSymbol(triple[1])];
+            this.backend.cloneNamespaces(cloneRelocation);
             for(let i = 1; i < path.length; ++i) {
-                path[i][1].apply(path[i][2], checkoutRelocation);
-                versionId = path[i][0];
+                const diff = new Diff(this.backend, this.relocationTable, this.namespace, this.backend.getPairOptionally(path[i].edge, this.backend.symbolByName.Diff));
+                diff.apply(path[i].direction, checkoutRelocation);
+                version = path[i].version;
             }
         }
         return checkoutRelocation;
     }
 
     /** Deletes the materialization of a version, but not the version itself
-     * @param {Symbol} versionId The version to dematerialize
+     * @param {Symbol} version The version to dematerialize
      */
-    dematerializeVersion(versionId) {
-        if(!this.materializedVersions[versionId])
+    dematerializeVersion(version) {
+        const materialization = this.backend.getPairOptionally(version, this.backend.symbolByName.Materialization);
+        if(materialization == this.backend.symbolByName.Void)
             return;
-        for(const namespaceIdentity of this.materializedVersions[versionId])
-            this.backend.unlinkSymbol(BasicBackend.symbolInNamespace('Namespaces', namespaceIdentity));
-        delete this.materializedVersions[versionId];
+        for(const triple of this.backend.queryTriples(BasicBackend.queryMasks.MIV, [materialization, this.backend.symbolByName.Void, this.backend.symbolByName.Void]))
+            this.backend.unlinkSymbol(triple[2]);
+        this.backend.unlinkSymbol(materialization);
     }
 
-    /** Finds the shortest path between two versions or a destination and the closest materialized version
-     * @param {Symbol} dstVersionId Destination version
-     * @param {Symbol} srcVersionId Source version (optional, closest materialized version is used otherwise)
-     * @param {Symbol[]} Path of version hops from source to destination
+    /**
+     * @typedef {Object} RepositoryPathEntry
+     * @property {Symbol} version
+     * @property {Diff} diff
+     * @property {Boolean} direction
      */
-    findPathTo(dstVersionId, srcVersionId) {
-        const path = [], queue = [dstVersionId];
-        this.versions[dstVersionId].discoveredBy = true;
+
+    /** Finds the shortest path between two versions or a destination and the closest materialized version
+     * @param {Symbol} dstVersion Destination version
+     * @param {Symbol} srcVersion Source version (optional, closest materialized version is used otherwise)
+     * @return {RepositoryPathEntry[]} Path from source to destination
+     */
+    findPath(dstVersion, srcVersion) {
+        const path = [], queue = [dstVersion], discoveredBy = SymbolMap.create();
+        SymbolMap.insert(discoveredBy, dstVersion, true);
         while(queue.length > 0) {
-            let versionId = queue.shift();
-            if(srcVersionId == versionId || (!srcVersionId && this.materializedVersions[versionId])) {
-                path.push(versionId);
+            let version = queue.shift();
+            if(srcVersion == version || (!srcVersion && this.backend.getTriple([version, this.backend.symbolByName.Materialization, this.backend.symbolByName.Void], BasicBackend.queryMasks.MMI))) {
+                path.push({'version': version});
                 while(true) {
-                    const discoveredBy = this.versions[versionId].discoveredBy;
-                    if(discoveredBy === true)
+                    const entry = SymbolMap.get(discoveredBy, version);
+                    if(entry === true)
                         break;
-                    path.push(discoveredBy);
-                    versionId = discoveredBy[0];
+                    path.push(entry);
+                    version = entry.version;
                 }
                 break;
             }
-            for(const neighborId in this.versions[versionId].parents)
-                if(!this.versions[neighborId].discoveredBy) {
-                    this.versions[neighborId].discoveredBy = [versionId, this.versions[versionId].parents[neighborId], false];
-                    queue.push(neighborId);
+            for(const [relative, edge] of SymbolMap.entries(this.getRelatives(version, this.backend.symbolByName.Parent)))
+                if(!SymbolMap.get(discoveredBy, relative)) {
+                    SymbolMap.insert(discoveredBy, relative, {'version': version, 'edge': edge, 'direction': false});
+                    queue.push(relative);
                 }
-            for(const neighborId in this.versions[versionId].children)
-                if(!this.versions[neighborId].discoveredBy) {
-                    this.versions[neighborId].discoveredBy = [versionId, this.versions[versionId].children[neighborId], true];
-                    queue.push(neighborId);
+            for(const [relative, edge] of SymbolMap.entries(this.getRelatives(version, this.backend.symbolByName.Child)))
+                if(!SymbolMap.get(discoveredBy, relative)) {
+                    SymbolMap.insert(discoveredBy, relative, {'version': version, 'edge': edge, 'direction': true});
+                    queue.push(relative);
                 }
         }
-        for(const versionId in this.versions)
-            delete this.versions[versionId].discoveredBy;
         return path;
     }
 }

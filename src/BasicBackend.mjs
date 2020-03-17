@@ -340,15 +340,26 @@ export default class BasicBackend {
     }
 
     /**
+     * Returns all triples a symbol is taking part in
+     * @param {Triple[]} symbol
+     */
+    getTriplesOfSymbol(symbol) {
+        const result = [];
+        for(const triple of this.queryTriples(queryMasks.MVV, [symbol, this.symbolByName.Void, this.symbolByName.Void]))
+            result.push(triple);
+        for(const triple of this.queryTriples(queryMasks.VMV, [this.symbolByName.Void, symbol, this.symbolByName.Void]))
+            result.push(triple);
+        for(const triple of this.queryTriples(queryMasks.VVM, [this.symbolByName.Void, this.symbolByName.Void, symbol]))
+            result.push(triple);
+        return result;
+    }
+
+    /**
      * Unlinks all triples of a symbol, empties its data field and releases it
      * @param {Symbol} symbol
      */
     unlinkSymbol(symbol) {
-        for(const triple of this.queryTriples(queryMasks.MVV, [symbol, this.symbolByName.Void, this.symbolByName.Void]))
-            this.setTriple(triple, false);
-        for(const triple of this.queryTriples(queryMasks.VMV, [this.symbolByName.Void, symbol, this.symbolByName.Void]))
-            this.setTriple(triple, false);
-        for(const triple of this.queryTriples(queryMasks.VVM, [this.symbolByName.Void, this.symbolByName.Void, symbol]))
+        for(const triple of this.getTriplesOfSymbol(symbol))
             this.setTriple(triple, false);
         this.setLength(symbol, 0);
         this.releaseSymbol(symbol);
@@ -362,6 +373,26 @@ export default class BasicBackend {
     clearNamespace(namespaceIdentity) {
         for(const symbol of this.querySymbols(namespaceIdentity))
             this.unlinkSymbol(symbol);
+    }
+
+    /**
+     * TODO
+     * @param {RelocationTable} namespaces relocation table
+     */
+    cloneNamespaces(namespaces) {
+        for(const [srcNamespaceIdentity, dstNamespaceIdentity] of Object.entries(namespaces))
+            for(const srcSymbol of this.querySymbols(srcNamespaceIdentity)) {
+                const dstSymbol = this.constructor.relocateSymbol(srcSymbol, namespaces),
+                      length = this.getLength(srcSymbol);
+                this.manifestSymbol(dstSymbol);
+                this.setLength(dstSymbol, length);
+                this.setRawData(dstSymbol, 0, length, this.getRawData(srcSymbol, 0, length));
+                for(const triple of this.getTriplesOfSymbol(srcSymbol)) {
+                    for(let i = 0; i < 3; ++i)
+                        triple[i] = this.constructor.relocateSymbol(triple[i], namespaces);
+                    this.setTriple(triple, true);
+                }
+            }
     }
 
     /**
@@ -584,19 +615,6 @@ export default class BasicBackend {
      * @return {Boolean} linked
      */
     getTriple(triple, mask=queryMasks.MMM) {
-        switch(mask) {
-            case queryMasks.MMM:
-            case queryMasks.IMM:
-            case queryMasks.MIM:
-            case queryMasks.MMI:
-            case queryMasks.MII:
-            case queryMasks.IMI:
-            case queryMasks.IIM:
-            case queryMasks.III:
-                break;
-            default:
-                throw new Error('Unsupported query mask');
-        }
         const iterator = this.queryTriples(mask, triple);
         return iterator.next().value.length === 3 && iterator.next().value === 1;
     }
