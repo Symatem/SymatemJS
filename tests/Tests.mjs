@@ -1,11 +1,13 @@
 import {getTests as IdentityPoolTests} from './IdentityPoolTests.mjs';
 import {getTests as SymbolDataTests} from './SymbolDataTests.mjs';
 import {getTests as TripleAndQueryTests} from './TripleAndQueryTests.mjs';
+import {getTests as NamespaceTests} from './NamespaceTests.mjs';
 import {getTests as DiffTests} from './DiffTests.mjs';
 const testBundles = [
     IdentityPoolTests,
     SymbolDataTests,
     TripleAndQueryTests,
+    NamespaceTests,
     DiffTests
 ];
 

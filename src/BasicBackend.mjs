@@ -341,16 +341,19 @@ export default class BasicBackend {
 
     /**
      * Returns all triples a symbol is taking part in
-     * @param {Triple[]} symbol
+     * @param {Symbol} symbol
+     * @param {Set} [result] Optionally, an existing set chained from other calls (union of sets)
+     * @return {Set} result
      */
-    getTriplesOfSymbol(symbol) {
-        const result = [];
+    getTriplesOfSymbol(symbol, result) {
+        if(!result)
+            result = new Set();
         for(const triple of this.queryTriples(queryMasks.MVV, [symbol, this.symbolByName.Void, this.symbolByName.Void]))
-            result.push(triple);
+            result.add(SymbolInternals.tripleToString(triple));
         for(const triple of this.queryTriples(queryMasks.VMV, [this.symbolByName.Void, symbol, this.symbolByName.Void]))
-            result.push(triple);
+            result.add(SymbolInternals.tripleToString(triple));
         for(const triple of this.queryTriples(queryMasks.VVM, [this.symbolByName.Void, this.symbolByName.Void, symbol]))
-            result.push(triple);
+            result.add(SymbolInternals.tripleToString(triple));
         return result;
     }
 
@@ -360,14 +363,14 @@ export default class BasicBackend {
      */
     unlinkSymbol(symbol) {
         for(const triple of this.getTriplesOfSymbol(symbol))
-            this.setTriple(triple, false);
+            this.setTriple(SymbolInternals.tripleFromString(triple), false);
         this.setLength(symbol, 0);
         this.releaseSymbol(symbol);
         return true;
     }
 
     /**
-     * Unlinks all symbols of a namespace, but does not release the namespace
+     * Unlinks all symbols and triples of a namespace, but does not release the namespace
      * @param {Identity} namespaceIdentity
      */
     clearNamespace(namespaceIdentity) {
@@ -376,23 +379,26 @@ export default class BasicBackend {
     }
 
     /**
-     * TODO
-     * @param {RelocationTable} namespaces relocation table
+     * Clones all symbols and triples of a namespace and their connections to other namespaces
+     * @param {RelocationTable} namespaces Relocate from source (key) to destination (value)
      */
     cloneNamespaces(namespaces) {
+        const triples = new Set();
         for(const [srcNamespaceIdentity, dstNamespaceIdentity] of Object.entries(namespaces))
             for(const srcSymbol of this.querySymbols(srcNamespaceIdentity)) {
                 const dstSymbol = this.constructor.relocateSymbol(srcSymbol, namespaces),
                       length = this.getLength(srcSymbol);
-                this.manifestSymbol(dstSymbol);
-                this.setLength(dstSymbol, length);
-                this.setRawData(dstSymbol, 0, length, this.getRawData(srcSymbol, 0, length));
-                for(const triple of this.getTriplesOfSymbol(srcSymbol)) {
-                    for(let i = 0; i < 3; ++i)
-                        triple[i] = this.constructor.relocateSymbol(triple[i], namespaces);
-                    this.setTriple(triple, true);
-                }
+                console.assert(this.manifestSymbol(dstSymbol));
+                console.assert(this.setLength(dstSymbol, length));
+                console.assert(this.writeData(dstSymbol, 0, length, this.readData(srcSymbol, 0, length)));
+                this.getTriplesOfSymbol(srcSymbol, triples);
             }
+        for(const tripleString of triples) {
+            const triple = SymbolInternals.tripleFromString(tripleString);
+            for(let i = 0; i < 3; ++i)
+                triple[i] = this.constructor.relocateSymbol(triple[i], namespaces);
+            console.assert(this.setTriple(triple, true));
+        }
     }
 
     /**

@@ -29,6 +29,14 @@ export class SymbolInternalsColonString {
         return string;
     }
 
+    static tripleFromString(string) {
+        return string.split(';').map(string => this.symbolFromString(string));
+    }
+
+    static tripleToString(triple) {
+        return triple.map(symbol => this.symbolToString(symbol)).join(';');
+    }
+
     /**
      * Extracts the namespaceIdentity of a symbol
      * @param {Symbol} symbol
