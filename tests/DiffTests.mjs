@@ -182,7 +182,7 @@ export function getTests(backend, rand) {
     configuration.repositoryNamespace = SymbolInternals.identityOfSymbol(backend.createSymbol(BasicBackend.metaNamespaceIdentity));
     configuration.modalNamespace = SymbolInternals.identityOfSymbol(backend.createSymbol(BasicBackend.metaNamespaceIdentity));
     configuration.checkoutNamespace = SymbolInternals.identityOfSymbol(backend.createSymbol(BasicBackend.metaNamespaceIdentity));
-    configuration.compassionNamespace = SymbolInternals.identityOfSymbol(backend.createSymbol(BasicBackend.metaNamespaceIdentity));
+    configuration.comparisonNamespace = SymbolInternals.identityOfSymbol(backend.createSymbol(BasicBackend.metaNamespaceIdentity));
     configuration.recordingRelocation = {[configuration.checkoutNamespace]: configuration.modalNamespace};
     configuration.checkoutRelocation = {[configuration.modalNamespace]: configuration.checkoutNamespace};
     const concatDiff = new Diff(backend, configuration.repositoryNamespace, configuration.recordingRelocation);

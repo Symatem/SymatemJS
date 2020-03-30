@@ -26,10 +26,10 @@ export function getTests(backend, rand) {
         'cloneNamespace': [10, () => {
             fillCheckout(backend, rand);
             const original = backend.encodeJson([configuration.checkoutNamespace]);
-            backend.cloneNamespaces({[configuration.checkoutNamespace]: configuration.compassionNamespace});
+            backend.cloneNamespaces({[configuration.checkoutNamespace]: configuration.comparisonNamespace});
             backend.clearNamespace(configuration.checkoutNamespace);
-            backend.cloneNamespaces({[configuration.compassionNamespace]: configuration.checkoutNamespace});
-            backend.clearNamespace(configuration.compassionNamespace);
+            backend.cloneNamespaces({[configuration.comparisonNamespace]: configuration.checkoutNamespace});
+            backend.clearNamespace(configuration.comparisonNamespace);
             const clone = backend.encodeJson([configuration.checkoutNamespace]);
             backend.clearNamespace(configuration.checkoutNamespace);
             if(clone != original) {

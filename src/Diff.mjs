@@ -180,8 +180,6 @@ export default class Diff extends BasicBackend {
     saveDataToRestore(srcSymbolRecording, srcSymbolModal, srcOffset, length, dataRestoreOperation) {
         if(this.isRecordingFromBackend)
             console.assert(srcOffset+length <= this.backend.getLength(srcSymbolRecording));
-        else if(!dataRestoreOperation)
-            return;
         const operationsOfSymbol = SymbolMap.getOrInsert(this.preCommitStructure, srcSymbolModal, {}),
               creaseLengthOperations = operationsOfSymbol.creaseLengthOperations || [],
               mergeCopyReplaceOperations = new Set(),
@@ -255,22 +253,18 @@ export default class Diff extends BasicBackend {
 
 
     querySymbols(namespaceIdentity) {
-        console.assert(this.isRecordingFromBackend);
         return this.backend.querySymbols(namespaceIdentity);
     }
 
     queryTriples(queryMask, triple) {
-        console.assert(this.isRecordingFromBackend);
         return this.backend.queryTriples(queryMask, triple);
     }
 
     getLength(symbol) {
-        console.assert(this.isRecordingFromBackend);
         return this.backend.getLength(symbol);
     }
 
     readData(symbol, offset, length) {
-        console.assert(this.isRecordingFromBackend);
         return this.backend.readData(symbol, offset, length);
     }
 
@@ -748,13 +742,27 @@ export default class Diff extends BasicBackend {
      */
     apply(reverse, checkoutRelocation={}, dst=this.backend) {
         console.assert(this.postCommitStructure);
-        // TODO: Validate everything first before applying anything: manifest/release symbols
-        // manifest: Check that there are no triples yet and the size is 0
-        // release: Check if all remaining triples are marked to be unlinked and the size decreases to 0
         if(dst instanceof Diff) {
             console.assert(!reverse);
             dst.isRecordingFromBackend = false;
         } else {
+            const existingSymbols = SymbolMap.create();
+            for(const [srcNamespaceIdentity, dstNamespaceIdentity] of Object.entries(checkoutRelocation))
+                for(const symbol of this.backend.querySymbols(dstNamespaceIdentity))
+                    SymbolMap.insert(existingSymbols, symbol, true);
+            if(this.postCommitStructure[(reverse) ? 'releaseSymbols' : 'manifestSymbols'])
+                for(const symbol of this.postCommitStructure[(reverse) ? 'releaseSymbols' : 'manifestSymbols'])
+                    if(SymbolMap.get(existingSymbols, BasicBackend.relocateSymbol(symbol, checkoutRelocation)))
+                        return false;
+            if(this.postCommitStructure[(reverse) ? 'manifestSymbols' : 'releaseSymbols'])
+                for(const symbol of this.postCommitStructure[(reverse) ? 'manifestSymbols' : 'releaseSymbols']) {
+                    const dstSymbol = BasicBackend.relocateSymbol(symbol, checkoutRelocation);
+                    if(!SymbolMap.get(existingSymbols, dstSymbol))
+                        return false;
+                    // TODO: Check if all remaining triples are marked to be unlinked and the size decreases to 0
+                    // dst.getLength(dstSymbol)
+                    // dst.getTriplesOfSymbol(dstSymbol)
+                }
             for(const [type, link] of [['linkTripleOperations', true], ['unlinkTripleOperations', false]])
                 if(this.postCommitStructure[type])
                     for(const operation of this.postCommitStructure[type])
