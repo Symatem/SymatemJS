@@ -116,17 +116,17 @@ export default class Repository {
 
     /** Materializes a version (checkout)
      * @param {Symbol} version The version to materialize
-     * @return {RelocationTable} Relocates modal namespaces which became checkout namespaces
+     * @return {RelocationTable} Relocates modal namespaces to become namespaces of the materialized version
      */
     materializeVersion(version) {
         console.assert(!this.backend.getTriple([version, this.backend.symbolByName.Materialization, this.backend.symbolByName.Void], BasicBackend.queryMasks.MMI));
         const path = SymbolMap.count(this.getRelatives(version, this.backend.symbolByName.Parent)) > 0 ? this.findPath(version) : undefined,
-              checkoutRelocation = {},
+              materializationRelocation = {},
               dstMaterialization = this.backend.createSymbol(this.namespace);
         this.backend.setTriple([version, this.backend.symbolByName.Materialization, dstMaterialization], true);
         for(const [recordingNamespaceIdentity, modalNamespaceIdentity] of Object.entries(this.relocationTable)) {
             const materializationNamespaceSymbol = this.backend.createSymbol(SymbolInternals.identityOfSymbol(this.backend.symbolByName.Namespaces));
-            checkoutRelocation[modalNamespaceIdentity] = SymbolInternals.identityOfSymbol(materializationNamespaceSymbol);
+            materializationRelocation[modalNamespaceIdentity] = SymbolInternals.identityOfSymbol(materializationNamespaceSymbol);
             this.backend.setTriple([dstMaterialization, this.backend.symbolInNamespace('Namespaces', modalNamespaceIdentity), materializationNamespaceSymbol], true);
         }
         if(path) {
@@ -135,15 +135,15 @@ export default class Repository {
             const srcMaterialization = this.backend.getPairOptionally(version, this.backend.symbolByName.Materialization),
                   cloneRelocation = {};
             for(const triple of this.backend.queryTriples(BasicBackend.queryMasks.MVV, [srcMaterialization, this.backend.symbolByName.Void, this.backend.symbolByName.Void]))
-                cloneRelocation[SymbolInternals.identityOfSymbol(triple[2])] = checkoutRelocation[SymbolInternals.identityOfSymbol(triple[1])];
+                cloneRelocation[SymbolInternals.identityOfSymbol(triple[2])] = materializationRelocation[SymbolInternals.identityOfSymbol(triple[1])];
             this.backend.cloneNamespaces(cloneRelocation);
             for(let i = 1; i < path.length; ++i) {
                 const diff = new Diff(this.backend, this.relocationTable, this.namespace, this.backend.getPairOptionally(path[i].edge, this.backend.symbolByName.Diff));
-                diff.apply(path[i].direction, checkoutRelocation);
+                diff.apply(path[i].direction, materializationRelocation);
                 version = path[i].version;
             }
         }
-        return checkoutRelocation;
+        return materializationRelocation;
     }
 
     /** Deletes the materialization of a version, but not the version itself

@@ -20,11 +20,11 @@ export const configuration = {
     })
 };
 
-export function fillCheckout(backend, rand) {
-    backend.clearNamespace(configuration.checkoutNamespace);
+export function fillMaterialization(backend, rand) {
+    backend.clearNamespace(configuration.materializationNamespace);
     const symbolPool = [];
     for(let i = 0; i < configuration.minSymbolCount*2; ++i) {
-        const symbol = backend.createSymbol(configuration.checkoutNamespace),
+        const symbol = backend.createSymbol(configuration.materializationNamespace),
               length = rand.range(configuration.minDataLength, configuration.maxDataLength),
               dataBytes = rand.bytes(Math.ceil(length/32)*4);
         backend.setRawData(symbol, dataBytes, length);
@@ -69,7 +69,7 @@ export function *generateOperations(backend, rand, symbolPool) {
                               : rand.selectByDistribution(configuration.operationProbabilities);
         switch(operationType) {
             case 'createSymbol': {
-                const symbol = backend.createSymbol(configuration.checkoutNamespace);
+                const symbol = backend.createSymbol(configuration.materializationNamespace);
                 symbolPool.push(symbol);
                 yield `${iteration}: Create a symbol ${symbol}`;
             } break;
@@ -155,17 +155,17 @@ function testDiff(backend, diff, initialState) {
     decodedDiff.link();
     const loadedDiff = new Diff(backend, configuration.repositoryNamespace, configuration.recordingRelocation, decodedDiff.symbol),
           loadedJson = loadedDiff.encodeJson(),
-          resultOfRecording = backend.encodeJson([configuration.checkoutNamespace]);
-    if(!loadedDiff.apply(true, configuration.checkoutRelocation)) {
+          resultOfRecording = backend.encodeJson([configuration.materializationNamespace]);
+    if(!loadedDiff.apply(true, configuration.materializationRelocation)) {
         console.warn('Could not apply reverse');
         return false;
     }
-    const resultOfReverse = backend.encodeJson([configuration.checkoutNamespace]);
-    if(!loadedDiff.apply(false, configuration.checkoutRelocation)) {
+    const resultOfReverse = backend.encodeJson([configuration.materializationNamespace]);
+    if(!loadedDiff.apply(false, configuration.materializationRelocation)) {
         console.warn('Could not apply forward');
         return false;
     }
-    const resultOfForward = backend.encodeJson([configuration.checkoutNamespace]);
+    const resultOfForward = backend.encodeJson([configuration.materializationNamespace]);
     loadedDiff.unlink();
     if(initialState != resultOfReverse) {
         console.warn('Reverse failed', initialState, resultOfReverse);
@@ -181,17 +181,17 @@ function testDiff(backend, diff, initialState) {
 export function getTests(backend, rand) {
     configuration.repositoryNamespace = SymbolInternals.identityOfSymbol(backend.createSymbol(BasicBackend.metaNamespaceIdentity));
     configuration.modalNamespace = SymbolInternals.identityOfSymbol(backend.createSymbol(BasicBackend.metaNamespaceIdentity));
-    configuration.checkoutNamespace = SymbolInternals.identityOfSymbol(backend.createSymbol(BasicBackend.metaNamespaceIdentity));
+    configuration.materializationNamespace = SymbolInternals.identityOfSymbol(backend.createSymbol(BasicBackend.metaNamespaceIdentity));
     configuration.comparisonNamespace = SymbolInternals.identityOfSymbol(backend.createSymbol(BasicBackend.metaNamespaceIdentity));
-    configuration.recordingRelocation = {[configuration.checkoutNamespace]: configuration.modalNamespace};
-    configuration.checkoutRelocation = {[configuration.modalNamespace]: configuration.checkoutNamespace};
+    configuration.recordingRelocation = {[configuration.materializationNamespace]: configuration.modalNamespace};
+    configuration.materializationRelocation = {[configuration.modalNamespace]: configuration.materializationNamespace};
     const concatDiff = new Diff(backend, configuration.repositoryNamespace, configuration.recordingRelocation);
     let concatInitialState;
     return {
         'diffRecording': [100, () => {
-            const initialState = backend.encodeJson([configuration.checkoutNamespace]),
+            const initialState = backend.encodeJson([configuration.materializationNamespace]),
                   diff = new Diff(backend, configuration.repositoryNamespace, configuration.recordingRelocation),
-                  symbolPool = [...backend.querySymbols(configuration.checkoutNamespace)];
+                  symbolPool = [...backend.querySymbols(configuration.materializationNamespace)];
             if(!concatInitialState)
                 concatInitialState = initialState;
             for(const description of generateOperations(diff, rand, symbolPool));

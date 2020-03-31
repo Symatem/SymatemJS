@@ -117,5 +117,7 @@ export function getTests(backend, rand) {
             }
             return true;
         }]
+        // TODO: bitwiseCopy with destination == source is not implemented yet
+        // TODO: 'replaceDataSimultaneously': () => {}
     };
 }

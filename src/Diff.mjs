@@ -734,29 +734,29 @@ export default class Diff extends BasicBackend {
     }
 
     /**
-     * Applies this diff to a checkout
+     * Applies this diff to transform a materialized version into another
      * @param {Boolean} reverse Set to true to revert this diff
-     * @param {RelocationTable} checkoutRelocation Relocate modal namespaces to become checkout namespaces
+     * @param {RelocationTable} materializationRelocation Relocates modal namespaces to become namespaces of the materialized version
      * @param {BasicBackend} dst Apply to another diff or the backend (default)
      * @return {Boolean} True on success
      */
-    apply(reverse, checkoutRelocation={}, dst=this.backend) {
+    apply(reverse, materializationRelocation={}, dst=this.backend) {
         console.assert(this.postCommitStructure);
         if(dst instanceof Diff) {
             console.assert(!reverse);
             dst.isRecordingFromBackend = false;
         } else {
             const existingSymbols = SymbolMap.create();
-            for(const [srcNamespaceIdentity, dstNamespaceIdentity] of Object.entries(checkoutRelocation))
+            for(const [srcNamespaceIdentity, dstNamespaceIdentity] of Object.entries(materializationRelocation))
                 for(const symbol of this.backend.querySymbols(dstNamespaceIdentity))
                     SymbolMap.insert(existingSymbols, symbol, true);
             if(this.postCommitStructure[(reverse) ? 'releaseSymbols' : 'manifestSymbols'])
                 for(const symbol of this.postCommitStructure[(reverse) ? 'releaseSymbols' : 'manifestSymbols'])
-                    if(SymbolMap.get(existingSymbols, BasicBackend.relocateSymbol(symbol, checkoutRelocation)))
+                    if(SymbolMap.get(existingSymbols, BasicBackend.relocateSymbol(symbol, materializationRelocation)))
                         return false;
             if(this.postCommitStructure[(reverse) ? 'manifestSymbols' : 'releaseSymbols'])
                 for(const symbol of this.postCommitStructure[(reverse) ? 'manifestSymbols' : 'releaseSymbols']) {
-                    const dstSymbol = BasicBackend.relocateSymbol(symbol, checkoutRelocation);
+                    const dstSymbol = BasicBackend.relocateSymbol(symbol, materializationRelocation);
                     if(!SymbolMap.get(existingSymbols, dstSymbol))
                         return false;
                     // TODO: Check if all remaining triples are marked to be unlinked and the size decreases to 0
@@ -766,19 +766,19 @@ export default class Diff extends BasicBackend {
             for(const [type, link] of [['linkTripleOperations', true], ['unlinkTripleOperations', false]])
                 if(this.postCommitStructure[type])
                     for(const operation of this.postCommitStructure[type])
-                        if((dst.getTriple(operation.triple.map(symbol => BasicBackend.relocateSymbol(symbol, checkoutRelocation))) == link) != reverse)
+                        if((dst.getTriple(operation.triple.map(symbol => BasicBackend.relocateSymbol(symbol, materializationRelocation))) == link) != reverse)
                             return false;
             if(this.postCommitStructure.minimumLengths)
                 for(const operation of this.postCommitStructure.minimumLengths)
-                    if(dst.getLength(BasicBackend.relocateSymbol(operation.srcSymbol, checkoutRelocation)) < operation[((reverse) ? 'reverse' : 'forward')+'Length'])
+                    if(dst.getLength(BasicBackend.relocateSymbol(operation.srcSymbol, materializationRelocation)) < operation[((reverse) ? 'reverse' : 'forward')+'Length'])
                         return false;
         }
         if(this.postCommitStructure[(reverse) ? 'releaseSymbols' : 'manifestSymbols'])
             for(const symbol of this.postCommitStructure[(reverse) ? 'releaseSymbols' : 'manifestSymbols'])
-                console.assert(dst.manifestSymbol(BasicBackend.relocateSymbol(symbol, checkoutRelocation)));
+                console.assert(dst.manifestSymbol(BasicBackend.relocateSymbol(symbol, materializationRelocation)));
         if(this.postCommitStructure[(reverse) ? 'decreaseLengthOperations' : 'increaseLengthOperations'])
             for(const operation of (reverse) ? Utils.reversed(this.postCommitStructure.decreaseLengthOperations) : this.postCommitStructure.increaseLengthOperations)
-                console.assert(dst.creaseLength(BasicBackend.relocateSymbol(operation.dstSymbol, checkoutRelocation), operation.dstOffset, (reverse) ? -operation.length : operation.length));
+                console.assert(dst.creaseLength(BasicBackend.relocateSymbol(operation.dstSymbol, materializationRelocation), operation.dstOffset, (reverse) ? -operation.length : operation.length));
         let dataSource = this.dataSource, dataSourceOffset = 0;
         if(dst instanceof Diff) {
             dataSource = dst.dataSource;
@@ -788,20 +788,20 @@ export default class Diff extends BasicBackend {
             console.assert(this.backend.replaceData(dst.dataSource, dataSourceOffset, this.dataSource, 0, length));
             if(this.postCommitStructure.restoreDataOperations)
                 for(const operation of this.postCommitStructure.restoreDataOperations)
-                    dst.saveDataToRestore(this.dataRestore, BasicBackend.relocateSymbol(operation.srcSymbol, checkoutRelocation), operation.srcOffset, operation.length, operation);
+                    dst.saveDataToRestore(this.dataRestore, BasicBackend.relocateSymbol(operation.srcSymbol, materializationRelocation), operation.srcOffset, operation.length, operation);
         }
         if(this.postCommitStructure[(reverse) ? 'restoreDataOperations' : 'replaceDataOperations']) {
             const replaceOperations = (reverse)
                 ? this.postCommitStructure.restoreDataOperations.map(operation => ({
                     'srcSymbol': this.dataRestore,
-                    'dstSymbol': BasicBackend.relocateSymbol(operation.srcSymbol, checkoutRelocation),
+                    'dstSymbol': BasicBackend.relocateSymbol(operation.srcSymbol, materializationRelocation),
                     'srcOffset': operation.dstOffset,
                     'dstOffset': operation.srcOffset,
                     'length': operation.length
                 }))
                 : this.postCommitStructure.replaceDataOperations.map(operation => ({
-                    'srcSymbol': (operation.srcSymbol) ? BasicBackend.relocateSymbol(operation.srcSymbol, checkoutRelocation) : dataSource,
-                    'dstSymbol': BasicBackend.relocateSymbol(operation.dstSymbol, checkoutRelocation),
+                    'srcSymbol': (operation.srcSymbol) ? BasicBackend.relocateSymbol(operation.srcSymbol, materializationRelocation) : dataSource,
+                    'dstSymbol': BasicBackend.relocateSymbol(operation.dstSymbol, materializationRelocation),
                     'srcOffset': (operation.srcSymbol) ? operation.srcOffset : operation.srcOffset+dataSourceOffset,
                     'dstOffset': operation.dstOffset,
                     'length': operation.length
@@ -810,14 +810,14 @@ export default class Diff extends BasicBackend {
         }
         if(this.postCommitStructure[(reverse) ? 'increaseLengthOperations' : 'decreaseLengthOperations'])
             for(const operation of (reverse) ? Utils.reversed(this.postCommitStructure.increaseLengthOperations) : this.postCommitStructure.decreaseLengthOperations)
-                console.assert(dst.creaseLength(BasicBackend.relocateSymbol(operation.dstSymbol, checkoutRelocation), operation.dstOffset, (reverse) ? -operation.length : operation.length));
+                console.assert(dst.creaseLength(BasicBackend.relocateSymbol(operation.dstSymbol, materializationRelocation), operation.dstOffset, (reverse) ? -operation.length : operation.length));
         for(const [type, link] of [['linkTripleOperations', true], ['unlinkTripleOperations', false]])
             if(this.postCommitStructure[type])
                 for(const operation of this.postCommitStructure[type])
-                    console.assert(dst.setTriple(operation.triple.map(symbol => BasicBackend.relocateSymbol(symbol, checkoutRelocation)), link != reverse));
+                    console.assert(dst.setTriple(operation.triple.map(symbol => BasicBackend.relocateSymbol(symbol, materializationRelocation)), link != reverse));
         if(this.postCommitStructure[(reverse) ? 'manifestSymbols' : 'releaseSymbols'])
             for(const symbol of this.postCommitStructure[(reverse) ? 'manifestSymbols' : 'releaseSymbols'])
-                console.assert(dst.releaseSymbol(BasicBackend.relocateSymbol(symbol, checkoutRelocation)));
+                console.assert(dst.releaseSymbol(BasicBackend.relocateSymbol(symbol, materializationRelocation)));
         if(dst instanceof Diff)
             dst.isRecordingFromBackend = true;
         return true;

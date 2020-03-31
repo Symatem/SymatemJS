@@ -60,6 +60,7 @@ export function getTests(backend, rand) {
                         noErrorsOccured = false;
                     break;
                 }
+                // TODO: Namespace mask in queryTriples
                 if(element.value.reduce((value, symbol) => {
                     if(SymbolInternals.namespaceOfSymbol(symbol) == namespaceIdentity)
                         ++value;

@@ -7,17 +7,17 @@
             import PRNG from './PRNG.mjs';
             import {loaded, SymbolInternals, SymbolMap, BasicBackend, RustWasmBackend, Diff} from '../SymatemJS.mjs';
             import {svgRoot, createElement, visualizeDiff} from './DiffVisualizer.mjs';
-            import {configuration, fillCheckout, makeDiffSnapshot, generateOperations} from './DiffTests.mjs';
+            import {configuration, fillMaterialization, makeDiffSnapshot, generateOperations} from './DiffTests.mjs';
 
             let performanceAccumulator = {};
             const backend = new RustWasmBackend(),
                   rand = new PRNG(),
-                  checkoutSnapshots = [],
+                  materializationSnapshots = [],
                   diffSnapshots = [];
             loaded.then(() => {
                 backend.initPredefinedSymbols();
                 configuration.repositoryNamespace = SymbolInternals.identityOfSymbol(backend.createSymbol(BasicBackend.metaNamespaceIdentity));
-                configuration.checkoutNamespace = SymbolInternals.identityOfSymbol(backend.createSymbol(BasicBackend.metaNamespaceIdentity));
+                configuration.materializationNamespace = SymbolInternals.identityOfSymbol(backend.createSymbol(BasicBackend.metaNamespaceIdentity));
             });
             const seed = document.getElementById('seed');
             seed.value = rand.buffer[0];
@@ -25,7 +25,7 @@
             function prepare() {
                 rand.setSeed(seed.value);
                 performance.mark('start:fill');
-                fillCheckout(backend, rand);
+                fillMaterialization(backend, rand);
                 performance.measure('fill', 'start:fill');
             }
 
@@ -62,32 +62,32 @@
                 diff.commit();
                 performance.measure('commit', 'start:commit');
                 if(debugMode)
-                    checkoutSnapshots[offset+1] = backend.encodeJson([configuration.checkoutNamespace]);
+                    materializationSnapshots[offset+1] = backend.encodeJson([configuration.materializationNamespace]);
                 performance.mark('start:revert');
                 const reverseApply = diff.apply(true);
                 performance.measure('revert', 'start:revert');
                 if(debugMode)
-                    checkoutSnapshots[offset+2] = backend.encodeJson([configuration.checkoutNamespace]);
+                    materializationSnapshots[offset+2] = backend.encodeJson([configuration.materializationNamespace]);
                 performance.mark('start:apply');
                 const forwardApply = diff.apply(false);
                 performance.measure('apply', 'start:apply');
                 if(debugMode) {
-                    checkoutSnapshots[offset+3] = backend.encodeJson([configuration.checkoutNamespace]);
+                    materializationSnapshots[offset+3] = backend.encodeJson([configuration.materializationNamespace]);
                     colorPrintTestResult('Integrity', integrity);
                     colorPrintTestResult('Reverse Apply', reverseApply);
                     colorPrintTestResult('Forward Apply', forwardApply);
-                    colorPrintTestResult('Reverse Compare', checkoutSnapshots[offset  ] == checkoutSnapshots[offset+2]);
-                    colorPrintTestResult('Forward Compare', checkoutSnapshots[offset+1] == checkoutSnapshots[offset+3]);
+                    colorPrintTestResult('Reverse Compare', materializationSnapshots[offset  ] == materializationSnapshots[offset+2]);
+                    colorPrintTestResult('Forward Compare', materializationSnapshots[offset+1] == materializationSnapshots[offset+3]);
                 }
             }
 
             function testRecording(debugMode, seed, concatDiff) {
                 const diff = new Diff(backend, configuration.repositoryNamespace, {});
                 if(debugMode) {
-                    checkoutSnapshots[0] = backend.encodeJson([configuration.checkoutNamespace]);
+                    materializationSnapshots[0] = backend.encodeJson([configuration.materializationNamespace]);
                     diffSnapshots.push(makeDiffSnapshot(diff, 'Initial'));
                 }
-                const symbolPool = [...backend.querySymbols(configuration.checkoutNamespace)];
+                const symbolPool = [...backend.querySymbols(configuration.materializationNamespace)];
                 performance.mark('start:record');
                 for(const description of generateOperations(diff, rand, symbolPool))
                     if(debugMode) {
@@ -117,7 +117,7 @@
                 prepare();
                 document.getElementById('controls').innerHTML = '<input id="diffSelect" type="range" step="1" min="0" max="0" value="0" style="width: 500px; height: 25px; position: fixed; top: 10px; right: 20px;" /><div id="description" style="position: fixed; top: 40px; right: 20px;"></div>';
                 const concatDiff = new Diff(backend, configuration.repositoryNamespace, {});
-                checkoutSnapshots[4] = backend.encodeJson([configuration.checkoutNamespace]);
+                materializationSnapshots[4] = backend.encodeJson([configuration.materializationNamespace]);
                 for(let i = 0; i < 10; ++i)
                     testRecording(true, rand.buffer[0], concatDiff);
                 console.log('Concatenation:');
