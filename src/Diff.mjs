@@ -1,4 +1,5 @@
 import {Utils, SymbolInternals, SymbolMap, BasicBackend} from '../SymatemJS.mjs';
+import {diffOfSequences} from './DiffOfSequences.mjs';
 
 function getOrCreateEntry(dict, key, value) {
     const entry = dict[key];
@@ -581,7 +582,110 @@ export default class Diff extends BasicBackend {
         return this.replaceData(dstSymbolRecording, dstOffset, this.dataSource, srcOffset, length);
     }
 
-
+    /**
+     * Compare two materialized versions to create a diff. Can also compare against nothing (empty state).
+     * @param {Identity} dstNamespace next state
+     * @param {Identity|undefined} srcNamespace previous state
+     */
+    compare(dstNamespace, srcNamespace) {
+        this.isRecordingFromBackend = false;
+        const relocate = (namespace, symbol) => {
+            return SymbolInternals.concatIntoSymbol(namespace, SymbolInternals.identityOfSymbol(symbol));
+        }, setTriples = (symbol, linked) => {
+            const namespace = (linked) ? srcNamespace : dstNamespace;
+            const handleTriple = (triple) => {
+                triple = triple.map(symbol => relocate(namespace, symbol));
+                if(!this.backend.getTriple(triple))
+                    this.setTriple(triple, linked);
+            };
+            for(const triple of this.backend.queryTriples(BasicBackend.queryMasks.MVV, [symbol, this.backend.symbolByName.Void, this.backend.symbolByName.Void]))
+                handleTriple(triple);
+            for(const triple of this.backend.queryTriples(BasicBackend.queryMasks.VMV, [this.backend.symbolByName.Void, symbol, this.backend.symbolByName.Void]))
+                handleTriple(triple);
+            for(const triple of this.backend.queryTriples(BasicBackend.queryMasks.VVM, [this.backend.symbolByName.Void, this.backend.symbolByName.Void, symbol]))
+                handleTriple(triple);
+        }, context = {
+            'dataSourceOffset': 0,
+            'dataSourceOperations': getOrCreateEntry(SymbolMap.getOrInsert(this.preCommitStructure, this.dataSource, {}), 'copyOperations', []),
+            'dataRestoreOffset': 0,
+            'dataRestoreOperations': getOrCreateEntry(SymbolMap.getOrInsert(this.preCommitStructure, this.dataRestore, {}), 'replaceOperations', [])
+        }, compareData = (context, modalSymbol, dstSymbol, srcSymbol) => {
+            const srcLength = this.backend.getLength(srcSymbol),
+                  dstLength = this.backend.getLength(dstSymbol),
+                  srcData = this.backend.readData(srcSymbol, 0, srcLength),
+                  dstData = this.backend.readData(dstSymbol, 0, dstLength);
+            if(srcLength == dstLength && Utils.compare(srcData, dstData))
+                return;
+            let intermediateOffset = 0;
+            const operationsOfSymbol = SymbolMap.getOrInsert(this.preCommitStructure, modalSymbol, {}),
+                  equal = (x, y) => (this.backend.readData(srcSymbol, x, 1)[0] == this.backend.readData(dstSymbol, y, 1)[0]);
+            for(const entry of diffOfSequences(equal, srcLength, dstLength)) {
+                const creaseLength = entry.insert-entry.remove;
+                if(creaseLength != 0)
+                    getOrCreateEntry(operationsOfSymbol, 'creaseLengthOperations', []).push({
+                        'trackingId': this.nextTrackingId++,
+                        'dstSymbol': modalSymbol,
+                        'dstOffset': intermediateOffset,
+                        'length': creaseLength
+                    });
+                const addCopyReplaceOperation = (dataStoreName, operationsName, readSymbol, readOffset, length) => {
+                    if(length == 0)
+                        return;
+                    const operation = {
+                        'trackingId': this.nextTrackingId++,
+                        'dstSymbol': modalSymbol,
+                        'srcSymbol': this[dataStoreName],
+                        'length': length,
+                        'dstOffset': intermediateOffset,
+                        'srcOffset': context[dataStoreName+'Offset']
+                    };
+                    if(dataStoreName == 'dataRestore') {
+                        operation.dstOffset += Math.max(0, creaseLength);
+                        [operation.dstSymbol, operation.srcSymbol] = [operation.srcSymbol, operation.dstSymbol];
+                        [operation.dstOffset, operation.srcOffset] = [operation.srcOffset, operation.dstOffset];
+                    } else
+                        operation.dstOffset += Math.max(0, -creaseLength);
+                    getOrCreateEntry(operationsOfSymbol, operationsName, []).push(operation);
+                    context[dataStoreName+'Operations'].push(operation);
+                    this.backend.creaseLength(this[dataStoreName], context[dataStoreName+'Offset'], length);
+                    this.backend.writeData(this[dataStoreName], context[dataStoreName+'Offset'], length, this.backend.readData(readSymbol, readOffset, length));
+                    context[dataStoreName+'Offset'] += length;
+                };
+                addCopyReplaceOperation('dataRestore', 'copyOperations', srcSymbol, entry.offsetA, entry.remove);
+                addCopyReplaceOperation('dataSource', 'replaceOperations', dstSymbol, entry.offsetB, entry.insert);
+                intermediateOffset += entry.keep+Math.max(entry.remove, entry.insert);
+            }
+        };
+        const srcSymbols = SymbolMap.create(),
+              dstSymbols = SymbolMap.create(),
+              toUnlink = [];
+        for(const dstSymbol of this.backend.querySymbols(dstNamespace))
+            SymbolMap.insert(dstSymbols, dstSymbol, true);
+        if(srcNamespace) {
+            for(const srcSymbol of this.backend.querySymbols(srcNamespace)) {
+                SymbolMap.insert(srcSymbols, srcSymbol, true);
+                const dstSymbol = relocate(dstNamespace, srcSymbol),
+                      modalSymbol = BasicBackend.relocateSymbol(dstSymbol, this.recordingRelocation);
+                if(SymbolMap.get(dstSymbols, dstSymbol)) {
+                    compareData(context, modalSymbol, dstSymbol, srcSymbol);
+                    setTriples(srcSymbol, false);
+                } else
+                    toUnlink.push(srcSymbol);
+            }
+            for(const symbol of toUnlink)
+                this.unlinkSymbol(symbol);
+        }
+        for(const dstSymbol of SymbolMap.symbols(dstSymbols)) {
+            setTriples(dstSymbol, true);
+            const srcSymbol = relocate(srcNamespace, dstSymbol);
+            if(!srcNamespace || !SymbolMap.get(srcSymbols, srcSymbol)) {
+                this.manifestSymbol(dstSymbol);
+                const dataLength = this.backend.getLength(dstSymbol);
+                this.creaseLength(dstSymbol, 0, dataLength);
+                this.writeData(dstSymbol, 0, dataLength, this.backend.readData(dstSymbol, 0, dataLength));
+            }
+        }
+    }
 
     /**
      * Scan through all internal structures and check their integrity

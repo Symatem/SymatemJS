@@ -86,6 +86,21 @@ export class Utils {
     }
 
     /**
+     * Compares two Uint8Arrays for equality
+     * @param {Uint8Array} a
+     * @param {Uint8Array} b
+     * @return {Boolean} true if equal, false if different
+     */
+    static compare(a, b) {
+        if(a.length != b.length)
+            return false;
+        for(let i = 0; i < a.length; ++i)
+            if(a[i] != b[i])
+                return false;
+        return true;
+    }
+
+    /**
      * Converts a buffer to text in UTF8
      * @param {Uint8Array} buffer
      * @return {String} text

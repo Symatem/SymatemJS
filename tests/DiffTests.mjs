@@ -209,6 +209,20 @@ export function getTests(backend, rand) {
                 return false;
             concatDiff.unlink();
             return true;
+        }],
+        'diffComparison': [10, () => {
+            fillMaterialization(backend, rand);
+            const initialState = backend.encodeJson([configuration.materializationNamespace]);
+            backend.clearNamespace(configuration.comparisonNamespace);
+            backend.cloneNamespaces({[configuration.materializationNamespace]: configuration.comparisonNamespace});
+            const symbolPool = [...backend.querySymbols(configuration.materializationNamespace)];
+            for(const description of generateOperations(backend, rand, symbolPool));
+            const resultOfRecording = backend.encodeJson([configuration.materializationNamespace]),
+                  diff = new Diff(backend, configuration.repositoryNamespace, {[configuration.materializationNamespace]: configuration.modalNamespace, [configuration.comparisonNamespace]: configuration.modalNamespace});
+            diff.compare(configuration.materializationNamespace, configuration.comparisonNamespace);
+            if(!testDiff(backend, diff, initialState))
+                return false;
+            return true;
         }]
     };
 }
