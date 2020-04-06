@@ -162,7 +162,7 @@ export default class Repository {
      * @typedef {Object} RepositoryPathEntry
      * @property {Symbol} version
      * @property {Diff} diff
-     * @property {Boolean} direction
+     * @property {boolean} direction
      */
 
     /** Finds the shortest path between two versions or a destination and the closest materialized version

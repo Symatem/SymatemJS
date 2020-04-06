@@ -65,7 +65,7 @@ export default class BasicBackend {
     }
 
     /** All 27 query masks by their name
-      * @enum {Number}
+      * @enum {number}
       */
     static get queryMasks() {
         return queryMasks;
@@ -85,7 +85,7 @@ export default class BasicBackend {
     /**
      * Converts JS native data types to text
      * @param {Object} dataValue
-     * @return {String} text
+     * @return {string} text
      */
     static encodeText(dataValue) {
         switch(typeof dataValue) {
@@ -102,7 +102,7 @@ export default class BasicBackend {
 
     /**
      * Converts text to JS native data types
-     * @param {String} text
+     * @param {string} text
      * @return {Object} dataValue
      */
     static decodeText(text) {
@@ -126,7 +126,7 @@ export default class BasicBackend {
      * @param {Symbol} encoding
      * @param {Uint8Array} dataBytes
      * @param {Object} feedback Used to control the length (input and output)
-     * @param {Number} feedback.length in bits
+     * @param {number} feedback.length in bits
      * @return {Object} dataValue
      */
     decodeBinary(encoding, dataBytes, feedback) {
@@ -248,8 +248,8 @@ export default class BasicBackend {
     /**
      * Manifests a namespace with the given symbols and adds them to symbolByName
      * @param {Identity} namespaceIdentity
-     * @param {String[]} symbolNames
-     * @param {Boolean} assignNames If false the symbols names will not be assigned (stored in the data field)
+     * @param {string[]} symbolNames
+     * @param {boolean} assignNames If false the symbols names will not be assigned (stored in the data field)
      */
     registerSymbolsInNamespace(namespaceIdentity, symbolNames, assignNames=true) {
         if(symbolNames.length == 0)
@@ -274,9 +274,8 @@ export default class BasicBackend {
 
     /**
      * Manifests namespaces with the given names and adds them to symbolByName
-     * @param {Identity} namespaceIdentity
-     * @param {String[]} symbolNames
-     * @param {Boolean} assignNames If false the symbols names will not be assigned (stored in the data field)
+     * @param {string[]} symbolNamesByNamespace
+     * @param {boolean} assignNames If false the symbols names will not be assigned (stored in the data field)
      * @return {Object} Namespace identities can be used as input parameter for createSymbol
      */
     registerNamespaces(symbolNamesByNamespace, assignNames=true) {
@@ -304,7 +303,7 @@ export default class BasicBackend {
 
     /**
      * Same as concatIntoSymbol but resolves the namespaceIdentity by name
-     * @param {String} namespaceName
+     * @param {string} namespaceName
      * @param {Identity} identity
      * @return {Symbol} symbol
      */
@@ -315,7 +314,7 @@ export default class BasicBackend {
     /**
      * Makes sure a symbol exists
      * @param {Symbol} symbol
-     * @return {Boolean} False if it already existed
+     * @return {boolean} False if it already existed
      */
     manifestSymbol(symbol) {
         throw new Error('Abstract, not implemented');
@@ -333,7 +332,7 @@ export default class BasicBackend {
     /**
      * Deletes a symbol
      * @param {Symbol} symbol
-     * @return {Boolean} False if it did not exist
+     * @return {boolean} False if it did not exist
      */
     releaseSymbol(symbol) {
         throw new Error('Abstract, not implemented');
@@ -404,7 +403,7 @@ export default class BasicBackend {
     /**
      * Returns the length of the symbols virtual space
      * @param {Symbol} symbol
-     * @return {Number} length in bits
+     * @return {number} length in bits
      */
     getLength(symbol) {
         throw new Error('Abstract, not implemented');
@@ -413,9 +412,9 @@ export default class BasicBackend {
     /**
      * Inserts or erases a slice of a symbols virtual space at the given offset and with the given length
      * @param {Symbol} symbol
-     * @param {Number} offset in bits
-     * @param {Number} length in bits (positive=insert, negative=erase)
-     * @return {Boolean} True on success (changes occurred)
+     * @param {number} offset in bits
+     * @param {number} length in bits (positive=insert, negative=erase)
+     * @return {boolean} True on success (changes occurred)
      */
     creaseLength(symbol, offset, length) {
         throw new Error('Abstract, not implemented');
@@ -424,7 +423,7 @@ export default class BasicBackend {
     /**
      * Increases or deceases the length of a symbols virtual space at the end
      * @param {Symbol} symbol
-     * @param {Number} newLength in bits
+     * @param {number} newLength in bits
      */
     setLength(symbol, newLength) {
         const length = this.getLength(symbol);
@@ -436,8 +435,8 @@ export default class BasicBackend {
     /**
      * Returns a slice of copied data starting at the given offset and with the given length
      * @param {Symbol} symbol
-     * @param {Number} offset in bits
-     * @param {Number} length in bits
+     * @param {number} offset in bits
+     * @param {number} length in bits
      * @return {Uint8Array} dataBytes (undefined on error)
      */
     readData(symbol, offset, length) {
@@ -447,10 +446,10 @@ export default class BasicBackend {
     /**
      * Replaces a slice of data starting at the given offset and with the given length by dataBytes
      * @param {Symbol} symbol
-     * @param {Number} offset in bits
-     * @param {Number} length in bits
+     * @param {number} offset in bits
+     * @param {number} length in bits
      * @param {Uint8Array} dataBytes
-     * @return {Boolean} True on success (changes occurred)
+     * @return {boolean} True on success (changes occurred)
      */
     writeData(symbol, offset, length, dataBytes) {
         throw new Error('Abstract, not implemented');
@@ -460,7 +459,7 @@ export default class BasicBackend {
      * Returns a symbols entire data converted to JS native data types
      * @param {Symbol} symbol
      * @param {Uint8Array} dataBytes
-     * @param {Number} dataLength in bits
+     * @param {number} dataLength in bits
      * @return {Object} dataValue
      */
     getData(symbol, dataBytes, dataLength) {
@@ -525,7 +524,7 @@ export default class BasicBackend {
      * Replaces the entire data of a symbol
      * @param {Symbol} symbol
      * @param {Uint8Array} dataBytes
-     * @param {Number} dataLength in bits
+     * @param {number} dataLength in bits
      */
     setRawData(symbol, dataBytes, dataLength) {
         if(!dataBytes) {
@@ -542,7 +541,7 @@ export default class BasicBackend {
     /**
      * Returns a symbols entire data converted to a string of '0's and '1's
      * @param {Symbol} symbol
-     * @return {String} binary
+     * @return {string} binary
      */
     getBitString(symbol) {
         return Utils.asBitString(this.getRawData(symbol), this.getLength(symbol));
@@ -551,11 +550,11 @@ export default class BasicBackend {
     /**
      * Replaces a slice of a symbols data by another symbols data
      * @param {Symbol} dstSymbol
-     * @param {Number} dstOffset in bits
+     * @param {number} dstOffset in bits
      * @param {Symbol} srcSymbol
-     * @param {Number} srcOffset in bits
-     * @param {Number} length in bits
-     * @return {Boolean} True on success (changes occurred)
+     * @param {number} srcOffset in bits
+     * @param {number} length in bits
+     * @return {boolean} True on success (changes occurred)
      */
     replaceData(dstSymbol, dstOffset, srcSymbol, srcOffset, length) {
         return this.replaceDataSimultaneously([{'dstSymbol': dstSymbol, 'dstOffset': dstOffset, 'srcSymbol': srcSymbol, 'srcOffset': srcOffset, 'length': length}]);
@@ -607,8 +606,8 @@ export default class BasicBackend {
     /**
      * Links or unlinks a triple
      * @param {Triple} triple
-     * @param {Boolean} linked
-     * @return {Boolean} True on success (changes occurred)
+     * @param {boolean} linked
+     * @return {boolean} True on success (changes occurred)
      */
     setTriple(triple, linked) {
         throw new Error('Abstract, not implemented');
@@ -618,7 +617,7 @@ export default class BasicBackend {
      * Tests if the given Triple exists
      * @param {Triple} triple
      * @param {QueryMask} mask
-     * @return {Boolean} linked
+     * @return {boolean} linked
      */
     getTriple(triple, mask=queryMasks.MMM) {
         const iterator = this.queryTriples(mask, triple);
@@ -691,7 +690,7 @@ export default class BasicBackend {
 
     /**
      * Scan through all internal structures and check their integrity
-     * @return {Boolean} True on success
+     * @return {boolean} True on success
      */
     validateIntegrity() {
         throw new Error('Abstract, not implemented');
@@ -702,8 +701,8 @@ export default class BasicBackend {
     /**
      * @deprecated Use Diff.encodeJson() instead.
      * Exports the specified namespaces as JSON
-     * @param {Identity[]} namespaces The namespaces to export
-     * @return {String} json
+     * @param {Identity[]} namespaceIdentities The namespaces to export
+     * @return {string} json
      */
     encodeJson(namespaceIdentities) {
         const namespaces = {};
@@ -737,7 +736,7 @@ export default class BasicBackend {
     /**
      * @deprecated Use Diff.decodeJson() instead.
      * Imports content from JSON
-     * @param {String} json
+     * @param {string} json
      */
     decodeJson(json) {
         const entities = new Set();

@@ -222,6 +222,7 @@ export function getTests(backend, rand) {
             diff.compare(configuration.materializationNamespace, configuration.comparisonNamespace);
             if(!testDiff(backend, diff, initialState))
                 return false;
+            // TODO: Test multiple namespaces
             return true;
         }]
     };

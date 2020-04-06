@@ -5,7 +5,7 @@ export class SymbolInternalsColonString {
     /**
      * Validates if the input is a symbol
      * @param {Symbol} symbol
-     * @return {Boolean}
+     * @return {boolean}
      */
     static validateSymbol(symbol) {
         return typeof symbol == 'string' && /^[0-9]+:[0-9]+$/.test(symbol);
@@ -14,7 +14,7 @@ export class SymbolInternalsColonString {
     /**
      * Exports a symbol to a string
      * @param {Symbol} symbol
-     * @return {String} string
+     * @return {string} string
      */
     static symbolToString(symbol) {
         return symbol;
@@ -22,7 +22,7 @@ export class SymbolInternalsColonString {
 
     /**
      * Imports a symbol from a string
-     * @param {String} string
+     * @param {string} string
      * @return {Symbol} symbol
      */
     static symbolFromString(string) {
@@ -69,7 +69,7 @@ export class SymbolInternalsColonString {
      * Compares two symbols for equivalence
      * @param {Symbol} symbolA
      * @param {Symbol} symbolB
-     * @return {Boolean} equal
+     * @return {boolean} equal
      */
     static areSymbolsEqual(symbolA, symbolB) {
         return symbolA == symbolB;
@@ -79,7 +79,7 @@ export class SymbolInternalsColonString {
      * Compares two symbols
      * @param {Symbol} symbolA
      * @param {Symbol} symbolB
-     * @return {Number} result (negative: a < b, neutral: a == b, positive: a > b)
+     * @return {number} result (negative: a < b, neutral: a == b, positive: a > b)
      */
     static compareSymbols(symbolA, symbolB) {
         const splitA = symbolA.split(':'),

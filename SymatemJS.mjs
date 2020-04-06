@@ -9,11 +9,11 @@ import Repository from './src/Repository.mjs';
 export {loaded, Utils, SymbolInternals, IdentityPool, SymbolMap, BasicBackend, JavaScriptBackend, RustWasmBackend, Diff, Repository};
 
 /**
- * @typedef {Number} Identity
+ * @typedef {number} Identity
  */
 
 /**
- * @typedef {String} Symbol
+ * @typedef {string} Symbol
  * @property {Identity} namespaceIdentity
  * @property {Identity} handleIdentity
  */
@@ -28,10 +28,10 @@ export {loaded, Utils, SymbolInternals, IdentityPool, SymbolMap, BasicBackend, J
 /**
  * @typedef {Object} ReplaceDataOperation
  * @property {Symbol} dstOffset
- * @property {Number} dstOffset in bits
+ * @property {number} dstOffset in bits
  * @property {Symbol} srcSymbol
- * @property {Number} srcOffset in bits
- * @property {Number} length in bits
+ * @property {number} srcOffset in bits
+ * @property {number} length in bits
  */
 
 /**

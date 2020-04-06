@@ -4,7 +4,7 @@ export class Utils {
     /**
      * Saves a buffer as download file in browsers
      * @param {Uint8Array} buffer
-     * @param {String} fileName
+     * @param {string} fileName
      */
     static downloadAsFile(buffer, fileName) {
         const file = new Blob([buffer], {type: 'octet/stream'}),
@@ -21,7 +21,7 @@ export class Utils {
     /**
      * Converts Uint8Array to binary string of '0's and '1's
      * @param {Uint8Array} buffer
-     * @return {Number} hash value
+     * @return {number} hash value
      */
     static djb2Hash(buffer) {
         let result = 5381;
@@ -33,7 +33,7 @@ export class Utils {
     /**
      * Converts Uint8Array to binary string of '0's and '1's
      * @param {Uint8Array} buffer
-     * @return {String} binary
+     * @return {string} binary
      */
     static asBitString(buffer, length) {
         const result = [];
@@ -45,10 +45,10 @@ export class Utils {
     /**
      * Copies length bits from source at sourceOffset to destination at destinationOffset
      * @param {Uint8Array} destination
-     * @param {Number} destinationOffset
+     * @param {number} destinationOffset
      * @param {Uint8Array} source
-     * @param {Number} sourceOffset
-     * @param {Number} length
+     * @param {number} sourceOffset
+     * @param {number} length
      */
     static bitwiseCopy(destination, destinationOffset, source, sourceOffset, length) {
         if(length == 0)
@@ -89,7 +89,7 @@ export class Utils {
      * Compares two Uint8Arrays for equality
      * @param {Uint8Array} a
      * @param {Uint8Array} b
-     * @return {Boolean} true if equal, false if different
+     * @return {boolean} true if equal, false if different
      */
     static compare(a, b) {
         if(a.length != b.length)
@@ -103,7 +103,7 @@ export class Utils {
     /**
      * Converts a buffer to text in UTF8
      * @param {Uint8Array} buffer
-     * @return {String} text
+     * @return {string} text
      */
     static encodeAsUTF8(buffer) {
         // return new TextDecoder('utf8').decode(buffer);
@@ -121,7 +121,7 @@ export class Utils {
 
     /**
      * Converts text to a buffer in UTF8
-     * @param {String} text
+     * @param {string} text
      * @return {Uint8Array} buffer
      */
     static decodeAsUTF8(text) {
@@ -141,7 +141,7 @@ export class Utils {
     /**
      * Converts a buffer to hex
      * @param {Uint8Array} buffer
-     * @return {String} text
+     * @return {string} text
      */
     static encodeAsHex(buffer) {
         return Array.from(buffer).map(byte => (byte&0xF).toString(16)+(byte>>4).toString(16)).join('').toUpperCase();
@@ -149,7 +149,7 @@ export class Utils {
 
     /**
      * Converts hex to a buffer
-     * @param {String} text
+     * @param {string} text
      * @return {Uint8Array} buffer
      */
     static decodeAsHex(text) {
@@ -192,9 +192,9 @@ export class Utils {
 
     /**
      * Finds an element in an array by bisection (binary search)
-     * @param {Number} high Count of elements in the array
+     * @param {number} high Count of elements in the array
      * @param {Function} compare Compares the element and the current mid index
-     * @return {Number} index
+     * @return {number} index
      */
     static bisect(high, compare) {
         let low = 0;

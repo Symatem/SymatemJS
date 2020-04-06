@@ -14,7 +14,7 @@ export default class Diff extends BasicBackend {
      * @param {BasicBackend} backend
      * @param {Identity} repositoryNamespace The namespace identity of the repository
      * @param {RelocationTable} recordingRelocation Relocate recording namespaces to become modal namespaces
-     * @param {String|Symbol} [source] Optionally a JSON string or symbol to load the diff from. If none is provided the diff will be setup for recording instead
+     * @param {string|Symbol} [source] Optionally a JSON string or symbol to load the diff from. If none is provided the diff will be setup for recording instead
      */
     constructor(backend, repositoryNamespace, recordingRelocation, source) {
         super();
@@ -605,9 +605,9 @@ export default class Diff extends BasicBackend {
             for(const triple of this.backend.queryTriples(BasicBackend.queryMasks.VVM, [this.backend.symbolByName.Void, this.backend.symbolByName.Void, symbol]))
                 handleTriple(triple);
         }, context = {
-            'dataSourceOffset': 0,
+            'dataSourceOffset': this.backend.getLength(this.dataSource),
             'dataSourceOperations': getOrCreateEntry(SymbolMap.getOrInsert(this.preCommitStructure, this.dataSource, {}), 'copyOperations', []),
-            'dataRestoreOffset': 0,
+            'dataRestoreOffset': this.backend.getLength(this.dataRestore),
             'dataRestoreOperations': getOrCreateEntry(SymbolMap.getOrInsert(this.preCommitStructure, this.dataRestore, {}), 'replaceOperations', [])
         }, compareData = (context, modalSymbol, dstSymbol, srcSymbol) => {
             const srcLength = this.backend.getLength(srcSymbol),
@@ -689,7 +689,7 @@ export default class Diff extends BasicBackend {
 
     /**
      * Scan through all internal structures and check their integrity
-     * @return {Boolean} True on success
+     * @return {boolean} True on success
      */
     validateIntegrity() {
         console.assert(this.preCommitStructure);
@@ -839,10 +839,10 @@ export default class Diff extends BasicBackend {
 
     /**
      * Applies this diff to transform a materialized version into another
-     * @param {Boolean} reverse Set to true to revert this diff
+     * @param {boolean} reverse Set to true to revert this diff
      * @param {RelocationTable} materializationRelocation Relocates modal namespaces to become namespaces of the materialized version
      * @param {BasicBackend} dst Apply to another diff or the backend (default)
-     * @return {Boolean} True on success
+     * @return {boolean} True on success
      */
     apply(reverse, materializationRelocation={}, dst=this.backend) {
         console.assert(this.postCommitStructure);
@@ -929,7 +929,7 @@ export default class Diff extends BasicBackend {
 
     /**
      * Exports the commited diff as JSON
-     * @return {String} json
+     * @return {string} json
      */
     encodeJson() {
         console.assert(this.postCommitStructure);
@@ -980,7 +980,7 @@ export default class Diff extends BasicBackend {
 
     /**
      * Imports content from JSON. Don't call this method directly, use the constructor instead
-     * @param {String} json
+     * @param {string} json
      */
     decodeJson(json) {
         console.assert(!this.postCommitStructure);
