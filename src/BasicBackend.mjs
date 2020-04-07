@@ -131,25 +131,25 @@ export default class BasicBackend {
      */
     decodeBinary(encoding, dataBytes, feedback) {
         const dataView = new DataView(dataBytes.buffer);
-        switch(encoding) {
-            case this.symbolByName.Void:
+        switch(SymbolInternals.symbolToString(encoding)) {
+            case SymbolInternals.symbolToString(this.symbolByName.Void):
                 return dataBytes;
-            case this.symbolByName.BinaryNumber:
+            case SymbolInternals.symbolToString(this.symbolByName.BinaryNumber):
             if(feedback.length === 1)
                 return (dataView.getUint8(0) === 1);
-            case this.symbolByName.TwosComplement:
-            case this.symbolByName.IEEE754:
+            case SymbolInternals.symbolToString(this.symbolByName.TwosComplement):
+            case SymbolInternals.symbolToString(this.symbolByName.IEEE754):
                 console.assert(feedback.length >= 32);
                 feedback.length = 32;
-                switch(encoding) {
-                    case this.symbolByName.BinaryNumber:
+                switch(SymbolInternals.symbolToString(encoding)) {
+                    case SymbolInternals.symbolToString(this.symbolByName.BinaryNumber):
                         return dataView.getUint32(0, true);
-                    case this.symbolByName.TwosComplement:
+                    case SymbolInternals.symbolToString(this.symbolByName.TwosComplement):
                         return dataView.getInt32(0, true);
-                    case this.symbolByName.IEEE754:
+                    case SymbolInternals.symbolToString(this.symbolByName.IEEE754):
                         return dataView.getFloat32(0, true);
                 }
-            case this.symbolByName.UTF8:
+            case SymbolInternals.symbolToString(this.symbolByName.UTF8):
                 return Utils.encodeAsUTF8(dataBytes.slice(0, feedback.length/8));
         }
         if(!this.getTriple([encoding, this.symbolByName.Type, this.symbolByName.Composite]))
@@ -157,21 +157,21 @@ export default class BasicBackend {
         const dataValue = [],
               defaultEncoding = this.getPairOptionally(encoding, this.symbolByName.Default);
         let slotSize = this.getPairOptionally(encoding, this.symbolByName.SlotSize);
-        if(slotSize !== this.symbolByName.Void && slotSize !== this.symbolByName.Dynamic)
+        if(!SymbolInternals.areSymbolsEqual(slotSize, this.symbolByName.Void) && !SymbolInternals.areSymbolsEqual(slotSize, this.symbolByName.Dynamic))
             slotSize = this.getData(slotSize);
         let offset = 0, count = this.getPairOptionally(encoding, this.symbolByName.Count);
-        if(count === this.symbolByName.Dynamic)
+        if(SymbolInternals.areSymbolsEqual(count, this.symbolByName.Dynamic))
             count = dataView.getUint32((offset++)*4, true);
-        else if(count !== this.symbolByName.Void)
+        else if(!SymbolInternals.areSymbolsEqual(count, this.symbolByName.Void))
             count = this.getData(count);
         feedback.length = 0;
-        for(let i = 0; (count === this.symbolByName.Void && feedback.length < dataBytes.length*8) || i < count; ++i) {
+        for(let i = 0; (SymbolInternals.areSymbolsEqual(count, this.symbolByName.Void) && feedback.length < dataBytes.length*8) || i < count; ++i) {
             let childEncoding = this.getPairOptionally(encoding, this.constructor.symbolInNamespace('Index', i));
-            if(childEncoding === this.symbolByName.Void)
+            if(SymbolInternals.areSymbolsEqual(childEncoding, this.symbolByName.Void))
                 childEncoding = defaultEncoding;
-            const childFeedback = {'length': (slotSize === this.symbolByName.Dynamic) ? dataView.getUint32((offset+i)*4, true) : slotSize};
+            const childFeedback = {'length': (SymbolInternals.areSymbolsEqual(slotSize, this.symbolByName.Dynamic)) ? dataView.getUint32((offset+i)*4, true) : slotSize};
             let childDataBytes;
-            if(childFeedback.length === this.symbolByName.Void) {
+            if(SymbolInternals.areSymbolsEqual(childFeedback.length, this.symbolByName.Void)) {
                 childDataBytes = dataBytes.slice(feedback.length/8);
                 childFeedback.length = childDataBytes.length*8;
             } else if(feedback.length < dataBytes.length*8)
@@ -194,21 +194,21 @@ export default class BasicBackend {
     encodeBinary(encoding, dataValue) {
         let dataBytes = new Uint8Array(4);
         const dataView = new DataView(dataBytes.buffer);
-        switch(encoding) {
-            case this.symbolByName.Void:
+        switch(SymbolInternals.symbolToString(encoding)) {
+            case SymbolInternals.symbolToString(this.symbolByName.Void):
                 return dataValue;
-            case this.symbolByName.BinaryNumber:
+            case SymbolInternals.symbolToString(this.symbolByName.BinaryNumber):
                 if(typeof dataValue === 'boolean')
                     return new Uint8Array([(dataValue) ? 1 : 0]);
                 dataView.setUint32(0, dataValue, true);
                 return dataBytes;
-            case this.symbolByName.TwosComplement:
+            case SymbolInternals.symbolToString(this.symbolByName.TwosComplement):
                 dataView.setInt32(0, dataValue, true);
                 return dataBytes;
-            case this.symbolByName.IEEE754:
+            case SymbolInternals.symbolToString(this.symbolByName.IEEE754):
                 dataView.setFloat32(0, dataValue, true);
                 return dataBytes;
-            case this.symbolByName.UTF8:
+            case SymbolInternals.symbolToString(this.symbolByName.UTF8):
                 return Utils.decodeAsUTF8(dataValue);
         }
         if(!this.getTriple([encoding, this.symbolByName.Type, this.symbolByName.Composite]))
@@ -219,17 +219,17 @@ export default class BasicBackend {
         if(slotSize !== this.symbolByName.Void && slotSize !== this.symbolByName.Dynamic)
             slotSize = this.getData(slotSize);
         let offset = 0, count = this.getPairOptionally(encoding, this.symbolByName.Count);
-        if(count === this.symbolByName.Dynamic)
+        if(SymbolInternals.areSymbolsEqual(count, this.symbolByName.Dynamic))
             dataView.setUint32(offset++, dataValue.length, true);
         else if(count !== this.symbolByName.Void && dataValue.length !== this.getData(count))
             throw new Error('Provided dataValue array length does not match count specified in the composite encoding');
         let length = 0;
         for(let i = 0; i < dataValue.length; ++i) {
             let childEncoding = this.getPairOptionally(encoding, this.constructor.symbolInNamespace('Index', i));
-            if(childEncoding === this.symbolByName.Void)
+            if(SymbolInternals.areSymbolsEqual(childEncoding, this.symbolByName.Void))
                 childEncoding = defaultEncoding;
             const childDataBytes = this.encodeBinary(childEncoding, dataValue[i]);
-            if(slotSize === this.symbolByName.Dynamic)
+            if(SymbolInternals.areSymbolsEqual(slotSize, this.symbolByName.Dynamic))
                 dataView.setUint32(offset+i, childDataBytes.length*8, true);
             dataBytesArray.push(childDataBytes);
             length += childDataBytes.length*8;
@@ -485,11 +485,11 @@ export default class BasicBackend {
         switch(typeof dataValue) {
             case 'undefined':
                 encoding = this.symbolByName.Void;
-                this.getAndSetPairs(symbol, this.symbolByName.Encoding, encoding);
+                this.getAndSetPairs(symbol, this.symbolByName.Encoding, [encoding]);
                 break;
             case 'string':
                 encoding = this.symbolByName.UTF8;
-                this.getAndSetPairs(symbol, this.symbolByName.Encoding, encoding);
+                this.getAndSetPairs(symbol, this.symbolByName.Encoding, [encoding]);
                 break;
             case 'number':
             case 'boolean':
@@ -499,7 +499,7 @@ export default class BasicBackend {
                     encoding = this.symbolByName.TwosComplement;
                 else
                     encoding = this.symbolByName.BinaryNumber;
-                this.getAndSetPairs(symbol, this.symbolByName.Encoding, encoding);
+                this.getAndSetPairs(symbol, this.symbolByName.Encoding, [encoding]);
                 break;
             default:
                 encoding = this.getPairOptionally(symbol, this.symbolByName.Encoding);
@@ -628,9 +628,9 @@ export default class BasicBackend {
      * Searches and modifes triples based on a pair of matching symbols and varying third
      * @param {Symbol} first Matching symbol pair
      * @param {Symbol} second Matching symbol pair
-     * @param {undefined|Symbol|Set<Symbol>} thirds Varying is replaced by these (won't modify anything if undefined)
+     * @param {undefined|Symbol[]} thirds Varying is replaced by these (won't modify anything if undefined)
      * @param {QueryMask} mask
-     * @return {Set<Symbol>} Varying search result
+     * @return {SymbolMap} Varying search result
      */
     getAndSetPairs(first, second, thirds, mask=queryMasks.MMV) {
         let index, triple;
@@ -656,23 +656,17 @@ export default class BasicBackend {
             default:
                 throw new Error('Unsupported query mask');
         }
-        const result = new Set();
+        const result = SymbolMap.create();
         for(const queryTriple of this.queryTriples(mask, triple)) {
             if(thirds)
                 this.setTriple(queryTriple, false);
-            result.add(queryTriple[index]);
+            SymbolMap.insert(result, queryTriple[index], true);
         }
-        if(thirds) {
-            if(typeof thirds != 'string' && typeof thirds[Symbol.iterator] === 'function')
-                for(const thrid of thirds) {
-                    triple[index] = third;
-                    this.setTriple(triple, true);
-                }
-            else if(SymbolInternals.validateSymbol(thirds)) {
-                triple[index] = thirds;
+        if(thirds)
+            for(const third of thirds) {
+                triple[index] = third;
                 this.setTriple(triple, true);
             }
-        }
         return result;
     }
 
@@ -685,7 +679,7 @@ export default class BasicBackend {
      */
     getPairOptionally(first, second, mask=queryMasks.MMV) {
         const thirds = this.getAndSetPairs(first, second, undefined, mask);
-        return (thirds.size == 1) ? thirds.values().next().value : this.symbolByName.Void;
+        return (SymbolMap.count(thirds) == 1) ? [...SymbolMap.symbols(thirds)][0] : this.symbolByName.Void;
     }
 
     /**
@@ -716,10 +710,10 @@ export default class BasicBackend {
                 for(const attribute of attributes) {
                     const values = [];
                     betaCollection.push(SymbolInternals.symbolToString(attribute));
-                    betaCollection.push(values);
                     for(const triple of this.queryTriples(queryMasks.MMV, [symbol, attribute, this.symbolByName.Void]))
-                        values.push(SymbolInternals.symbolToString(triple[2]));
+                        values.push(triple[2]);
                     values.sort(SymbolInternals.compareSymbols);
+                    betaCollection.push(values.map(symbol => SymbolInternals.symbolToString(symbol)));
                 }
                 const length = this.getLength(symbol);
                 entries.push([
