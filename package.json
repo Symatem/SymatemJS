@@ -7,6 +7,7 @@
     "license": "MIT",
     "description": "Symatem JS API",
     "main": "SymatemJS.mjs",
+    "type": "module",
     "scripts": {
         "preinstall": "curl --create-dirs -o dist/backend.wasm -GL https://github.com/Symatem/SymatemRust/releases/latest/download/symatem.wasm",
         "test": "node tests/Tests.mjs",
