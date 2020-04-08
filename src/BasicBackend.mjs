@@ -660,7 +660,7 @@ export default class BasicBackend {
         for(const queryTriple of this.queryTriples(mask, triple)) {
             if(thirds)
                 this.setTriple(queryTriple, false);
-            SymbolMap.insert(result, queryTriple[index], true);
+            SymbolMap.set(result, queryTriple[index], true);
         }
         if(thirds)
             for(const third of thirds) {

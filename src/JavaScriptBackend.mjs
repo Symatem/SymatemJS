@@ -112,7 +112,7 @@ function* searchMVV(index, triple) {
           results = SymbolMap.create();
     for(const [beta, gammaCollection] of SymbolMap.entries(betaCollection))
         for(const gamma of SymbolMap.symbols(gammaCollection))
-            SymbolMap.insert(results, gamma, true);
+            SymbolMap.set(results, gamma, true);
     let count = 0;
     for(triple[2] of SymbolMap.symbols(results)) {
         yield reorderTriple(tripleNormalized, index, triple);
@@ -186,9 +186,9 @@ function operateSubIndex(betaCollection, beta, gamma, linked) {
         let gammaCollection = SymbolMap.get(betaCollection, beta);
         if(!gammaCollection) {
             gammaCollection = SymbolMap.create();
-            SymbolMap.insert(betaCollection, beta, gammaCollection);
+            SymbolMap.set(betaCollection, beta, gammaCollection);
         }
-        return SymbolMap.insert(gammaCollection, gamma, true);
+        return SymbolMap.set(gammaCollection, gamma, true);
     } else {
         let gammaCollection = SymbolMap.get(betaCollection, beta);
         if(!gammaCollection || !SymbolMap.remove(gammaCollection, gamma))

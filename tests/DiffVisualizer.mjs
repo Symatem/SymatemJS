@@ -153,7 +153,7 @@ export function visualizeDiff(diff, symbolSlots, animationSlot) {
             if(animationSlot)
                 symbolSlot.classList.add('fadeIn');
             symbolSlot.tripleElements = [];
-            SymbolMap.insert(symbolSlots, symbol, symbolSlot);
+            SymbolMap.set(symbolSlots, symbol, symbolSlot);
             createTag(symbolTags, symbol, symbolSlot);
         }
         return symbolSlot;

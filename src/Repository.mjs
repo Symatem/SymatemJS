@@ -46,7 +46,7 @@ export default class Repository {
         const result = SymbolMap.create();
         for(const triple of this.backend.queryTriples(BasicBackend.queryMasks.MMV, [version, kind, this.backend.symbolByName.Void])) {
             const relative = this.backend.getPairOptionally(triple[2], kind);
-            SymbolMap.insert(result, relative, triple[2]);
+            SymbolMap.set(result, relative, triple[2]);
         }
         return result;
     }
@@ -172,7 +172,7 @@ export default class Repository {
      */
     findPath(dstVersion, srcVersion) {
         const path = [], queue = [dstVersion], discoveredBy = SymbolMap.create();
-        SymbolMap.insert(discoveredBy, dstVersion, true);
+        SymbolMap.set(discoveredBy, dstVersion, true);
         while(queue.length > 0) {
             let version = queue.shift();
             if(srcVersion == version || (!srcVersion && this.backend.getTriple([version, this.backend.symbolByName.Materialization, this.backend.symbolByName.Void], BasicBackend.queryMasks.MMI))) {
@@ -188,12 +188,12 @@ export default class Repository {
             }
             for(const [relative, edge] of SymbolMap.entries(this.getRelatives(version, this.backend.symbolByName.Parent)))
                 if(!SymbolMap.get(discoveredBy, relative)) {
-                    SymbolMap.insert(discoveredBy, relative, {'version': version, 'edge': edge, 'direction': false});
+                    SymbolMap.set(discoveredBy, relative, {'version': version, 'edge': edge, 'direction': false});
                     queue.push(relative);
                 }
             for(const [relative, edge] of SymbolMap.entries(this.getRelatives(version, this.backend.symbolByName.Child)))
                 if(!SymbolMap.get(discoveredBy, relative)) {
-                    SymbolMap.insert(discoveredBy, relative, {'version': version, 'edge': edge, 'direction': true});
+                    SymbolMap.set(discoveredBy, relative, {'version': version, 'edge': edge, 'direction': true});
                     queue.push(relative);
                 }
         }

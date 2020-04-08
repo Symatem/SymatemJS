@@ -33,7 +33,7 @@ export default class Diff extends BasicBackend {
             this.dataSource = this.backend.createSymbol(this.repositoryNamespace);
             this.dataRestore = this.backend.createSymbol(this.repositoryNamespace);
             this.preCommitStructure = SymbolMap.create();
-            SymbolMap.insert(this.preCommitStructure, this.dataRestore, {'replaceOperations': []});
+            SymbolMap.set(this.preCommitStructure, this.dataRestore, {'replaceOperations': []});
         }
     }
 
@@ -316,7 +316,7 @@ export default class Diff extends BasicBackend {
         if(isLinked === link)
             return false;
         if(isLinked === undefined)
-            SymbolMap.insert(gammaCollection, triple[2], link);
+            SymbolMap.set(gammaCollection, triple[2], link);
         else {
             SymbolMap.remove(gammaCollection, triple[2]);
             if(SymbolMap.isEmpty(gammaCollection)) {
@@ -660,10 +660,10 @@ export default class Diff extends BasicBackend {
               dstSymbols = SymbolMap.create(),
               toUnlink = [];
         for(const dstSymbol of this.backend.querySymbols(dstNamespace))
-            SymbolMap.insert(dstSymbols, dstSymbol, true);
+            SymbolMap.set(dstSymbols, dstSymbol, true);
         if(srcNamespace) {
             for(const srcSymbol of this.backend.querySymbols(srcNamespace)) {
-                SymbolMap.insert(srcSymbols, srcSymbol, true);
+                SymbolMap.set(srcSymbols, srcSymbol, true);
                 const dstSymbol = relocate(dstNamespace, srcSymbol),
                       modalSymbol = BasicBackend.relocateSymbol(dstSymbol, this.recordingRelocation);
                 if(SymbolMap.get(dstSymbols, dstSymbol)) {
@@ -776,6 +776,7 @@ export default class Diff extends BasicBackend {
      */
     commit() {
         console.assert(this.preCommitStructure);
+        const restoreDataOperations = SymbolMap.get(this.preCommitStructure, this.dataRestore);
         this.postCommitStructure = {
             'manifestSymbols': [],
             'releaseSymbols': [],
@@ -784,7 +785,7 @@ export default class Diff extends BasicBackend {
             'increaseLengthOperations': [],
             'decreaseLengthOperations': [],
             'replaceDataOperations': [],
-            'restoreDataOperations': SymbolMap.get(this.preCommitStructure, this.dataRestore).replaceOperations,
+            'restoreDataOperations': (restoreDataOperations && restoreDataOperations.replaceOperations) ? restoreDataOperations.replaceOperations : [],
             'minimumLengths': []
         };
         for(const [symbol, operationsOfSymbol] of SymbolMap.entries(this.preCommitStructure)) {
@@ -853,7 +854,7 @@ export default class Diff extends BasicBackend {
             const existingSymbols = SymbolMap.create();
             for(const [srcNamespaceIdentity, dstNamespaceIdentity] of Object.entries(materializationRelocation))
                 for(const symbol of this.backend.querySymbols(dstNamespaceIdentity))
-                    SymbolMap.insert(existingSymbols, symbol, true);
+                    SymbolMap.set(existingSymbols, symbol, true);
             if(this.postCommitStructure[(reverse) ? 'releaseSymbols' : 'manifestSymbols'])
                 for(const symbol of this.postCommitStructure[(reverse) ? 'releaseSymbols' : 'manifestSymbols'])
                     if(SymbolMap.get(existingSymbols, BasicBackend.relocateSymbol(symbol, materializationRelocation)))
@@ -1035,10 +1036,10 @@ export default class Diff extends BasicBackend {
             'minimumLengths': []
         };
         this.dataSource = this.backend.getPairOptionally(this.symbol, this.backend.symbolByName.DataSource);
-        if(this.dataSource == this.backend.symbolByName.Void)
+        if(SymbolInternals.areSymbolsEqual(this.dataSource, this.backend.symbolByName.Void))
             delete this.dataSource;
         this.dataRestore = this.backend.getPairOptionally(this.symbol, this.backend.symbolByName.DataRestore);
-        if(this.dataRestore == this.backend.symbolByName.Void)
+        if(SymbolInternals.areSymbolsEqual(this.dataRestore, this.backend.symbolByName.Void))
             delete this.dataRestore;
         for(const [type, attributeName] of [['manifestSymbols', 'ManifestSymbol'], ['releaseSymbols', 'ReleaseSymbol']])
             for(const triple of this.backend.queryTriples(BasicBackend.queryMasks.MMV, [this.symbol, this.backend.symbolByName[attributeName], this.backend.symbolByName.Void]))
@@ -1177,13 +1178,13 @@ export default class Diff extends BasicBackend {
      * Removes the diff from the repository
      */
     unlink() {
-        console.assert(this.postCommitStructure);
         if(this.dataSource)
             console.assert(this.backend.unlinkSymbol(this.dataSource));
         if(this.dataRestore)
             console.assert(this.backend.unlinkSymbol(this.dataRestore));
         if(!this.symbol)
             return;
+        console.assert(this.postCommitStructure);
         for(const type of ['linkTripleOperations', 'unlinkTripleOperations'])
             if(this.postCommitStructure[type])
                 for(const operation of this.postCommitStructure[type])

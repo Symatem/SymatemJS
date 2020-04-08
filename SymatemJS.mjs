@@ -1,5 +1,5 @@
 import {Utils, IdentityPool} from './src/Utils.mjs';
-import {SymbolInternalsColonString as SymbolInternals, SymbolMapString as SymbolMap} from './src/Symbol.mjs';
+import {SymbolInternals, SymbolMap} from './src/Symbol.mjs';
 import BasicBackend from './src/BasicBackend.mjs';
 import JavaScriptBackend from './src/JavaScriptBackend.mjs';
 import RustWasmBackend, { loaded } from './src/RustWasmBackend.mjs';

@@ -52,12 +52,12 @@ export function makeDiffSnapshot(diff, description) {
             operationsOfSymbolCopy.tripleOperations = SymbolMap.create();
             for(const [beta, gammaCollection] of SymbolMap.entries(operationsOfSymbol.tripleOperations)) {
                 const gammaCollectionCopy = SymbolMap.create();
-                SymbolMap.insert(operationsOfSymbolCopy.tripleOperations, beta, gammaCollectionCopy);
+                SymbolMap.set(operationsOfSymbolCopy.tripleOperations, beta, gammaCollectionCopy);
                 for(const [gamma, link] of SymbolMap.entries(gammaCollection))
-                    SymbolMap.insert(gammaCollectionCopy, gamma, link);
+                    SymbolMap.set(gammaCollectionCopy, gamma, link);
             }
         }
-        SymbolMap.insert(diffSnapshot.preCommitStructure, symbol, operationsOfSymbolCopy);
+        SymbolMap.set(diffSnapshot.preCommitStructure, symbol, operationsOfSymbolCopy);
     }
     return diffSnapshot;
 }
@@ -150,11 +150,9 @@ function testDiff(backend, diff, initialState) {
     if(!diff.validateIntegrity())
         return false;
     diff.commit();
-    const originalJson = diff.encodeJson(),
-          decodedDiff = new Diff(backend, configuration.repositoryNamespace, configuration.recordingRelocation, originalJson);
+    const decodedDiff = new Diff(backend, configuration.repositoryNamespace, configuration.recordingRelocation, diff.encodeJson());
     decodedDiff.link();
     const loadedDiff = new Diff(backend, configuration.repositoryNamespace, configuration.recordingRelocation, decodedDiff.symbol),
-          loadedJson = loadedDiff.encodeJson(),
           resultOfRecording = backend.encodeJson([configuration.materializationNamespace]);
     if(!loadedDiff.apply(true, configuration.materializationRelocation)) {
         console.warn('Could not apply reverse');
