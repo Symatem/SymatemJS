@@ -31,6 +31,21 @@ export class Utils {
     }
 
     /**
+     * Calculates the SHA-256 hash value of an Uint8Array
+     * @param {Uint8Array} buffer
+     * @return {Promise<Uint8Array>} hash value
+     */
+    static sha256(buffer) {
+        return (typeof process === 'undefined')
+            ? crypto.subtle.digest('SHA-256', buffer).then(arrayBuffer => new Uint8Array(arrayBuffer))
+            : import('crypto').then((crypto) => {
+                const hash = crypto.createHash('sha256');
+                hash.update(buffer);
+                return hash.digest();
+            });
+    }
+
+    /**
      * Converts Uint8Array to binary string of '0's and '1's
      * @param {Uint8Array} buffer
      * @return {string} binary
@@ -91,7 +106,9 @@ export class Utils {
      * @param {Uint8Array} b
      * @return {boolean} true if equal, false if different
      */
-    static compare(a, b) {
+    static equals(a, b) {
+        if(typeof process !== 'undefined')
+            return Buffer.from(a).equals(b);
         if(a.length != b.length)
             return false;
         for(let i = 0; i < a.length; ++i)
