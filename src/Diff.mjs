@@ -33,7 +33,6 @@ export default class Diff extends BasicBackend {
             this.dataSource = this.backend.createSymbol(this.repositoryNamespace);
             this.dataRestore = this.backend.createSymbol(this.repositoryNamespace);
             this.preCommitStructure = SymbolMap.create();
-            SymbolMap.set(this.preCommitStructure, this.dataRestore, {'replaceOperations': []});
         }
     }
 
@@ -183,16 +182,16 @@ export default class Diff extends BasicBackend {
             console.assert(srcOffset+length <= this.backend.getLength(srcSymbolRecording));
         const operationsOfSymbol = SymbolMap.getOrInsert(this.preCommitStructure, srcSymbolModal, {}),
               creaseLengthOperations = operationsOfSymbol.creaseLengthOperations || [],
-              mergeCopyReplaceOperations = new Set(),
-              operationsOfDataRestore = SymbolMap.get(this.preCommitStructure, this.dataRestore);
+              mergeCopyReplaceOperations = new Set();
         if(operationsOfSymbol.manifestOrRelease == 'manifest')
             return;
-        let [intermediateOffset, operationIndex] = this.constructor.getIntermediateOffset(creaseLengthOperations, srcOffset),
+        let operationsOfDataRestore = SymbolMap.get(this.preCommitStructure, this.dataRestore),
+            [intermediateOffset, operationIndex] = this.constructor.getIntermediateOffset(creaseLengthOperations, srcOffset),
             decreaseAccumulator = intermediateOffset-srcOffset;
         const addSlice = (length) => {
             if(length <= 0)
                 return;
-            const dstOffset = (replaceOperationIndex < operationsOfDataRestore.replaceOperations.length)
+            const dstOffset = (operationsOfDataRestore && replaceOperationIndex < operationsOfDataRestore.replaceOperations.length)
                              ? operationsOfDataRestore.replaceOperations[replaceOperationIndex].dstOffset
                              : this.backend.getLength(this.dataRestore);
             let srcOffset = intermediateOffset-decreaseAccumulator;
@@ -208,6 +207,10 @@ export default class Diff extends BasicBackend {
                 'srcOffset': intermediateOffset,
                 'length': length
             };
+            if(!operationsOfDataRestore) {
+                operationsOfDataRestore = {'replaceOperations': []};
+                SymbolMap.set(this.preCommitStructure, this.dataRestore, operationsOfDataRestore);
+            }
             this.addCopyReplaceOperation('src', operation);
             this.addCopyReplaceOperation('dst', operation, operationsOfDataRestore.replaceOperations, replaceOperationIndex++);
             mergeCopyReplaceOperations.add(operation.dstOffset);
@@ -593,17 +596,12 @@ export default class Diff extends BasicBackend {
             return SymbolInternals.concatIntoSymbol(namespace, SymbolInternals.identityOfSymbol(symbol));
         }, setTriples = (symbol, linked) => {
             const namespace = (linked) ? srcNamespace : dstNamespace;
-            const handleTriple = (triple) => {
-                triple = triple.map(symbol => relocate(namespace, symbol));
-                if(!this.backend.getTriple(triple))
+            for(let triple of this.backend.queryTriples(BasicBackend.queryMasks.MVV, [symbol, this.backend.symbolByName.Void, this.backend.symbolByName.Void])) {
+                if(srcNamespace)
+                    triple = triple.map(symbol => relocate(namespace, symbol));
+                if(!srcNamespace || !this.backend.getTriple(triple))
                     this.setTriple(triple, linked);
-            };
-            for(const triple of this.backend.queryTriples(BasicBackend.queryMasks.MVV, [symbol, this.backend.symbolByName.Void, this.backend.symbolByName.Void]))
-                handleTriple(triple);
-            for(const triple of this.backend.queryTriples(BasicBackend.queryMasks.VMV, [this.backend.symbolByName.Void, symbol, this.backend.symbolByName.Void]))
-                handleTriple(triple);
-            for(const triple of this.backend.queryTriples(BasicBackend.queryMasks.VVM, [this.backend.symbolByName.Void, this.backend.symbolByName.Void, symbol]))
-                handleTriple(triple);
+            }
         }, context = {
             'dataSourceOffset': this.backend.getLength(this.dataSource),
             'dataSourceOperations': getOrCreateEntry(SymbolMap.getOrInsert(this.preCommitStructure, this.dataSource, {}), 'copyOperations', []),
@@ -614,7 +612,7 @@ export default class Diff extends BasicBackend {
                   dstLength = this.backend.getLength(dstSymbol),
                   srcData = this.backend.readData(srcSymbol, 0, srcLength),
                   dstData = this.backend.readData(dstSymbol, 0, dstLength);
-            if(srcLength == dstLength && Utils.compare(srcData, dstData))
+            if(srcLength == dstLength && Utils.equals(srcData, dstData))
                 return;
             let intermediateOffset = 0;
             const operationsOfSymbol = SymbolMap.getOrInsert(this.preCommitStructure, modalSymbol, {}),
@@ -658,8 +656,10 @@ export default class Diff extends BasicBackend {
         };
         const srcSymbols = SymbolMap.create(),
               dstSymbols = SymbolMap.create(),
+              dstSymbolsToSort = [...this.backend.querySymbols(dstNamespace)],
               toUnlink = [];
-        for(const dstSymbol of this.backend.querySymbols(dstNamespace))
+        dstSymbolsToSort.sort(SymbolInternals.compareSymbols);
+        for(const dstSymbol of dstSymbolsToSort)
             SymbolMap.set(dstSymbols, dstSymbol, true);
         if(srcNamespace) {
             for(const srcSymbol of this.backend.querySymbols(srcNamespace)) {

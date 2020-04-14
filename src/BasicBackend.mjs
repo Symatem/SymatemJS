@@ -256,15 +256,15 @@ export default class BasicBackend {
             return;
         for(const name of symbolNames)
             if(!this.symbolByName[name])
-                this.symbolByName[name] = undefined;
+                this.symbolByName[name] = null;
         if(!this.manifestSymbol(SymbolInternals.concatIntoSymbol(this.constructor.metaNamespaceIdentity, namespaceIdentity)))
             for(const symbol of this.querySymbols(namespaceIdentity)) {
                 const name = this.getData(symbol);
-                if(this.symbolByName[name] === undefined)
+                if(this.symbolByName[name] === null)
                     this.symbolByName[name] = symbol;
             }
         for(const name of symbolNames)
-            if(this.symbolByName[name] === undefined) {
+            if(this.symbolByName[name] === null) {
                 const symbol = this.createSymbol(namespaceIdentity);
                 this.symbolByName[name] = symbol;
                 if(assignNames)
