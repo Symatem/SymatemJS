@@ -146,14 +146,14 @@ export function *generateOperations(backend, rand, symbolPool) {
 }
 
 function testDiff(backend, diff, initialState) {
+    const resultOfRecording = backend.encodeJson([configuration.materializationNamespace]);
     diff.compressData();
+    diff.commit();
     if(!diff.validateIntegrity())
         return false;
-    diff.commit();
     const decodedDiff = new Diff(backend, configuration.repositoryNamespace, configuration.recordingRelocation, diff.encodeJson());
     decodedDiff.link();
-    const loadedDiff = new Diff(backend, configuration.repositoryNamespace, configuration.recordingRelocation, decodedDiff.symbol),
-          resultOfRecording = backend.encodeJson([configuration.materializationNamespace]);
+    const loadedDiff = new Diff(backend, configuration.repositoryNamespace, configuration.recordingRelocation, decodedDiff.symbol);
     if(!loadedDiff.apply(true, configuration.materializationRelocation)) {
         console.warn('Could not apply reverse');
         return false;
@@ -217,7 +217,7 @@ export function getTests(backend, rand) {
             for(const description of generateOperations(backend, rand, symbolPool));
             const resultOfRecording = backend.encodeJson([configuration.materializationNamespace]),
                   diff = new Diff(backend, configuration.repositoryNamespace, {[configuration.materializationNamespace]: configuration.modalNamespace, [configuration.comparisonNamespace]: configuration.modalNamespace});
-            diff.compare(configuration.materializationNamespace, configuration.comparisonNamespace);
+            diff.compare({[configuration.comparisonNamespace]: configuration.materializationNamespace});
             if(!testDiff(backend, diff, initialState))
                 return false;
             // TODO: Test multiple namespaces

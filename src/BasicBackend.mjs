@@ -35,7 +35,6 @@ const PredefinedSymbols = {
         'DataSource',
         'DataRestore',
         'ReplaceData',
-        'RestoreData',
         'Source',
         'Destination',
         'SourceOffset',
