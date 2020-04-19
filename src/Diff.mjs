@@ -1,4 +1,5 @@
-import {Utils, SymbolInternals, SymbolMap, BasicBackend} from '../SymatemJS.mjs';
+import {Utils, RelocationTable, SymbolInternals, SymbolMap} from '../SymatemJS.mjs';
+import BasicBackend from './BasicBackend.mjs';
 import {diffOfSequences} from './DiffOfSequences.mjs';
 
 function getOrCreateEntry(dict, key, value) {
@@ -276,7 +277,7 @@ export default class Diff extends BasicBackend {
     manifestSymbol(symbol, created) {
         if(this.isRecordingFromBackend && !created && !this.backend.manifestSymbol(symbol))
             return false;
-        symbol = BasicBackend.relocateSymbol(symbol, this.recordingRelocation);
+        symbol = RelocationTable.relocateSymbol(this.recordingRelocation, symbol);
         const operationsOfSymbol = SymbolMap.getOrInsert(this.operationsBySymbol, symbol, {});
         if(operationsOfSymbol.manifestOrRelease == 'release') {
             delete operationsOfSymbol.manifestOrRelease;
@@ -296,7 +297,7 @@ export default class Diff extends BasicBackend {
     releaseSymbol(symbol) {
         if(this.isRecordingFromBackend && !this.backend.releaseSymbol(symbol))
             return false;
-        symbol = BasicBackend.relocateSymbol(symbol, this.recordingRelocation);
+        symbol = RelocationTable.relocateSymbol(this.recordingRelocation, symbol);
         const operationsOfSymbol = SymbolMap.getOrInsert(this.operationsBySymbol, symbol, {});
         if(operationsOfSymbol.manifestOrRelease == 'manifest') {
             delete operationsOfSymbol.manifestOrRelease;
@@ -309,7 +310,7 @@ export default class Diff extends BasicBackend {
     setTriple(triple, link) {
         if(this.isRecordingFromBackend && !this.backend.setTriple(triple, link))
             return false;
-        triple = triple.map(symbol => BasicBackend.relocateSymbol(symbol, this.recordingRelocation));
+        triple = triple.map(symbol => RelocationTable.relocateSymbol(this.recordingRelocation, symbol));
         const operationsOfSymbol = SymbolMap.getOrInsert(this.operationsBySymbol, triple[0], {}),
               betaCollection = getOrCreateEntry(operationsOfSymbol, 'tripleOperations', SymbolMap.create()),
               gammaCollection = SymbolMap.getOrInsert(betaCollection, triple[1], SymbolMap.create()),
@@ -343,8 +344,8 @@ export default class Diff extends BasicBackend {
                 return false;
         }
         const originalLength = length,
-              dstSymbolModal = BasicBackend.relocateSymbol(dstSymbolRecording, this.recordingRelocation);
-        const operationsOfSymbol = SymbolMap.getOrInsert(this.operationsBySymbol, dstSymbolModal, {}),
+              dstSymbolModal = RelocationTable.relocateSymbol(this.recordingRelocation, dstSymbolRecording),
+              operationsOfSymbol = SymbolMap.getOrInsert(this.operationsBySymbol, dstSymbolModal, {}),
               creaseLengthOperations = getOrCreateEntry(operationsOfSymbol, 'creaseLengthOperations', []),
               dirtySymbols = new Set();
         let trackingId,
@@ -548,7 +549,7 @@ export default class Diff extends BasicBackend {
             if(operation.length <= 0 || (SymbolInternals.areSymbolsEqual(operation.dstSymbol, operation.srcSymbol) && operation.dstOffset == operation.srcOffset))
                 continue;
             for(const mode of ['dst', 'src']) {
-                context[mode+'Symbol'] = BasicBackend.relocateSymbol(operation[mode+'Symbol'], this.recordingRelocation);
+                context[mode+'Symbol'] = RelocationTable.relocateSymbol(this.recordingRelocation, operation[mode+'Symbol']);
                 context[mode+'OperationsOfSymbol'] = SymbolMap.getOrInsert(this.operationsBySymbol, context[mode+'Symbol'], {});
                 context[mode+'CreaseLengthOperations'] = context[mode+'OperationsOfSymbol'].creaseLengthOperations || [];
                 [context[mode+'IntermediateOffset'], context[mode+'OperationIndex']] = this.constructor.getIntermediateOffset(context[mode+'CreaseLengthOperations'], operation[mode+'Offset']);
@@ -585,11 +586,11 @@ export default class Diff extends BasicBackend {
      * @param {RelocationTable} forwardRelocation Relocate from source to destination
      */
     compare(forwardRelocation) {
-        const reverseRelocation = {};
+        const reverseRelocation = RelocationTable.inverse(forwardRelocation);
         this.isRecordingFromBackend = false;
         const setTriples = (symbol, linked) => {
-            for(let triple of this.backend.queryTriples(BasicBackend.queryMasks.MVV, [symbol, this.backend.symbolByName.Void, this.backend.symbolByName.Void])) {
-                triple = triple.map(symbol => BasicBackend.relocateSymbol(symbol, this.recordingRelocation));
+            for(let triple of this.backend.queryTriples(this.backend.queryMasks.MVV, [symbol, this.backend.symbolByName.Void, this.backend.symbolByName.Void])) {
+                triple = triple.map(symbol => RelocationTable.relocateSymbol(this.recordingRelocation, symbol));
                 this.setTriple(triple, linked);
             }
         }, context = {
@@ -644,9 +645,7 @@ export default class Diff extends BasicBackend {
                 intermediateOffset += entry.keep+Math.max(entry.remove, entry.insert);
             }
         };
-        for(const [key, dstNamespace] of Object.entries(forwardRelocation)) {
-            const srcNamespace = parseInt(key);
-            reverseRelocation[dstNamespace] = srcNamespace;
+        for(const [srcNamespace, dstNamespace] of RelocationTable.entries(forwardRelocation)) {
             const srcSymbols = SymbolMap.create(),
                   dstSymbols = SymbolMap.create(),
                   dstSymbolsToSort = [...this.backend.querySymbols(dstNamespace)],
@@ -656,9 +655,9 @@ export default class Diff extends BasicBackend {
                 SymbolMap.set(dstSymbols, dstSymbol, true);
             for(const srcSymbol of this.backend.querySymbols(srcNamespace)) {
                 SymbolMap.set(srcSymbols, srcSymbol, true);
-                const dstSymbol = BasicBackend.relocateSymbol(srcSymbol, forwardRelocation);
+                const dstSymbol = RelocationTable.relocateSymbol(forwardRelocation, srcSymbol);
                 if(SymbolMap.get(dstSymbols, dstSymbol)) {
-                    compareData(context, BasicBackend.relocateSymbol(dstSymbol, this.recordingRelocation), dstSymbol, srcSymbol);
+                    compareData(context, RelocationTable.relocateSymbol(this.recordingRelocation, dstSymbol), dstSymbol, srcSymbol);
                     setTriples(srcSymbol, false);
                 } else
                     srcSymbolsToUnlink.push(srcSymbol);
@@ -666,7 +665,7 @@ export default class Diff extends BasicBackend {
             for(const srcSymbols of srcSymbolsToUnlink)
                 this.unlinkSymbol(srcSymbols);
             for(const dstSymbol of SymbolMap.symbols(dstSymbols)) {
-                if(!SymbolMap.get(srcSymbols, BasicBackend.relocateSymbol(dstSymbol, reverseRelocation))) {
+                if(!SymbolMap.get(srcSymbols, RelocationTable.relocateSymbol(reverseRelocation, dstSymbol))) {
                     this.manifestSymbol(dstSymbol);
                     const dataLength = this.backend.getLength(dstSymbol);
                     this.creaseLength(dstSymbol, 0, dataLength);
@@ -808,20 +807,18 @@ export default class Diff extends BasicBackend {
      * @param {BasicBackend} dst Apply to another diff or the backend (default)
      * @return {boolean} True on success
      */
-    apply(reverse, materializationRelocation={}, dst=this.backend) {
+    apply(reverse, materializationRelocation=RelocationTable.create(), dst=this.backend) {
         if(dst instanceof Diff) {
             console.assert(!reverse);
             dst.isRecordingFromBackend = false;
         } else {
-            const modalizationRelocation = {},
+            const modalizationRelocation = RelocationTable.inverse(materializationRelocation),
                   existingSymbols = SymbolMap.create();
-            for(const [srcNamespaceIdentity, dstNamespaceIdentity] of Object.entries(materializationRelocation)) {
-                modalizationRelocation[dstNamespaceIdentity] = parseInt(srcNamespaceIdentity);
+            for(const [srcNamespaceIdentity, dstNamespaceIdentity] of RelocationTable.entries(materializationRelocation))
                 for(const symbol of this.backend.querySymbols(dstNamespaceIdentity))
                     SymbolMap.set(existingSymbols, symbol, true);
-            }
             for(const [symbol, operationsOfSymbol] of SymbolMap.entries(this.operationsBySymbol)) {
-                const materialSymbol = BasicBackend.relocateSymbol(symbol, materializationRelocation);
+                const materialSymbol = RelocationTable.relocateSymbol(materializationRelocation, symbol);
                 if(operationsOfSymbol.manifestOrRelease) {
                     if(operationsOfSymbol.manifestOrRelease == (reverse ? 'release' : 'manifest')) {
                         if(SymbolMap.get(existingSymbols, materialSymbol))
@@ -830,7 +827,7 @@ export default class Diff extends BasicBackend {
                         if(!SymbolMap.get(existingSymbols, materialSymbol))
                             return false;
                         for(let triple of dst.getTriplesOfSymbol(materialSymbol)) {
-                            triple = SymbolInternals.tripleFromString(triple).map(symbol => BasicBackend.relocateSymbol(symbol, modalizationRelocation));
+                            triple = SymbolInternals.tripleFromString(triple).map(symbol => RelocationTable.relocateSymbol(modalizationRelocation, symbol));
                             const operationsOfSymbol = SymbolMap.get(this.operationsBySymbol, triple[0]);
                             if(!operationsOfSymbol || !operationsOfSymbol.tripleOperations)
                                 return false;
@@ -846,9 +843,9 @@ export default class Diff extends BasicBackend {
                 if(operationsOfSymbol.tripleOperations) {
                     const triple = [materialSymbol];
                     for(const [beta, gammaCollection] of SymbolMap.entries(operationsOfSymbol.tripleOperations)) {
-                        triple[1] = BasicBackend.relocateSymbol(beta, materializationRelocation);
+                        triple[1] = RelocationTable.relocateSymbol(materializationRelocation, beta);
                         for(const [gamma, link] of SymbolMap.entries(gammaCollection)) {
-                            triple[2] = BasicBackend.relocateSymbol(gamma, materializationRelocation);
+                            triple[2] = RelocationTable.relocateSymbol(materializationRelocation, gamma);
                             if((dst.getTriple(triple) == link) != reverse)
                                 return false;
                         }
@@ -857,7 +854,7 @@ export default class Diff extends BasicBackend {
             }
         }
         for(const [symbol, operationsOfSymbol] of SymbolMap.entries(this.operationsBySymbol)) {
-            const materialSymbol = BasicBackend.relocateSymbol(symbol, materializationRelocation);
+            const materialSymbol = RelocationTable.relocateSymbol(materializationRelocation, symbol);
             if(operationsOfSymbol.manifestOrRelease == (reverse ? 'release' : 'manifest'))
                 console.assert(dst.manifestSymbol(materialSymbol));
             if(operationsOfSymbol.creaseLengthOperations)
@@ -875,7 +872,7 @@ export default class Diff extends BasicBackend {
             const operationsOfSymbol = SymbolMap.get(this.operationsBySymbol, this.dataRestore);
             if(operationsOfSymbol && operationsOfSymbol.replaceOperations)
                 for(const operation of operationsOfSymbol.replaceOperations)
-                    dst.saveDataToRestore(this.dataRestore, BasicBackend.relocateSymbol(operation.srcSymbol, materializationRelocation), operation.srcOffset, operation.length, operation);
+                    dst.saveDataToRestore(this.dataRestore, RelocationTable.relocateSymbol(materializationRelocation, operation.srcSymbol), operation.srcOffset, operation.length, operation);
         }
         const replaceOperations = [];
         if(reverse) {
@@ -884,19 +881,19 @@ export default class Diff extends BasicBackend {
                 for(const operation of operationsOfSymbol.replaceOperations)
                     replaceOperations.push({
                         'srcSymbol': this.dataRestore,
-                        'dstSymbol': BasicBackend.relocateSymbol(operation.srcSymbol, materializationRelocation),
+                        'dstSymbol': RelocationTable.relocateSymbol(materializationRelocation, operation.srcSymbol),
                         'srcOffset': operation.dstOffset,
                         'dstOffset': operation.srcOffset,
                         'length': operation.length
                     });
         } else {
             for(const [symbol, operationsOfSymbol] of SymbolMap.entries(this.operationsBySymbol)) {
-                const materialSymbol = BasicBackend.relocateSymbol(symbol, materializationRelocation);
+                const materialSymbol = RelocationTable.relocateSymbol(materializationRelocation, symbol);
                 if(!SymbolInternals.areSymbolsEqual(symbol, this.dataRestore) && operationsOfSymbol.replaceOperations)
                     for(const operation of operationsOfSymbol.replaceOperations) {
                         const fromDataSource = SymbolInternals.areSymbolsEqual(operation.srcSymbol, this.dataSource);
                         replaceOperations.push({
-                            'srcSymbol': fromDataSource ? dataSource : BasicBackend.relocateSymbol(operation.srcSymbol, materializationRelocation),
+                            'srcSymbol': fromDataSource ? dataSource : RelocationTable.relocateSymbol(materializationRelocation, operation.srcSymbol),
                             'dstSymbol': materialSymbol,
                             'srcOffset': fromDataSource ? operation.srcOffset+dataSourceOffset : operation.srcOffset,
                             'dstOffset': operation.dstOffset,
@@ -909,17 +906,17 @@ export default class Diff extends BasicBackend {
         for(const [symbol, operationsOfSymbol] of SymbolMap.entries(this.operationsBySymbol)) {
             if(!operationsOfSymbol.tripleOperations)
                 continue;
-            const triple = [BasicBackend.relocateSymbol(symbol, materializationRelocation)];
+            const triple = [RelocationTable.relocateSymbol(materializationRelocation, symbol)];
             for(const [beta, gammaCollection] of SymbolMap.entries(operationsOfSymbol.tripleOperations)) {
-                triple[1] = BasicBackend.relocateSymbol(beta, materializationRelocation);
+                triple[1] = RelocationTable.relocateSymbol(materializationRelocation, beta);
                 for(const [gamma, link] of SymbolMap.entries(gammaCollection)) {
-                    triple[2] = BasicBackend.relocateSymbol(gamma, materializationRelocation);
+                    triple[2] = RelocationTable.relocateSymbol(materializationRelocation, gamma);
                     console.assert(dst.setTriple(triple, link != reverse));
                 }
             }
         }
         for(const [symbol, operationsOfSymbol] of SymbolMap.entries(this.operationsBySymbol)) {
-            const materialSymbol = BasicBackend.relocateSymbol(symbol, materializationRelocation);
+            const materialSymbol = RelocationTable.relocateSymbol(materializationRelocation, symbol);
             if(operationsOfSymbol.creaseLengthOperations)
                 for(const operation of Utils.reversed(operationsOfSymbol.creaseLengthOperations))
                     if((operation.length > 0) == reverse)
@@ -1137,17 +1134,17 @@ export default class Diff extends BasicBackend {
         if(SymbolInternals.areSymbolsEqual(this.dataRestore, this.backend.symbolByName.Void))
             delete this.dataRestore;
         for(const [manifestOrRelease, attributeName] of [['manifest', 'ManifestSymbol'], ['release', 'ReleaseSymbol']])
-            for(const triple of this.backend.queryTriples(BasicBackend.queryMasks.MMV, [this.symbol, this.backend.symbolByName[attributeName], this.backend.symbolByName.Void]))
+            for(const triple of this.backend.queryTriples(this.backend.queryMasks.MMV, [this.symbol, this.backend.symbolByName[attributeName], this.backend.symbolByName.Void]))
                 SymbolMap.getOrInsert(this.operationsBySymbol, triple[2], {}).manifestOrRelease = manifestOrRelease;
         for(const [link, attributeName] of [[true, 'LinkTriple'], [false, 'UnlinkTriple']])
-            for(const triple of this.backend.queryTriples(BasicBackend.queryMasks.MMV, [this.symbol, this.backend.symbolByName[attributeName], this.backend.symbolByName.Void])) {
+            for(const triple of this.backend.queryTriples(this.backend.queryMasks.MMV, [this.symbol, this.backend.symbolByName[attributeName], this.backend.symbolByName.Void])) {
                 const operationsOfSymbol = SymbolMap.getOrInsert(this.operationsBySymbol, this.backend.getPairOptionally(triple[2], this.backend.symbolByName.Entity), {}),
                       tripleOperations = getOrCreateEntry(operationsOfSymbol, 'tripleOperations', SymbolMap.create()),
                       betaCollection = SymbolMap.getOrInsert(tripleOperations, this.backend.getPairOptionally(triple[2], this.backend.symbolByName.Attribute), SymbolMap.create());
                 SymbolMap.set(betaCollection, this.backend.getPairOptionally(triple[2], this.backend.symbolByName.Value), link);
             }
         for(const [sign, attributeName] of [[1, 'IncreaseLength'], [-1, 'DecreaseLength']])
-            for(const triple of this.backend.queryTriples(BasicBackend.queryMasks.MMV, [this.symbol, this.backend.symbolByName[attributeName], this.backend.symbolByName.Void])) {
+            for(const triple of this.backend.queryTriples(this.backend.queryMasks.MMV, [this.symbol, this.backend.symbolByName[attributeName], this.backend.symbolByName.Void])) {
                 const dstSymbol = this.backend.getPairOptionally(triple[2], this.backend.symbolByName.Destination),
                       operationsOfSymbol = SymbolMap.getOrInsert(this.operationsBySymbol, dstSymbol, {});
                 getOrCreateEntry(operationsOfSymbol, 'creaseLengthOperations', []).push({
@@ -1156,7 +1153,7 @@ export default class Diff extends BasicBackend {
                     'length': this.backend.getData(this.backend.getPairOptionally(triple[2], this.backend.symbolByName.Length))*sign
                 });
             }
-        for(const triple of this.backend.queryTriples(BasicBackend.queryMasks.MMV, [this.symbol, this.backend.symbolByName.ReplaceData, this.backend.symbolByName.Void])) {
+        for(const triple of this.backend.queryTriples(this.backend.queryMasks.MMV, [this.symbol, this.backend.symbolByName.ReplaceData, this.backend.symbolByName.Void])) {
             const operation = {
                 'dstSymbol': this.backend.getPairOptionally(triple[2], this.backend.symbolByName.Destination),
                 'dstOffset': this.backend.getData(this.backend.getPairOptionally(triple[2], this.backend.symbolByName.DestinationOffset)),
@@ -1167,7 +1164,7 @@ export default class Diff extends BasicBackend {
             getOrCreateEntry(SymbolMap.getOrInsert(this.operationsBySymbol, operation.dstSymbol, {}), 'replaceOperations', []).push(operation);
             getOrCreateEntry(SymbolMap.getOrInsert(this.operationsBySymbol, operation.srcSymbol, {}), 'copyOperations', []).push(operation);
         }
-        for(const triple of this.backend.queryTriples(BasicBackend.queryMasks.MMV, [this.symbol, this.backend.symbolByName.MinimumLength, this.backend.symbolByName.Void])) {
+        for(const triple of this.backend.queryTriples(this.backend.queryMasks.MMV, [this.symbol, this.backend.symbolByName.MinimumLength, this.backend.symbolByName.Void])) {
             const srcSymbol = this.backend.getPairOptionally(triple[2], this.backend.symbolByName.Source),
                   operationsOfSymbol = SymbolMap.getOrInsert(this.operationsBySymbol, srcSymbol, {});
             operationsOfSymbol.forwardLength = this.backend.getData(this.backend.getPairOptionally(triple[2], this.backend.symbolByName.ForwardLength));
@@ -1263,21 +1260,21 @@ export default class Diff extends BasicBackend {
         if(!this.symbol)
             return;
         for(const attributeName of ['LinkTriple', 'UnlinkTriple'])
-            for(const triple of this.backend.queryTriples(BasicBackend.queryMasks.MMV, [this.symbol, this.backend.symbolByName[attributeName], this.backend.symbolByName.Void]))
+            for(const triple of this.backend.queryTriples(this.backend.queryMasks.MMV, [this.symbol, this.backend.symbolByName[attributeName], this.backend.symbolByName.Void]))
                 console.assert(this.backend.unlinkSymbol(triple[2]));
         for(const attributeName of ['IncreaseLength', 'DecreaseLength'])
-            for(const triple of this.backend.queryTriples(BasicBackend.queryMasks.MMV, [this.symbol, this.backend.symbolByName[attributeName], this.backend.symbolByName.Void])) {
+            for(const triple of this.backend.queryTriples(this.backend.queryMasks.MMV, [this.symbol, this.backend.symbolByName[attributeName], this.backend.symbolByName.Void])) {
                 console.assert(this.backend.unlinkSymbol(this.backend.getPairOptionally(triple[2], this.backend.symbolByName.DestinationOffset)));
                 console.assert(this.backend.unlinkSymbol(this.backend.getPairOptionally(triple[2], this.backend.symbolByName.Length)));
                 console.assert(this.backend.unlinkSymbol(triple[2]));
             }
-        for(const triple of this.backend.queryTriples(BasicBackend.queryMasks.MMV, [this.symbol, this.backend.symbolByName.ReplaceData, this.backend.symbolByName.Void])) {
+        for(const triple of this.backend.queryTriples(this.backend.queryMasks.MMV, [this.symbol, this.backend.symbolByName.ReplaceData, this.backend.symbolByName.Void])) {
             console.assert(this.backend.unlinkSymbol(this.backend.getPairOptionally(triple[2], this.backend.symbolByName.DestinationOffset)));
             console.assert(this.backend.unlinkSymbol(this.backend.getPairOptionally(triple[2], this.backend.symbolByName.SourceOffset)));
             console.assert(this.backend.unlinkSymbol(this.backend.getPairOptionally(triple[2], this.backend.symbolByName.Length)));
             console.assert(this.backend.unlinkSymbol(triple[2]));
         }
-        for(const triple of this.backend.queryTriples(BasicBackend.queryMasks.MMV, [this.symbol, this.backend.symbolByName.MinimumLength, this.backend.symbolByName.Void])) {
+        for(const triple of this.backend.queryTriples(this.backend.queryMasks.MMV, [this.symbol, this.backend.symbolByName.MinimumLength, this.backend.symbolByName.Void])) {
             console.assert(this.backend.unlinkSymbol(this.backend.getPairOptionally(triple[2], this.backend.symbolByName.ForwardLength)));
             console.assert(this.backend.unlinkSymbol(this.backend.getPairOptionally(triple[2], this.backend.symbolByName.ReverseLength)));
             console.assert(this.backend.unlinkSymbol(triple[2]));

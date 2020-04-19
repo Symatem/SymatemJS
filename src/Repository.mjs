@@ -1,4 +1,4 @@
-import {SymbolInternals, SymbolMap, BasicBackend, Diff} from '../SymatemJS.mjs';
+import {SymbolInternals, SymbolMap, Diff} from '../SymatemJS.mjs';
 
 /** The repository is a DAG with the versions being vertices and the edges containing the diffs */
 export default class Repository {
@@ -22,7 +22,7 @@ export default class Repository {
      */
     getVersions() {
         const versions = [];
-        for(const triple of this.backend.queryTriples(BasicBackend.queryMasks.VMM, [this.backend.symbolByName.Void, this.backend.symbolByName.Type, this.backend.symbolByName.Version]))
+        for(const triple of this.backend.queryTriples(this.backend.queryMasks.VMM, [this.backend.symbolByName.Void, this.backend.symbolByName.Type, this.backend.symbolByName.Version]))
             versions.push(triple[0]);
         return versions;
     }
@@ -32,7 +32,7 @@ export default class Repository {
      */
     getEdges() {
         const edges = [];
-        for(const triple of this.backend.queryTriples(BasicBackend.queryMasks.VMM, [this.backend.symbolByName.Void, this.backend.symbolByName.Type, this.backend.symbolByName.Edge]))
+        for(const triple of this.backend.queryTriples(this.backend.queryMasks.VMM, [this.backend.symbolByName.Void, this.backend.symbolByName.Type, this.backend.symbolByName.Edge]))
             edges.push(triple[0]);
         return edges;
     }
@@ -44,7 +44,7 @@ export default class Repository {
      */
     getRelatives(version, kind) {
         const result = SymbolMap.create();
-        for(const triple of this.backend.queryTriples(BasicBackend.queryMasks.MMV, [version, kind, this.backend.symbolByName.Void])) {
+        for(const triple of this.backend.queryTriples(this.backend.queryMasks.MMV, [version, kind, this.backend.symbolByName.Void])) {
             const relative = this.backend.getPairOptionally(triple[2], kind);
             SymbolMap.set(result, relative, triple[2]);
         }
@@ -108,7 +108,7 @@ export default class Repository {
     removeEdge(edge) {
         const diffSymbol = this.backend.getPairOptionally(edge, this.backend.symbolByName.Diff);
         this.backend.unlinkSymbol(edge);
-        if(diffSymbol == this.backend.symbolByName.Void || this.backend.getTriple([this.backend.symbolByName.Void, this.backend.symbolByName.Diff, diffSymbol], BasicBackend.queryMask.VMM))
+        if(diffSymbol == this.backend.symbolByName.Void || this.backend.getTriple([this.backend.symbolByName.Void, this.backend.symbolByName.Diff, diffSymbol], this.backend.queryMask.VMM))
             return;
         const diff = new Diff(this.backend, this.relocationTable, this.namespace, diffSymbol);
         diff.unlink();
@@ -119,23 +119,23 @@ export default class Repository {
      * @return {RelocationTable} Relocates modal namespaces to become namespaces of the materialized version
      */
     materializeVersion(version) {
-        console.assert(!this.backend.getTriple([version, this.backend.symbolByName.Materialization, this.backend.symbolByName.Void], BasicBackend.queryMasks.MMI));
+        console.assert(!this.backend.getTriple([version, this.backend.symbolByName.Materialization, this.backend.symbolByName.Void], this.backend.queryMasks.MMI));
         const path = SymbolMap.count(this.getRelatives(version, this.backend.symbolByName.Parent)) > 0 ? this.findPath(version) : undefined,
-              materializationRelocation = {},
+              materializationRelocation = RelocationTable.create(),
               dstMaterialization = this.backend.createSymbol(this.namespace);
         this.backend.setTriple([version, this.backend.symbolByName.Materialization, dstMaterialization], true);
         for(const [recordingNamespaceIdentity, modalNamespaceIdentity] of Object.entries(this.relocationTable)) {
             const materializationNamespaceSymbol = this.backend.createSymbol(SymbolInternals.identityOfSymbol(this.backend.symbolByName.Namespaces));
-            materializationRelocation[modalNamespaceIdentity] = SymbolInternals.identityOfSymbol(materializationNamespaceSymbol);
+            RelocationTable.set(materializationRelocation, modalNamespaceIdentity, SymbolInternals.identityOfSymbol(materializationNamespaceSymbol));
             this.backend.setTriple([dstMaterialization, this.backend.symbolInNamespace('Namespaces', modalNamespaceIdentity), materializationNamespaceSymbol], true);
         }
         if(path) {
             console.assert(path.length > 1);
             version = path[0].version;
             const srcMaterialization = this.backend.getPairOptionally(version, this.backend.symbolByName.Materialization),
-                  cloneRelocation = {};
-            for(const triple of this.backend.queryTriples(BasicBackend.queryMasks.MVV, [srcMaterialization, this.backend.symbolByName.Void, this.backend.symbolByName.Void]))
-                cloneRelocation[SymbolInternals.identityOfSymbol(triple[2])] = materializationRelocation[SymbolInternals.identityOfSymbol(triple[1])];
+                  cloneRelocation = RelocationTable.create();
+            for(const triple of this.backend.queryTriples(this.backend.queryMasks.MVV, [srcMaterialization, this.backend.symbolByName.Void, this.backend.symbolByName.Void]))
+                RelocationTable.set(cloneRelocation, SymbolInternals.identityOfSymbol(triple[2]), RelocationTable.get(materializationRelocation, SymbolInternals.identityOfSymbol(triple[1])));
             this.backend.cloneNamespaces(cloneRelocation);
             for(let i = 1; i < path.length; ++i) {
                 const diff = new Diff(this.backend, this.relocationTable, this.namespace, this.backend.getPairOptionally(path[i].edge, this.backend.symbolByName.Diff));
@@ -153,7 +153,7 @@ export default class Repository {
         const materialization = this.backend.getPairOptionally(version, this.backend.symbolByName.Materialization);
         if(materialization == this.backend.symbolByName.Void)
             return;
-        for(const triple of this.backend.queryTriples(BasicBackend.queryMasks.MIV, [materialization, this.backend.symbolByName.Void, this.backend.symbolByName.Void]))
+        for(const triple of this.backend.queryTriples(this.backend.queryMasks.MIV, [materialization, this.backend.symbolByName.Void, this.backend.symbolByName.Void]))
             this.backend.unlinkSymbol(triple[2]);
         this.backend.unlinkSymbol(materialization);
     }
@@ -175,7 +175,7 @@ export default class Repository {
         SymbolMap.set(discoveredBy, dstVersion, true);
         while(queue.length > 0) {
             let version = queue.shift();
-            if(srcVersion == version || (!srcVersion && this.backend.getTriple([version, this.backend.symbolByName.Materialization, this.backend.symbolByName.Void], BasicBackend.queryMasks.MMI))) {
+            if(srcVersion == version || (!srcVersion && this.backend.getTriple([version, this.backend.symbolByName.Materialization, this.backend.symbolByName.Void], this.backend.queryMasks.MMI))) {
                 path.push({'version': version});
                 while(true) {
                     const entry = SymbolMap.get(discoveredBy, version);

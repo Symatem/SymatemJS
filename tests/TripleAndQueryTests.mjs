@@ -1,11 +1,11 @@
-import {SymbolInternals, SymbolMap, BasicBackend} from '../SymatemJS.mjs';
+import {SymbolInternals, SymbolMap} from '../SymatemJS.mjs';
 
 export function getTests(backend, rand) {
     const symbolPool = [],
           triplePool = new Set(),
-          maskByIndex = Object.keys(BasicBackend.queryMasks),
-          namespaceIdentity = SymbolInternals.identityOfSymbol(backend.createSymbol(BasicBackend.metaNamespaceIdentity)),
-          cloneIdentity = SymbolInternals.identityOfSymbol(backend.createSymbol(BasicBackend.metaNamespaceIdentity));
+          maskByIndex = Object.keys(backend.queryMasks),
+          namespaceIdentity = SymbolInternals.identityOfSymbol(backend.createSymbol(backend.metaNamespaceIdentity)),
+          cloneIdentity = SymbolInternals.identityOfSymbol(backend.createSymbol(backend.metaNamespaceIdentity));
     for(let i = 0; i < 100; ++i)
         symbolPool.push(backend.createSymbol(namespaceIdentity));
 
@@ -21,7 +21,7 @@ export function getTests(backend, rand) {
                 console.warn('setTriple',
                     SymbolInternals.tripleToString(triple),
                     [...triplePool].sort().join(' '), '|',
-                    [...backend.queryTriples(BasicBackend.queryMasks.VVV, [backend.symbolByName.Void, backend.symbolByName.Void, backend.symbolByName.Void])].map(triple => SymbolInternals.tripleToString(triple)).sort().join(' '),
+                    [...backend.queryTriples(backend.queryMasks.VVV, [backend.symbolByName.Void, backend.symbolByName.Void, backend.symbolByName.Void])].map(triple => SymbolInternals.tripleToString(triple)).sort().join(' '),
                     tripleExists, linked, result, expected
                 );
                 return false;
@@ -76,7 +76,7 @@ export function getTests(backend, rand) {
                 console.warn('queryTriples',
                     mask, SymbolInternals.tripleToString(queryTriple),
                     [...triplePool].sort().join(' '), '|',
-                    [...backend.queryTriples(BasicBackend.queryMasks.VVV, [backend.symbolByName.Void, backend.symbolByName.Void, backend.symbolByName.Void])].map(triple => SymbolInternals.tripleToString(triple)).sort().join(' '), '|',
+                    [...backend.queryTriples(backend.queryMasks.VVV, [backend.symbolByName.Void, backend.symbolByName.Void, backend.symbolByName.Void])].map(triple => SymbolInternals.tripleToString(triple)).sort().join(' '), '|',
                     [...result].sort().join(' '), '|',
                     [...expected].sort().join(' ')
                 );

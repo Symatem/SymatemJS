@@ -5,7 +5,7 @@
         <title>Diff Fuzzy Test Visualizer</title>
         <script type='module'>
             import PRNG from './PRNG.mjs';
-            import {loaded, SymbolInternals, SymbolMap, BasicBackend, RustWasmBackend, Diff} from '../SymatemJS.mjs';
+            import {loaded, SymbolInternals, SymbolMap, RustWasmBackend, Diff} from '../SymatemJS.mjs';
             import {svgRoot, createElement, visualizeDiff} from './DiffVisualizer.mjs';
             import {configuration, fillMaterialization, makeDiffSnapshot, generateOperations} from './DiffTests.mjs';
 
@@ -16,8 +16,8 @@
                   diffSnapshots = [];
             loaded.then(() => {
                 backend.initPredefinedSymbols();
-                configuration.repositoryNamespace = SymbolInternals.identityOfSymbol(backend.createSymbol(BasicBackend.metaNamespaceIdentity));
-                configuration.materializationNamespace = SymbolInternals.identityOfSymbol(backend.createSymbol(BasicBackend.metaNamespaceIdentity));
+                configuration.repositoryNamespace = SymbolInternals.identityOfSymbol(backend.createSymbol(backend.metaNamespaceIdentity));
+                configuration.materializationNamespace = SymbolInternals.identityOfSymbol(backend.createSymbol(backend.metaNamespaceIdentity));
             });
             const seed = document.getElementById('seed');
             seed.value = rand.buffer[0];

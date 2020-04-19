@@ -177,6 +177,45 @@ export class Utils {
     }
 
     /**
+     * Converts JS native data types to text
+     * @param {Object} dataValue
+     * @return {string} text
+     */
+    static encodeText(dataValue) {
+        switch(typeof dataValue) {
+            case 'string':
+                return '"' + dataValue + '"';
+            case 'object':
+                if(dataValue instanceof Array)
+                    return '['+dataValue.map(value => this.encodeText(value)).join(', ')+']';
+                return 'hex:'+Utils.encodeAsHex(dataValue);
+            default:
+                return '' + dataValue;
+        }
+    }
+
+    /**
+     * Converts text to JS native data types
+     * @param {string} text
+     * @return {Object} dataValue
+     */
+    static decodeText(text) {
+        const inner = text.match(/"((?:[^\\"]|\\.)*)"/);
+        if(inner != undefined)
+            return inner[1];
+        if(text.length > 4 && text.substr(0, 4) == 'hex:')
+            return Utils.decodeAsHex(text.substr(4));
+        else if(text === 'false' || text === 'true')
+            return (text === 'true');
+        else if(!Number.isNaN(parseFloat(text)))
+            return parseFloat(text);
+        else if(!Number.isNaN(parseInt(text)))
+            return parseInt(text);
+        else if(text.toLowerCase() === 'nan')
+            return NaN;
+    }
+
+    /**
      * Returns a sorted copy of a map or an object dict
      * @param {Object|Map} src
      * @param {Function} compare compares two keys

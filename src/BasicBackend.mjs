@@ -1,4 +1,4 @@
-import {Utils, SymbolInternals, SymbolMap} from '../SymatemJS.mjs';
+import {Utils, RelocationTable, SymbolInternals, SymbolMap} from '../SymatemJS.mjs';
 
 const queryMode = ['M', 'V', 'I'],
       queryMasks = {};
@@ -59,65 +59,15 @@ export default class BasicBackend {
     /** The identity of the namespace which lists all namespaces
       * @return {Identity}
       */
-    static get metaNamespaceIdentity() {
+    get metaNamespaceIdentity() {
         return 0;
     }
 
     /** All 27 query masks by their name
       * @enum {number}
       */
-    static get queryMasks() {
+    get queryMasks() {
         return queryMasks;
-    }
-
-    /**
-     * Relocates a symbol into another namespace according to a lookup table
-     * @param {Symbol} symbol
-     * @param {RelocationTable} namespaces relocation table
-     * @return {Symbol} relocated symbol
-     */
-    static relocateSymbol(symbol, namespaces) {
-        const namespaceId = namespaces[SymbolInternals.namespaceOfSymbol(symbol)];
-        return (namespaceId) ? SymbolInternals.concatIntoSymbol(namespaceId, SymbolInternals.identityOfSymbol(symbol)) : symbol;
-    }
-
-    /**
-     * Converts JS native data types to text
-     * @param {Object} dataValue
-     * @return {string} text
-     */
-    static encodeText(dataValue) {
-        switch(typeof dataValue) {
-            case 'string':
-                return '"' + dataValue + '"';
-            case 'object':
-                if(dataValue instanceof Array)
-                    return '['+dataValue.map(value => this.encodeText(value)).join(', ')+']';
-                return 'hex:'+Utils.encodeAsHex(dataValue);
-            default:
-                return '' + dataValue;
-        }
-    }
-
-    /**
-     * Converts text to JS native data types
-     * @param {string} text
-     * @return {Object} dataValue
-     */
-    static decodeText(text) {
-        const inner = text.match(/"((?:[^\\"]|\\.)*)"/);
-        if(inner != undefined)
-            return inner[1];
-        if(text.length > 4 && text.substr(0, 4) == 'hex:')
-            return Utils.decodeAsHex(text.substr(4));
-        else if(text === 'false' || text === 'true')
-            return (text === 'true');
-        else if(!Number.isNaN(parseFloat(text)))
-            return parseFloat(text);
-        else if(!Number.isNaN(parseInt(text)))
-            return parseInt(text);
-        else if(text.toLowerCase() === 'nan')
-            return NaN;
     }
 
     /**
@@ -242,8 +192,6 @@ export default class BasicBackend {
         return dataBytes;
     }
 
-
-
     /**
      * Manifests a namespace with the given symbols and adds them to symbolByName
      * @param {Identity} namespaceIdentity
@@ -256,7 +204,7 @@ export default class BasicBackend {
         for(const name of symbolNames)
             if(!this.symbolByName[name])
                 this.symbolByName[name] = null;
-        if(!this.manifestSymbol(SymbolInternals.concatIntoSymbol(this.constructor.metaNamespaceIdentity, namespaceIdentity)))
+        if(!this.manifestSymbol(SymbolInternals.concatIntoSymbol(this.metaNamespaceIdentity, namespaceIdentity)))
             for(const symbol of this.querySymbols(namespaceIdentity)) {
                 const name = this.getData(symbol);
                 if(this.symbolByName[name] === null)
@@ -278,7 +226,7 @@ export default class BasicBackend {
      * @return {Object} Namespace identities can be used as input parameter for createSymbol
      */
     registerNamespaces(symbolNamesByNamespace, assignNames=true) {
-        this.registerSymbolsInNamespace(this.constructor.metaNamespaceIdentity, Object.keys(symbolNamesByNamespace), assignNames);
+        this.registerSymbolsInNamespace(this.metaNamespaceIdentity, Object.keys(symbolNamesByNamespace), assignNames);
         const namespaceIdentityByName = {};
         for(const [namespaceName, symbolNames] of Object.entries(symbolNamesByNamespace)) {
             namespaceIdentityByName[namespaceName] = SymbolInternals.identityOfSymbol(this.symbolByName[namespaceName]);
@@ -292,7 +240,7 @@ export default class BasicBackend {
      */
     initPredefinedSymbols() {
         this.symbolByName = {};
-        this.symbolByName.Namespaces = SymbolInternals.concatIntoSymbol(this.constructor.metaNamespaceIdentity, this.constructor.metaNamespaceIdentity);
+        this.symbolByName.Namespaces = SymbolInternals.concatIntoSymbol(this.metaNamespaceIdentity, this.metaNamespaceIdentity);
         this.registerNamespaces(PredefinedSymbols, false);
         for(const [name, symbol] of Object.entries(this.symbolByName))
             this.setData(symbol, name);
@@ -378,13 +326,13 @@ export default class BasicBackend {
 
     /**
      * Clones all symbols and triples of a namespace and their connections to other namespaces
-     * @param {RelocationTable} namespaces Relocate from source (key) to destination (value)
+     * @param {RelocationTable} relocationTable
      */
-    cloneNamespaces(namespaces) {
+    cloneNamespaces(relocationTable) {
         const triples = new Set();
-        for(const [srcNamespaceIdentity, dstNamespaceIdentity] of Object.entries(namespaces))
+        for(const [srcNamespaceIdentity, dstNamespaceIdentity] of RelocationTable.entries(relocationTable))
             for(const srcSymbol of this.querySymbols(srcNamespaceIdentity)) {
-                const dstSymbol = this.constructor.relocateSymbol(srcSymbol, namespaces),
+                const dstSymbol = RelocationTable.relocateSymbol(relocationTable, srcSymbol),
                       length = this.getLength(srcSymbol);
                 console.assert(this.manifestSymbol(dstSymbol));
                 console.assert(this.setLength(dstSymbol, length));
@@ -394,7 +342,7 @@ export default class BasicBackend {
         for(const tripleString of triples) {
             const triple = SymbolInternals.tripleFromString(tripleString);
             for(let i = 0; i < 3; ++i)
-                triple[i] = this.constructor.relocateSymbol(triple[i], namespaces);
+                triple[i] = RelocationTable.relocateSymbol(relocationTable, triple[i]);
             console.assert(this.setTriple(triple, true));
         }
     }

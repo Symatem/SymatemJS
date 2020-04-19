@@ -1,4 +1,4 @@
-import {SymbolInternals, SymbolMap, BasicBackend} from '../SymatemJS.mjs';
+import {RelocationTable, SymbolInternals, SymbolMap} from '../SymatemJS.mjs';
 import {configuration, fillMaterialization} from './DiffTests.mjs';
 
 export function getTests(backend, rand) {
@@ -12,7 +12,7 @@ export function getTests(backend, rand) {
                 return false;
             }
             // TODO: Namespace mask in queryTriples
-            const triplesResult = [...backend.queryTriples(BasicBackend.queryMasks.VVV, [backend.symbolByName.Void, backend.symbolByName.Void, backend.symbolByName.Void])].filter((triple) => {
+            const triplesResult = [...backend.queryTriples(backend.queryMasks.VVV, [backend.symbolByName.Void, backend.symbolByName.Void, backend.symbolByName.Void])].filter((triple) => {
                 for(const symbol of triple)
                     if(SymbolInternals.namespaceOfSymbol(symbol) != configuration.materializationNamespace)
                         return false;
@@ -27,9 +27,9 @@ export function getTests(backend, rand) {
         'cloneNamespace': [10, () => {
             fillMaterialization(backend, rand);
             const original = backend.encodeJson([configuration.materializationNamespace]);
-            backend.cloneNamespaces({[configuration.materializationNamespace]: configuration.comparisonNamespace});
+            backend.cloneNamespaces(configuration.comparisonRelocation);
             backend.clearNamespace(configuration.materializationNamespace);
-            backend.cloneNamespaces({[configuration.comparisonNamespace]: configuration.materializationNamespace});
+            backend.cloneNamespaces(configuration.inverseComparisonRelocation);
             backend.clearNamespace(configuration.comparisonNamespace);
             const clone = backend.encodeJson([configuration.materializationNamespace]);
             backend.clearNamespace(configuration.materializationNamespace);

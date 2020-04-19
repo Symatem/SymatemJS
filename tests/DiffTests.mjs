@@ -1,5 +1,5 @@
 import PRNG from './PRNG.mjs';
-import {Utils, SymbolInternals, SymbolMap, BasicBackend, Diff} from '../SymatemJS.mjs';
+import {Utils, RelocationTable, SymbolInternals, SymbolMap, Diff} from '../SymatemJS.mjs';
 
 export const configuration = {
     'minSymbolCount': 10,
@@ -177,12 +177,18 @@ function testDiff(backend, diff, initialState) {
 }
 
 export function getTests(backend, rand) {
-    configuration.repositoryNamespace = SymbolInternals.identityOfSymbol(backend.createSymbol(BasicBackend.metaNamespaceIdentity));
-    configuration.modalNamespace = SymbolInternals.identityOfSymbol(backend.createSymbol(BasicBackend.metaNamespaceIdentity));
-    configuration.materializationNamespace = SymbolInternals.identityOfSymbol(backend.createSymbol(BasicBackend.metaNamespaceIdentity));
-    configuration.comparisonNamespace = SymbolInternals.identityOfSymbol(backend.createSymbol(BasicBackend.metaNamespaceIdentity));
-    configuration.recordingRelocation = {[configuration.materializationNamespace]: configuration.modalNamespace};
-    configuration.materializationRelocation = {[configuration.modalNamespace]: configuration.materializationNamespace};
+    configuration.repositoryNamespace = SymbolInternals.identityOfSymbol(backend.createSymbol(backend.metaNamespaceIdentity));
+    configuration.modalNamespace = SymbolInternals.identityOfSymbol(backend.createSymbol(backend.metaNamespaceIdentity));
+    configuration.materializationNamespace = SymbolInternals.identityOfSymbol(backend.createSymbol(backend.metaNamespaceIdentity));
+    configuration.comparisonNamespace = SymbolInternals.identityOfSymbol(backend.createSymbol(backend.metaNamespaceIdentity));
+    configuration.recordingRelocation = RelocationTable.create();
+    RelocationTable.set(configuration.recordingRelocation, configuration.materializationNamespace, configuration.modalNamespace);
+    RelocationTable.set(configuration.recordingRelocation, configuration.comparisonNamespace, configuration.modalNamespace);
+    configuration.materializationRelocation = RelocationTable.create();
+    RelocationTable.set(configuration.materializationRelocation, configuration.modalNamespace, configuration.materializationNamespace);
+    configuration.comparisonRelocation = RelocationTable.create();
+    RelocationTable.set(configuration.comparisonRelocation, configuration.materializationNamespace, configuration.comparisonNamespace);
+    configuration.inverseComparisonRelocation = RelocationTable.inverse(configuration.comparisonRelocation);
     const concatDiff = new Diff(backend, configuration.repositoryNamespace, configuration.recordingRelocation);
     let concatInitialState;
     return {
@@ -195,7 +201,7 @@ export function getTests(backend, rand) {
             for(const description of generateOperations(diff, rand, symbolPool));
             if(!testDiff(backend, diff, initialState))
                 return false;
-            if(!diff.apply(false, {}, concatDiff)) {
+            if(!diff.apply(false, RelocationTable.create(), concatDiff)) {
                 console.warn('Could not concat diffs');
                 return false;
             }
@@ -212,12 +218,12 @@ export function getTests(backend, rand) {
             fillMaterialization(backend, rand);
             const initialState = backend.encodeJson([configuration.materializationNamespace]);
             backend.clearNamespace(configuration.comparisonNamespace);
-            backend.cloneNamespaces({[configuration.materializationNamespace]: configuration.comparisonNamespace});
+            backend.cloneNamespaces(configuration.comparisonRelocation);
             const symbolPool = [...backend.querySymbols(configuration.materializationNamespace)];
             for(const description of generateOperations(backend, rand, symbolPool));
             const resultOfRecording = backend.encodeJson([configuration.materializationNamespace]),
-                  diff = new Diff(backend, configuration.repositoryNamespace, {[configuration.materializationNamespace]: configuration.modalNamespace, [configuration.comparisonNamespace]: configuration.modalNamespace});
-            diff.compare({[configuration.comparisonNamespace]: configuration.materializationNamespace});
+                  diff = new Diff(backend, configuration.repositoryNamespace, configuration.recordingRelocation);
+            diff.compare(configuration.inverseComparisonRelocation);
             if(!testDiff(backend, diff, initialState))
                 return false;
             // TODO: Test multiple namespaces

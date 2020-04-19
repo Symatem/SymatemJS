@@ -1,4 +1,5 @@
-import {SymbolInternals, BasicBackend} from '../SymatemJS.mjs';
+import {SymbolInternals} from '../SymatemJS.mjs';
+import BasicBackend from './BasicBackend.mjs';
 
 let module, wasm;
 const imports = {};

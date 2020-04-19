@@ -1,4 +1,69 @@
 /**
+ * TODO
+ */
+export class RelocationTable {
+    /**
+     * Creates a new relocation table
+     * @return {RelocationTable} relocation table
+     */
+    static create() {
+        return new Map();
+    }
+
+    /**
+     * Creates a mapping from a source namespace to a destination namespace
+     * @param {RelocationTable} relocationTable relocation table
+     * @param {Identity} source namespace identity
+     * @param {Identity} destination namespace identity
+     */
+    static set(relocationTable, source, destination) {
+        relocationTable.set(source, destination);
+    }
+
+    /**
+     * Retrieve a mapping of a source namespace
+     * @param {RelocationTable} relocationTable relocation table
+     * @param {Identity} source namespace identity
+     * @return {Identity} destination namespace identity
+     */
+    static get(relocationTable, source, destination) {
+        return relocationTable.get(source);
+    }
+
+    /**
+     * Relocates a symbol into another namespace according to the relocation table
+     * @param {RelocationTable} relocationTable relocation table
+     * @param {Symbol} symbol
+     * @return {Symbol} relocated symbol
+     */
+    static relocateSymbol(relocationTable, symbol) {
+        const namespaceId = relocationTable.get(SymbolInternals.namespaceOfSymbol(symbol));
+        return (namespaceId) ? SymbolInternals.concatIntoSymbol(namespaceId, SymbolInternals.identityOfSymbol(symbol)) : symbol;
+    }
+
+    /**
+     * Iterates over all mappings of the relocation table
+     * @param {RelocationTable} relocationTable relocation table
+     * @yield {[Identity, Identity]} [source, destination]
+     */
+    static entries(relocationTable) {
+        return relocationTable.entries();
+    }
+
+    /**
+     * Returns the relocation table of inverse direction
+     * @param {RelocationTable} relocationTable relocation table
+     * @return {RelocationTable} inverse
+     */
+    static inverse(relocationTable) {
+        const result = RelocationTable.create();
+        for(const [srcNamespaceIdentity, dstNamespaceIdentity] of RelocationTable.entries(relocationTable))
+            result.set(dstNamespaceIdentity, srcNamespaceIdentity);
+        return result;
+    }
+}
+
+/**
  * Base class for all Symbol repesentations
  */
 class BasicSymbolInternals {
@@ -99,7 +164,7 @@ class BasicSymbolInternals {
 /**
  * Symbols are represented using a colon separated string
  */
-class SymbolInternalsColonString extends BasicSymbolInternals {
+export class SymbolInternalsColonString extends BasicSymbolInternals {
     static validateSymbol(symbol) {
         return typeof symbol == 'string' && /^[0-9]+:[0-9]+$/.test(symbol);
     }
@@ -139,7 +204,7 @@ class SymbolInternalsColonString extends BasicSymbolInternals {
 /**
  * Symbols are represented using an Uint32Array
  */
-class SymbolInternalsUint32Array extends BasicSymbolInternals {
+export class SymbolInternalsUint32Array extends BasicSymbolInternals {
     static validateSymbol(symbol) {
         return symbol instanceof Uint32Array && symbol.length == 2;
     }
@@ -149,7 +214,7 @@ class SymbolInternalsUint32Array extends BasicSymbolInternals {
     }
 
     static symbolFromString(string) {
-        return Uint32Array.from(string.split(':'));
+        return Uint32Array.from(string.split(':').map(x => parseInt(x)));
     }
 
     static namespaceOfSymbol(symbol) {
@@ -272,7 +337,7 @@ class BasicSymbolMap {
 /**
  * SymbolMap using JS dicts
  */
-class SymbolMapJSDict extends BasicSymbolMap {
+export class SymbolMapJSDict extends BasicSymbolMap {
     static create() {
         return {};
     }
@@ -324,7 +389,7 @@ class SymbolMapJSDict extends BasicSymbolMap {
 /**
  * SymbolMap using ES6 Maps
  */
-class SymbolMapES6Map extends BasicSymbolMap {
+export class SymbolMapES6Map extends BasicSymbolMap {
     static create() {
         return new Map();
     }

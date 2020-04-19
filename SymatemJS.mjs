@@ -1,12 +1,11 @@
 import {Utils, IdentityPool} from './src/Utils.mjs';
-import {SymbolInternals, SymbolMap} from './src/Symbol.mjs';
-import BasicBackend from './src/BasicBackend.mjs';
+import {RelocationTable, SymbolInternals, SymbolMap} from './src/Symbol.mjs';
 import JavaScriptBackend from './src/JavaScriptBackend.mjs';
 import RustWasmBackend, { loaded } from './src/RustWasmBackend.mjs';
 import Diff from './src/Diff.mjs';
 import Repository from './src/Repository.mjs';
 
-export {loaded, Utils, SymbolInternals, IdentityPool, SymbolMap, BasicBackend, JavaScriptBackend, RustWasmBackend, Diff, Repository};
+export {loaded, Utils, RelocationTable, SymbolInternals, IdentityPool, SymbolMap, JavaScriptBackend, RustWasmBackend, Diff, Repository};
 
 /**
  * @typedef {number} Identity
@@ -32,8 +31,4 @@ export {loaded, Utils, SymbolInternals, IdentityPool, SymbolMap, BasicBackend, J
  * @property {Symbol} srcSymbol
  * @property {number} srcOffset in bits
  * @property {number} length in bits
- */
-
-/**
- * @typedef {Object.<Identity, Identity>} RelocationTable
  */
