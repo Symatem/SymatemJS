@@ -170,7 +170,7 @@ export class Utils {
      * @return {Uint8Array} buffer
      */
     static decodeAsHex(text) {
-        const buffer = new Uint8Array(Math.floor(text.length/2));
+        const buffer = new Uint8Array(Math.ceil(text.length/2));
         for(let i = 0; i < buffer.byteLength; ++i)
             buffer[i] = parseInt(text[i*2], 16)|(parseInt(text[i*2+1], 16)<<4);
         return buffer;

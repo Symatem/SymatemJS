@@ -58,7 +58,7 @@ export default class MersenneTwister {
     }
 
     nextFloat() {
-        return this.nextInt32()/4294967296.0;
+        return this.nextInt32()/0x100000000;
     }
 
     range(start, end) {

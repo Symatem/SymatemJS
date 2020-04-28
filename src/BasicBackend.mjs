@@ -83,20 +83,37 @@ export default class BasicBackend {
         switch(SymbolInternals.symbolToString(encoding)) {
             case SymbolInternals.symbolToString(this.symbolByName.Void):
                 return dataBytes;
+            case SymbolInternals.symbolToString(this.symbolByName.IEEE754):
+                switch(feedback.length) {
+                    case 32:
+                        return dataView.getFloat32(0, true);
+                    case 64:
+                        return dataView.getFloat64(0, true);
+                    default:
+                        throw new Error(`Can not read ${feedback.length} bit IEEE754`);
+                }
             case SymbolInternals.symbolToString(this.symbolByName.BinaryNumber):
             if(feedback.length === 1)
-                return (dataView.getUint8(0) === 1);
+                return (dataView.getUint8(0) == 1);
             case SymbolInternals.symbolToString(this.symbolByName.TwosComplement):
-            case SymbolInternals.symbolToString(this.symbolByName.IEEE754):
-                console.assert(feedback.length >= 32);
-                feedback.length = 32;
-                switch(SymbolInternals.symbolToString(encoding)) {
-                    case SymbolInternals.symbolToString(this.symbolByName.BinaryNumber):
-                        return dataView.getUint32(0, true);
-                    case SymbolInternals.symbolToString(this.symbolByName.TwosComplement):
-                        return dataView.getInt32(0, true);
-                    case SymbolInternals.symbolToString(this.symbolByName.IEEE754):
-                        return dataView.getFloat32(0, true);
+                switch(feedback.length) {
+                    case 8:
+                        return (SymbolInternals.areSymbolsEqual(encoding, this.symbolByName.BinaryNumber))
+                               ? dataView.getUint8(0, true)
+                               : dataView.getInt8(0, true);
+                    case 16:
+                        return (SymbolInternals.areSymbolsEqual(encoding, this.symbolByName.BinaryNumber))
+                               ? dataView.getUint16(0, true)
+                               : dataView.getInt16(0, true);
+                    case 32:
+                        return (SymbolInternals.areSymbolsEqual(encoding, this.symbolByName.BinaryNumber))
+                               ? dataView.getUint32(0, true)
+                               : dataView.getInt32(0, true);
+                    default:
+                        const dataValue = BigInt('0x'+Utils.encodeAsHex(dataBytes).split('').reverse().join(''));
+                        return (SymbolInternals.areSymbolsEqual(encoding, this.symbolByName.TwosComplement) && (dataBytes[Math.floor((feedback.length-1)/8)]>>((feedback.length+7)%8))&1 == 1)
+                            ? dataValue-(1n<<BigInt(feedback.length))
+                            : dataValue;
                 }
             case SymbolInternals.symbolToString(this.symbolByName.UTF8):
                 return Utils.encodeAsUTF8(dataBytes.slice(0, feedback.length/8));
@@ -141,22 +158,39 @@ export default class BasicBackend {
      * @return {Uint8Array} dataBytes
      */
     encodeBinary(encoding, dataValue) {
-        let dataBytes = new Uint8Array(4);
-        const dataView = new DataView(dataBytes.buffer);
+        function writeNumber(byteLength, methodName) {
+            let dataBytes = new Uint8Array(byteLength);
+            const dataView = new DataView(dataBytes.buffer);
+            dataView[methodName](0, dataValue, true);
+            return dataBytes;
+        }
+        function parseBigInt(value) {
+            if(value < 0) {
+                let bits = (-value).toString(2).length;
+                if(-value > 1n<<BigInt(bits-1))
+                    ++bits;
+                value = (1n<<BigInt(Math.ceil(bits/8)*8))+value;
+            }
+            return Utils.decodeAsHex(value.toString(16).split('').reverse().join(''));
+        }
         switch(SymbolInternals.symbolToString(encoding)) {
             case SymbolInternals.symbolToString(this.symbolByName.Void):
                 return dataValue;
             case SymbolInternals.symbolToString(this.symbolByName.BinaryNumber):
-                if(typeof dataValue === 'boolean')
-                    return new Uint8Array([(dataValue) ? 1 : 0]);
-                dataView.setUint32(0, dataValue, true);
-                return dataBytes;
+                return (typeof dataValue == 'boolean') ? new Uint8Array([(dataValue) ? 1 : 0]) :
+                       (typeof dataValue == 'bigint') ? parseBigInt(dataValue) :
+                       (dataValue < 0x100) ? writeNumber(1, 'setUint8') :
+                       (dataValue < 0x10000) ? writeNumber(2, 'setUint16') :
+                       (dataValue < 0x100000000) ? writeNumber(4, 'setUint32') :
+                       parseBigInt(BigInt(dataValue));
             case SymbolInternals.symbolToString(this.symbolByName.TwosComplement):
-                dataView.setInt32(0, dataValue, true);
-                return dataBytes;
+                return (typeof dataValue == 'bigint') ? parseBigInt(dataValue) :
+                       (dataValue >= -0x80 && dataValue < 0x80) ? writeNumber(1, 'setInt8') :
+                       (dataValue >= -0x8000 && dataValue < 0x8000) ? writeNumber(2, 'setInt16') :
+                       (dataValue >= -0x80000000 && dataValue < 0x80000000) ? writeNumber(4, 'setInt32') :
+                       parseBigInt(BigInt(dataValue));
             case SymbolInternals.symbolToString(this.symbolByName.IEEE754):
-                dataView.setFloat32(0, dataValue, true);
-                return dataBytes;
+                return writeNumber(8, 'setFloat64');
             case SymbolInternals.symbolToString(this.symbolByName.UTF8):
                 return Utils.decodeAsUTF8(dataValue);
         }
@@ -428,7 +462,7 @@ export default class BasicBackend {
      */
     setData(symbol, dataValue) {
         let encoding;
-        const isBool = (typeof dataValue === 'boolean');
+        const isBool = (typeof dataValue == 'boolean');
         switch(typeof dataValue) {
             case 'undefined':
                 encoding = this.symbolByName.Void;
@@ -438,9 +472,10 @@ export default class BasicBackend {
                 encoding = this.symbolByName.UTF8;
                 this.getAndSetPairs(symbol, this.symbolByName.Encoding, [encoding]);
                 break;
+            case 'bigint':
             case 'number':
             case 'boolean':
-                if(!Number.isInteger(dataValue) && !isBool)
+                if(!Number.isInteger(dataValue) && !isBool && typeof dataValue != 'bigint')
                     encoding = this.symbolByName.IEEE754;
                 else if(dataValue < 0)
                     encoding = this.symbolByName.TwosComplement;
