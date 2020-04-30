@@ -26,7 +26,7 @@ export function getTests(backend, rand) {
         return [string.substr(0, offset), '[', string.substr(offset, length), ']', string.substr(offset+length)].join('');
     }
 
-    return {
+    const tests = {
         'decreaseLength': [1000, () => {
             const [destinationString, destinationLength, destinationOffset] = fillSymbol(destination),
                   length = rand.range(0, destinationLength-destinationOffset),
@@ -116,8 +116,33 @@ export function getTests(backend, rand) {
                 return false;
             }
             return true;
-        }]
+        }],
         // TODO: bitwiseCopy with destination == source is not implemented yet
         // TODO: 'replaceDataSimultaneously': () => {}
+        'IEEE754-64': [1000, () => {
+            const dataValue = rand.nextFloat();
+            backend.setData(destination, dataValue);
+            if(dataValue != backend.getData(destination)) {
+                console.warn('IEEE754-64', dataValue, backend.getData(destination), backend.getRawData(destination).buffer);
+                return false;
+            }
+            return true;
+        }]
     };
+    for(const sign of [1, -1]) {
+        for(let i = 3; i < 7; ++i) {
+            const bits = 1<<i,
+                  testName = (sign == 1) ? `BinaryNumber-${bits}` : `TwosComplement-${bits}`;
+            tests[testName] = [1000, () => {
+                const dataValue = sign*parseInt('0x'+Utils.encodeAsHex(rand.bytes(bits/8)));
+                backend.setData(destination, dataValue);
+                if(dataValue != backend.getData(destination)) {
+                    console.warn(testName, dataValue, backend.getData(destination), backend.getRawData(destination).buffer);
+                    return false;
+                }
+                return true;
+            }];
+        }
+    }
+    return tests;
 }
