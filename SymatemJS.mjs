@@ -1,11 +1,11 @@
 import {Utils, IdentityPool} from './src/Utils.mjs';
 import {RelocationTable, SymbolInternals, SymbolMap} from './src/Symbol.mjs';
 import JavaScriptBackend from './src/JavaScriptBackend.mjs';
-import RustWasmBackend, { loaded } from './src/RustWasmBackend.mjs';
+import RustWasmBackend from './src/RustWasmBackend.mjs';
 import Diff from './src/Diff.mjs';
 import Repository from './src/Repository.mjs';
 
-export {loaded, Utils, RelocationTable, SymbolInternals, IdentityPool, SymbolMap, JavaScriptBackend, RustWasmBackend, Diff, Repository};
+export {Utils, RelocationTable, SymbolInternals, IdentityPool, SymbolMap, JavaScriptBackend, RustWasmBackend, Diff, Repository};
 
 /**
  * @typedef {number} Identity
