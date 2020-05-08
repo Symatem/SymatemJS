@@ -19,7 +19,6 @@ async function runAll(seed) {
         seed = rand.buffer[0];
     console.log(`Seed: ${seed}`);
     for(const backend of [new JavaScriptBackend(), await new RustWasmBackend()]) {
-        backend.initPredefinedSymbols();
         rand.setSeed(seed);
         const tests = {};
         for(let testBundle of testBundles)

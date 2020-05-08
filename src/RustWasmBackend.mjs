@@ -25,6 +25,7 @@ export default class RustWasmBackend extends BasicBackend {
             .then(arrayBuffer => WebAssembly.instantiate(arrayBuffer, imports))
             .then(result => {
                 this.wasm = result.instance.exports;
+                this.initPredefinedSymbols();
                 return this;
             })
             .catch((err) => console.error(err));

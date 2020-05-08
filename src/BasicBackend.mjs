@@ -1,4 +1,4 @@
-import {Utils, RelocationTable, SymbolInternals, SymbolMap} from '../SymatemJS.mjs';
+import {Utils, RelocationTable, SymbolInternals, SymbolMap, TripleMap} from '../SymatemJS.mjs';
 
 const queryMode = ['M', 'V', 'I'],
       queryMasks = {};
@@ -322,18 +322,18 @@ export default class BasicBackend {
     /**
      * Returns all triples a symbol is taking part in
      * @param {Symbol} symbol
-     * @param {Set} [result] Optionally, an existing set chained from other calls (union of sets)
-     * @return {Set} result
+     * @param {TripleMap} [result] Optionally, an existing set chained from other calls (union of sets)
+     * @return {TripleMap} result
      */
     getTriplesOfSymbol(symbol, result) {
         if(!result)
-            result = new Set();
+            result = TripleMap.create();
         for(const triple of this.queryTriples(queryMasks.MVV, [symbol, this.symbolByName.Void, this.symbolByName.Void]))
-            result.add(SymbolInternals.tripleToString(triple));
+            TripleMap.set(result, triple, true);
         for(const triple of this.queryTriples(queryMasks.VMV, [this.symbolByName.Void, symbol, this.symbolByName.Void]))
-            result.add(SymbolInternals.tripleToString(triple));
+            TripleMap.set(result, triple, true);
         for(const triple of this.queryTriples(queryMasks.VVM, [this.symbolByName.Void, this.symbolByName.Void, symbol]))
-            result.add(SymbolInternals.tripleToString(triple));
+            TripleMap.set(result, triple, true);
         return result;
     }
 
@@ -342,8 +342,8 @@ export default class BasicBackend {
      * @param {Symbol} symbol
      */
     unlinkSymbol(symbol) {
-        for(const triple of this.getTriplesOfSymbol(symbol))
-            this.setTriple(SymbolInternals.tripleFromString(triple), false);
+        for(const triple of TripleMap.keys(this.getTriplesOfSymbol(symbol)))
+            this.setTriple(triple, false);
         this.setLength(symbol, 0);
         this.releaseSymbol(symbol);
         return true;
@@ -373,8 +373,7 @@ export default class BasicBackend {
                 console.assert(this.writeData(dstSymbol, 0, length, this.readData(srcSymbol, 0, length)));
                 this.getTriplesOfSymbol(srcSymbol, triples);
             }
-        for(const tripleString of triples) {
-            const triple = SymbolInternals.tripleFromString(tripleString);
+        for(const triple of TripleMap.keys(triples)) {
             for(let i = 0; i < 3; ++i)
                 triple[i] = RelocationTable.relocateSymbol(relocationTable, triple[i]);
             console.assert(this.setTriple(triple, true));
@@ -661,7 +660,7 @@ export default class BasicBackend {
      */
     getPairOptionally(first, second, mask=queryMasks.MMV) {
         const thirds = this.getAndSetPairs(first, second, undefined, mask);
-        return (SymbolMap.count(thirds) == 1) ? [...SymbolMap.symbols(thirds)][0] : this.symbolByName.Void;
+        return (SymbolMap.count(thirds) == 1) ? [...SymbolMap.keys(thirds)][0] : this.symbolByName.Void;
     }
 
     /**

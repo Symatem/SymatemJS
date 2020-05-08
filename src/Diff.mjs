@@ -1,4 +1,4 @@
-import {Utils, RelocationTable, SymbolInternals, SymbolMap} from '../SymatemJS.mjs';
+import {Utils, RelocationTable, SymbolInternals, SymbolMap, TripleMap} from '../SymatemJS.mjs';
 import BasicBackend from './BasicBackend.mjs';
 import {diffOfSequences} from './DiffOfSequences.mjs';
 
@@ -664,7 +664,7 @@ export default class Diff extends BasicBackend {
             }
             for(const srcSymbols of srcSymbolsToUnlink)
                 this.unlinkSymbol(srcSymbols);
-            for(const dstSymbol of SymbolMap.symbols(dstSymbols)) {
+            for(const dstSymbol of SymbolMap.keys(dstSymbols)) {
                 if(!SymbolMap.get(srcSymbols, RelocationTable.relocateSymbol(reverseRelocation, dstSymbol))) {
                     this.manifestSymbol(dstSymbol);
                     const dataLength = this.backend.getLength(dstSymbol);
@@ -808,7 +808,7 @@ export default class Diff extends BasicBackend {
      * @return {boolean} True on success
      */
     apply(reverse, materializationRelocation=RelocationTable.create(), dst=this.backend) {
-        if(dst instanceof Diff) {
+        if(dst instanceof this.constructor) {
             console.assert(!reverse);
             dst.isRecordingFromBackend = false;
         } else {
@@ -826,8 +826,8 @@ export default class Diff extends BasicBackend {
                     } else {
                         if(!SymbolMap.get(existingSymbols, materialSymbol))
                             return false;
-                        for(let triple of dst.getTriplesOfSymbol(materialSymbol)) {
-                            triple = SymbolInternals.tripleFromString(triple).map(symbol => RelocationTable.relocateSymbol(modalizationRelocation, symbol));
+                        for(let triple of TripleMap.keys(dst.getTriplesOfSymbol(materialSymbol))) {
+                            triple = triple.map(symbol => RelocationTable.relocateSymbol(modalizationRelocation, symbol));
                             const operationsOfSymbol = SymbolMap.get(this.operationsBySymbol, triple[0]);
                             if(!operationsOfSymbol || !operationsOfSymbol.tripleOperations)
                                 return false;
@@ -863,7 +863,7 @@ export default class Diff extends BasicBackend {
                         console.assert(dst.creaseLength(materialSymbol, operation.dstOffset, reverse ? -operation.length : operation.length));
         }
         let dataSource = this.dataSource, dataSourceOffset = 0;
-        if(dst instanceof Diff) {
+        if(dst instanceof this.constructor) {
             dataSource = dst.dataSource;
             dataSourceOffset = this.backend.getLength(dst.dataSource);
             const length = this.backend.getLength(this.dataSource);
@@ -924,7 +924,7 @@ export default class Diff extends BasicBackend {
             if(operationsOfSymbol.manifestOrRelease == (reverse ? 'manifest' : 'release'))
                 console.assert(dst.releaseSymbol(materialSymbol));
         }
-        if(dst instanceof Diff)
+        if(dst instanceof this.constructor)
             dst.isRecordingFromBackend = true;
         return true;
     }
@@ -935,7 +935,7 @@ export default class Diff extends BasicBackend {
      */
     encodeJson() {
         function exportSymbolMap(input, output, callback) {
-            const symbols = [...SymbolMap.symbols(input)];
+            const symbols = [...SymbolMap.keys(input)];
             symbols.sort(SymbolInternals.compareSymbols);
             let namespaceIdentity;
             for(const symbol of symbols) {
@@ -1170,7 +1170,7 @@ export default class Diff extends BasicBackend {
             operationsOfSymbol.forwardLength = this.backend.getData(this.backend.getPairOptionally(triple[2], this.backend.symbolByName.ForwardLength));
             operationsOfSymbol.reverseLength = this.backend.getData(this.backend.getPairOptionally(triple[2], this.backend.symbolByName.ReverseLength));
         }
-        for(const symbol of SymbolMap.symbols(this.operationsBySymbol)) {
+        for(const symbol of SymbolMap.keys(this.operationsBySymbol)) {
             const operationsOfSymbol = SymbolMap.get(this.operationsBySymbol, symbol);
             if(operationsOfSymbol.creaseLengthOperations)
                 operationsOfSymbol.creaseLengthOperations.sort((a, b) => a.dstOffset-b.dstOffset);

@@ -1,8 +1,8 @@
-import {SymbolInternals, SymbolMap} from '../SymatemJS.mjs';
+import {SymbolInternals, SymbolMap, TripleMap} from '../SymatemJS.mjs';
 
 export function getTests(backend, rand) {
     const symbolPool = [],
-          triplePool = new Set(),
+          triplePool = TripleMap.create(),
           maskByIndex = Object.keys(backend.queryMasks),
           namespaceIdentity = SymbolInternals.identityOfSymbol(backend.createSymbol(backend.metaNamespaceIdentity)),
           cloneIdentity = SymbolInternals.identityOfSymbol(backend.createSymbol(backend.metaNamespaceIdentity));
@@ -12,24 +12,23 @@ export function getTests(backend, rand) {
     return {
         'setTriple': [5000, () => {
             const triple = [rand.selectUniformly(symbolPool), rand.selectUniformly(symbolPool), rand.selectUniformly(symbolPool)],
-                  tripleTag = SymbolInternals.tripleToString(triple),
-                  tripleExists = triplePool.has(tripleTag),
+                  tripleExists = TripleMap.get(triplePool, triple) != undefined,
                   linked = rand.selectUniformly([false, true]),
                   expected = (tripleExists != linked),
                   result = backend.setTriple(triple, linked);
             if(expected != result) {
                 console.warn('setTriple',
-                    SymbolInternals.tripleToString(triple),
-                    [...triplePool].sort().join(' '), '|',
-                    [...backend.queryTriples(backend.queryMasks.VVV, [backend.symbolByName.Void, backend.symbolByName.Void, backend.symbolByName.Void])].map(triple => SymbolInternals.tripleToString(triple)).sort().join(' '),
+                    triple, '|',
+                    [...TripleMap.keys(triplePool)].sort().join(' '), '|',
+                    [...backend.queryTriples(backend.queryMasks.VVV, [backend.symbolByName.Void, backend.symbolByName.Void, backend.symbolByName.Void])].sort().join(' '), '|',
                     tripleExists, linked, result, expected
                 );
                 return false;
             }
             if(linked)
-                triplePool.add(tripleTag);
+                TripleMap.set(triplePool, triple, true);
             else
-                triplePool.delete(tripleTag);
+                TripleMap.remove(triplePool, triple);
             return true;
         }],
         'queryTriples': [100, () => {
@@ -37,9 +36,8 @@ export function getTests(backend, rand) {
                   maskIndex = rand.range(0, 27),
                   mask = maskByIndex[maskIndex],
                   iterator = backend.queryTriples(maskIndex, queryTriple),
-                  result = new Set(), expected = new Set();
-            for(const tripleTag of triplePool) {
-                const triple = SymbolInternals.tripleFromString(tripleTag);
+                  result = TripleMap.create(), expected = TripleMap.create();
+            for(const triple of TripleMap.keys(triplePool)) {
                 let select = true;
                 for(let j = 0; j < 3; ++j) {
                     if(mask[j] == 'I')
@@ -50,7 +48,7 @@ export function getTests(backend, rand) {
                     }
                 }
                 if(select)
-                    expected.add(SymbolInternals.tripleToString(triple));
+                    TripleMap.set(expected, triple, true);
             }
             let noErrorsOccured = true;
             while(true) {
@@ -67,16 +65,15 @@ export function getTests(backend, rand) {
                     return value;
                 }, 0) < 3)
                     continue;
-                const tripleTag = SymbolInternals.tripleToString(element.value);
-                result.add(tripleTag);
-                if(!expected.has(tripleTag))
+                TripleMap.set(result, element.value, true);
+                if(!TripleMap.get(expected, element.value))
                     noErrorsOccured = false;
             }
             if(!noErrorsOccured)
                 console.warn('queryTriples',
-                    mask, SymbolInternals.tripleToString(queryTriple),
-                    [...triplePool].sort().join(' '), '|',
-                    [...backend.queryTriples(backend.queryMasks.VVV, [backend.symbolByName.Void, backend.symbolByName.Void, backend.symbolByName.Void])].map(triple => SymbolInternals.tripleToString(triple)).sort().join(' '), '|',
+                    mask, queryTriple, '|',
+                    [...TripleMap.keys(triplePool)].sort().join(' '), '|',
+                    [...backend.queryTriples(backend.queryMasks.VVV, [backend.symbolByName.Void, backend.symbolByName.Void, backend.symbolByName.Void])].sort().join(' '), '|',
                     [...result].sort().join(' '), '|',
                     [...expected].sort().join(' ')
                 );

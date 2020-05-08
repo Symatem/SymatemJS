@@ -181,13 +181,12 @@ export function getTests(backend, rand) {
     configuration.modalNamespace = SymbolInternals.identityOfSymbol(backend.createSymbol(backend.metaNamespaceIdentity));
     configuration.materializationNamespace = SymbolInternals.identityOfSymbol(backend.createSymbol(backend.metaNamespaceIdentity));
     configuration.comparisonNamespace = SymbolInternals.identityOfSymbol(backend.createSymbol(backend.metaNamespaceIdentity));
-    configuration.recordingRelocation = RelocationTable.create();
-    RelocationTable.set(configuration.recordingRelocation, configuration.materializationNamespace, configuration.modalNamespace);
-    RelocationTable.set(configuration.recordingRelocation, configuration.comparisonNamespace, configuration.modalNamespace);
-    configuration.materializationRelocation = RelocationTable.create();
-    RelocationTable.set(configuration.materializationRelocation, configuration.modalNamespace, configuration.materializationNamespace);
-    configuration.comparisonRelocation = RelocationTable.create();
-    RelocationTable.set(configuration.comparisonRelocation, configuration.materializationNamespace, configuration.comparisonNamespace);
+    configuration.recordingRelocation = RelocationTable.create([
+        [configuration.materializationNamespace, configuration.modalNamespace],
+        [configuration.comparisonNamespace, configuration.modalNamespace]
+    ]);
+    configuration.materializationRelocation = RelocationTable.create([[configuration.modalNamespace, configuration.materializationNamespace]]);
+    configuration.comparisonRelocation = RelocationTable.create([[configuration.materializationNamespace, configuration.comparisonNamespace]]);
     configuration.inverseComparisonRelocation = RelocationTable.inverse(configuration.comparisonRelocation);
     const concatDiff = new Diff(backend, configuration.repositoryNamespace, configuration.recordingRelocation);
     let concatInitialState;

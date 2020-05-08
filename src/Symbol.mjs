@@ -1,13 +1,18 @@
 /**
- * TODO
+ * Used to define a mapping of symbols between namespaces
  */
 export class RelocationTable {
     /**
      * Creates a new relocation table
+     * @param {[Identity, Identity][]} iterable Fill the collection with these mappings
      * @return {RelocationTable} relocation table
      */
-    static create() {
-        return new Map();
+    static create(iterable) {
+        const relocationTable = new Map();
+        if(iterable)
+            for(const [source, destination] of iterable)
+                this.set(relocationTable, source, destination);
+        return relocationTable;
     }
 
     /**
@@ -164,7 +169,7 @@ class BasicSymbolInternals {
 /**
  * Symbols are represented using a colon separated string
  */
-export class SymbolInternalsColonString extends BasicSymbolInternals {
+export class ColonStringSymbolInternals extends BasicSymbolInternals {
     static validateSymbol(symbol) {
         return typeof symbol == 'string' && /^[0-9]+:[0-9]+$/.test(symbol);
     }
@@ -204,7 +209,7 @@ export class SymbolInternalsColonString extends BasicSymbolInternals {
 /**
  * Symbols are represented using an Uint32Array
  */
-export class SymbolInternalsUint32Array extends BasicSymbolInternals {
+export class Uint32ArraySymbolInternals extends BasicSymbolInternals {
     static validateSymbol(symbol) {
         return symbol instanceof Uint32Array && symbol.length == 2;
     }
@@ -239,7 +244,7 @@ export class SymbolInternalsUint32Array extends BasicSymbolInternals {
     }
 };
 
-export const SymbolInternals = SymbolInternalsColonString;
+export const SymbolInternals = ColonStringSymbolInternals;
 
 
 
@@ -249,10 +254,15 @@ export const SymbolInternals = SymbolInternalsColonString;
 class BasicSymbolMap {
     /**
      * Creates a new empty SymbolMap
+     * @param {[Symbol, any][]} iterable Fill the collection with these key element pairs
      * @return {SymbolMap} collection
      */
-    static create() {
-        throw new Error('Abstract, not implemented');
+    static create(iterable) {
+        const collection = this.factory();
+        if(iterable)
+            for(const [key, element] of iterable)
+                this.set(collection, key, element);
+        return collection;
     }
 
     /**
@@ -270,55 +280,59 @@ class BasicSymbolMap {
      * @return {boolean} True if there are no entries in the collection
      */
     static isEmpty(collection) {
-        throw new Error('Abstract, not implemented');
+        return this.count(collection) == 0;
     }
 
     /**
      * Inserts or updates an entry to the collection
      * @param {SymbolMap} collection
-     * @param {Symbol} symbol The key
-     * @param {any} element The value
+     * @param {Symbol} key
+     * @param {any} element
      * @return {boolean} True if the key did not exist in the collection
      */
-    static set(collection, symbol, element) {
+    static set(collection, key, element) {
         throw new Error('Abstract, not implemented');
     }
 
     /**
      * Removes an entry from the collection
      * @param {SymbolMap} collection
-     * @param {Symbol} symbol The key
+     * @param {Symbol} key
      * @return {boolean} True if the key did exist in the collection
      */
-    static remove(collection, symbol) {
+    static remove(collection, key) {
         throw new Error('Abstract, not implemented');
     }
 
     /**
-     * Gets a value by its key in the collection
+     * Gets an element by its key in the collection
      * @param {SymbolMap} collection
-     * @param {Symbol} symbol The key
-     * @return {any} The value
+     * @param {Symbol} key
+     * @return {any} element
      */
-    static get(collection, symbol) {
+    static get(collection, key) {
         throw new Error('Abstract, not implemented');
     }
 
     /**
-     * Gets a value by its key in the collection or inserts a default value if it the key did not exist
+     * Gets an element by its key in the collection or inserts a default element if it the key did not exist
      * @param {SymbolMap} collection
-     * @param {Symbol} symbol The key
-     * @param {any} defaultElement The value
-     * @return {any} The value
+     * @param {Symbol} key
+     * @param {any} defaultElement
+     * @return {any} element
      */
-    static getOrInsert(collection, symbol, defaultElement) {
-        throw new Error('Abstract, not implemented');
+    static getOrInsert(collection, key, defaultElement) {
+        const element = this.get(collection, key);
+        if(element)
+            return element;
+        this.set(collection, key, defaultElement);
+        return defaultElement;
     }
 
     /**
      * Iterates over all entries of the collection
      * @param {SymbolMap} collection
-     * @yield {[Symbol, any]} [key, value]
+     * @yield {[Symbol, any]} [key, element]
      */
     static *entries(collection) {
         throw new Error('Abstract, not implemented');
@@ -329,7 +343,7 @@ class BasicSymbolMap {
      * @param {SymbolMap} collection
      * @yield {Symbol} key
      */
-    static *symbols(collection) {
+    static *keys(collection) {
         throw new Error('Abstract, not implemented');
     }
 };
@@ -337,17 +351,13 @@ class BasicSymbolMap {
 /**
  * SymbolMap using JS dicts
  */
-export class SymbolMapJSDict extends BasicSymbolMap {
-    static create() {
+export class JSDictSymbolMap extends BasicSymbolMap {
+    static factory() {
         return {};
     }
 
     static count(collection) {
         return Object.keys(collection).length;
-    }
-
-    static isEmpty(collection) {
-        return Object.keys(collection).length == 0;
     }
 
     static set(collection, symbol, element) {
@@ -380,7 +390,7 @@ export class SymbolMapJSDict extends BasicSymbolMap {
             yield [SymbolInternals.symbolFromString(key), element];
     }
 
-    static *symbols(collection) {
+    static *keys(collection) {
         for(const key of Object.keys(collection))
             yield SymbolInternals.symbolFromString(key);
     }
@@ -389,17 +399,13 @@ export class SymbolMapJSDict extends BasicSymbolMap {
 /**
  * SymbolMap using ES6 Maps
  */
-export class SymbolMapES6Map extends BasicSymbolMap {
-    static create() {
+export class ES6MapSymbolMap extends BasicSymbolMap {
+    static factory() {
         return new Map();
     }
 
     static count(outerCollection) {
         return outerCollection.size;
-    }
-
-    static isEmpty(outerCollection) {
-        return outerCollection.size == 0;
     }
 
     static set(outerCollection, symbol, element) {
@@ -443,16 +449,140 @@ export class SymbolMapES6Map extends BasicSymbolMap {
     }
 
     static *entries(outerCollection) {
-        for(const [symbol0, innerCollection] of outerCollection.entries())
-            for(const [symbol1, element] of innerCollection.entries())
-                yield [SymbolInternals.concatIntoSymbol(symbol0, symbol1), element];
+        for(const [namespaceIdentity, innerCollection] of outerCollection.entries())
+            for(const [symbolIdentity, element] of innerCollection.entries())
+                yield [SymbolInternals.concatIntoSymbol(namespaceIdentity, symbolIdentity), element];
     }
 
-    static *symbols(outerCollection) {
-        for(const [symbol0, innerCollection] of outerCollection.entries())
-            for(const [symbol1, element] of innerCollection.entries())
-                yield SymbolInternals.concatIntoSymbol(symbol0, symbol1);
+    static *keys(outerCollection) {
+        for(const [namespaceIdentity, innerCollection] of outerCollection.entries())
+            for(const [symbolIdentity, element] of innerCollection.entries())
+                yield SymbolInternals.concatIntoSymbol(namespaceIdentity, symbolIdentity);
     }
 };
 
-export const SymbolMap = SymbolMapJSDict;
+export const SymbolMap = JSDictSymbolMap;
+
+
+
+/**
+ * TripleMap using JS dicts
+ */
+export class JSDictTripleMap extends BasicSymbolMap {
+    static factory() {
+        return {};
+    }
+
+    static count(collection) {
+        return Object.keys(collection).length;
+    }
+
+    static set(collection, triple, element) {
+        const key = SymbolInternals.tripleToString(triple),
+              result = (collection[key] === undefined);
+        collection[key] = element;
+        return result;
+    }
+
+    static remove(collection, triple) {
+        const key = SymbolInternals.tripleToString(triple);
+        if(collection[key] === undefined)
+            return false;
+        delete collection[key];
+        return true;
+    }
+
+    static get(collection, triple) {
+        return collection[SymbolInternals.tripleToString(triple)];
+    }
+
+    static getOrInsert(collection, triple, defaultElement) {
+        const key = SymbolInternals.tripleToString(triple);
+        const element = collection[key];
+        return (element !== undefined) ? element : (collection[key] = defaultElement);
+    }
+
+    static *entries(collection) {
+        for(const [key, element] of Object.entries(collection))
+            yield [SymbolInternals.tripleFromString(key), element];
+    }
+
+    static *keys(collection) {
+        for(const key of Object.keys(collection))
+            yield SymbolInternals.tripleFromString(key);
+    }
+};
+
+/**
+ * TripleMap using SymbolMap
+ */
+export class SymbolMapTripleMap extends BasicSymbolMap {
+    static factory() {
+        const collection = SymbolMap.factory();
+        Object.defineProperty(collection, 'count', {'value': 0, 'writable': true, 'enumerable': false});
+        return collection;
+    }
+
+    static count(collection) {
+        return collection.count;
+    }
+
+    static set(collection, triple, element) {
+        const betaCollection = SymbolMap.getOrInsert(collection, triple[0], SymbolMap.create()),
+              gammaCollection = SymbolMap.getOrInsert(betaCollection, triple[1], SymbolMap.create());
+        if(SymbolMap.set(gammaCollection, triple[2], element)) {
+            ++collection.count;
+            return true;
+        }
+        return false;
+    }
+
+    static remove(collection, triple) {
+        const betaCollection = SymbolMap.get(collection, triple[0]);
+        if(!betaCollection)
+            return false;
+        const gammaCollection = SymbolMap.get(betaCollection, triple[1]);
+        if(!gammaCollection || !SymbolMap.remove(gammaCollection, triple[2]))
+            return false;
+        if(SymbolMap.isEmpty(gammaCollection)) {
+            SymbolMap.remove(betaCollection, triple[1]);
+            if(SymbolMap.isEmpty(betaCollection))
+                SymbolMap.remove(collection, triple[0]);
+        }
+        --collection.count;
+        return true;
+    }
+
+    static get(collection, triple) {
+        for(let i = 0; i < 3 && collection; ++i)
+            collection = SymbolMap.get(collection, triple[i]);
+        return collection;
+    }
+
+    static getOrInsert(collection, triple, defaultElement) {
+        const betaCollection = SymbolMap.getOrInsert(collection, triple[0], SymbolMap.create()),
+              gammaCollection = SymbolMap.getOrInsert(betaCollection, triple[1], SymbolMap.create());
+        const element = SymbolMap.get(gammaCollection, triple[2]);
+        if(element)
+            return element;
+        ++collection.count;
+        SymbolMap.set(collection, triple[2], defaultElement);
+        return defaultElement;
+    }
+
+    static *entries(collection) {
+        for(const [alpha, betaCollection] of SymbolMap.entries(collection))
+            for(const [beta, gammaCollection] of SymbolMap.entries(betaCollection))
+                for(const [gamma, element] of SymbolMap.entries(gammaCollection))
+                    yield [[alpha, beta, gamma], element];
+    }
+
+    static *keys(collection) {
+        for(const [alpha, betaCollection] of SymbolMap.entries(collection))
+            for(const [beta, gammaCollection] of SymbolMap.entries(betaCollection))
+                for(const gamma of SymbolMap.keys(gammaCollection))
+                    yield [alpha, beta, gamma];
+    }
+};
+
+export const TripleMap = JSDictTripleMap;

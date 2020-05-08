@@ -1,6 +1,6 @@
 import {Utils, SymbolInternals, IdentityPool, SymbolMap} from '../SymatemJS.mjs';
 import BasicBackend from './BasicBackend.mjs';
-import {SymbolMapES6Map} from './Symbol.mjs';
+import {ES6MapSymbolMap} from './Symbol.mjs';
 
 const indexByName = {
     'EAV': 0, 'AVE': 1, 'VEA': 2,
@@ -28,7 +28,7 @@ function reorderTriple(order, index, triple) {
 }
 
 function* searchMMM(index, triple) {
-    const handle = SymbolMapES6Map.get(this.symbols, triple[0]);
+    const handle = ES6MapSymbolMap.get(this.symbols, triple[0]);
     if(!handle)
         return 0;
     const betaCollection = handle.subIndices[index],
@@ -40,7 +40,7 @@ function* searchMMM(index, triple) {
 }
 
 function* searchMMI(index, triple) {
-    const handle = SymbolMapES6Map.get(this.symbols, triple[0]);
+    const handle = ES6MapSymbolMap.get(this.symbols, triple[0]);
     if(!handle)
         return 0;
     const betaCollection = handle.subIndices[index],
@@ -52,7 +52,7 @@ function* searchMMI(index, triple) {
 }
 
 function* searchMII(index, triple) {
-    const handle = SymbolMapES6Map.get(this.symbols, triple[0]);
+    const handle = ES6MapSymbolMap.get(this.symbols, triple[0]);
     if(!handle)
         return 0;
     const betaCollection = handle.subIndices[index];
@@ -63,7 +63,7 @@ function* searchMII(index, triple) {
 }
 
 function* searchIII(index, triple) {
-    for(const [symbol, handle] of SymbolMapES6Map.entries(this.symbols)) {
+    for(const [symbol, handle] of ES6MapSymbolMap.entries(this.symbols)) {
         const betaCollection = handle.subIndices[index];
         if(SymbolMap.isEmpty(betaCollection))
             continue;
@@ -74,7 +74,7 @@ function* searchIII(index, triple) {
 }
 
 function* searchMMV(index, triple) {
-    const handle = SymbolMapES6Map.get(this.symbols, triple[0]);
+    const handle = ES6MapSymbolMap.get(this.symbols, triple[0]);
     if(!handle)
         return 0;
     const betaCollection = handle.subIndices[index],
@@ -82,7 +82,7 @@ function* searchMMV(index, triple) {
     if(!gammaCollection)
         return 0;
     let count = 0;
-    for(triple[2] of SymbolMap.symbols(gammaCollection)) {
+    for(triple[2] of SymbolMap.keys(gammaCollection)) {
         yield reorderTriple(tripleNormalized, index, triple);
         ++count;
     }
@@ -90,14 +90,14 @@ function* searchMMV(index, triple) {
 }
 
 function* searchMVV(index, triple) {
-    const handle = SymbolMapES6Map.get(this.symbols, triple[0]);
+    const handle = ES6MapSymbolMap.get(this.symbols, triple[0]);
     if(!handle)
         return 0;
     const betaCollection = handle.subIndices[index];
     let count = 0;
     for(const [beta, gammaCollection] of SymbolMap.entries(betaCollection)) {
         triple[1] = beta;
-        for(triple[2] of SymbolMap.symbols(gammaCollection)) {
+        for(triple[2] of SymbolMap.keys(gammaCollection)) {
             yield reorderTriple(tripleNormalized, index, triple);
             ++count;
         }
@@ -106,16 +106,16 @@ function* searchMVV(index, triple) {
 }
 
 /*function* searchMIV(index, triple) {
-    const handle = SymbolMapES6Map.get(this.symbols, triple[0]);
+    const handle = ES6MapSymbolMap.get(this.symbols, triple[0]);
     if(!handle)
         return 0;
     const betaCollection = handle.subIndices[index],
           results = SymbolMap.create();
     for(const [beta, gammaCollection] of SymbolMap.entries(betaCollection))
-        for(const gamma of SymbolMap.symbols(gammaCollection))
+        for(const gamma of SymbolMap.keys(gammaCollection))
             SymbolMap.set(results, gamma, true);
     let count = 0;
-    for(triple[2] of SymbolMap.symbols(results)) {
+    for(triple[2] of SymbolMap.keys(results)) {
         yield reorderTriple(tripleNormalized, index, triple);
         ++count;
     }
@@ -123,7 +123,7 @@ function* searchMVV(index, triple) {
 }*/
 
 function* searchMVI(index, triple) {
-    const handle = SymbolMapES6Map.get(this.symbols, triple[0]);
+    const handle = ES6MapSymbolMap.get(this.symbols, triple[0]);
     if(!handle)
         return 0;
     const betaCollection = handle.subIndices[index];
@@ -138,7 +138,7 @@ function* searchMVI(index, triple) {
 
 function* searchVII(index, triple) {
     let count = 0;
-    for(const [symbol, handle] of SymbolMapES6Map.entries(this.symbols)) {
+    for(const [symbol, handle] of ES6MapSymbolMap.entries(this.symbols)) {
         const betaCollection = handle.subIndices[index];
         if(SymbolMap.isEmpty(betaCollection))
             continue;
@@ -151,7 +151,7 @@ function* searchVII(index, triple) {
 
 function* searchVVI(index, triple) {
     let count = 0;
-    for(const [symbol, handle] of SymbolMapES6Map.entries(this.symbols)) {
+    for(const [symbol, handle] of ES6MapSymbolMap.entries(this.symbols)) {
         const betaCollection = handle.subIndices[index];
         triple[0] = symbol;
         for(const [beta, gammaCollection] of SymbolMap.entries(betaCollection)) {
@@ -165,12 +165,12 @@ function* searchVVI(index, triple) {
 
 function* searchVVV(index, triple) {
     let count = 0;
-    for(const [symbol, handle] of SymbolMapES6Map.entries(this.symbols)) {
+    for(const [symbol, handle] of ES6MapSymbolMap.entries(this.symbols)) {
         const betaCollection = handle.subIndices[index];
         triple[0] = symbol;
         for(const [beta, gammaCollection] of SymbolMap.entries(betaCollection)) {
             triple[1] = beta;
-            for(triple[2] of SymbolMap.symbols(gammaCollection)) {
+            for(triple[2] of SymbolMap.keys(gammaCollection)) {
                 yield reorderTriple(tripleNormalized, index, triple);
                 ++count;
             }
@@ -225,12 +225,13 @@ const searchLookup = [
 export default class JavaScriptBackend extends BasicBackend {
     constructor() {
         super();
-        this.symbols = SymbolMapES6Map.create();
+        this.symbols = ES6MapSymbolMap.create();
         this.identityPools = new Map();
+        this.initPredefinedSymbols();
     }
 
     manifestSymbol(symbol) {
-        let handle = SymbolMapES6Map.get(this.symbols, symbol);
+        let handle = ES6MapSymbolMap.get(this.symbols, symbol);
         if(handle)
             return false;
         const namespaceIdentity = SymbolInternals.namespaceOfSymbol(symbol),
@@ -246,7 +247,7 @@ export default class JavaScriptBackend extends BasicBackend {
         };
         for(let i = 0; i < 6; ++i)
             handle.subIndices.push(SymbolMap.create());
-        SymbolMapES6Map.set(this.symbols, symbol, handle);
+        ES6MapSymbolMap.set(this.symbols, symbol, handle);
         const identityPools = this.identityPools.get(namespaceIdentity);
         console.assert(IdentityPool.remove(identityPools, handleIdentity));
         return true;
@@ -262,13 +263,13 @@ export default class JavaScriptBackend extends BasicBackend {
     }
 
     releaseSymbol(symbol) {
-        const handle = SymbolMapES6Map.get(this.symbols, symbol);
+        const handle = ES6MapSymbolMap.get(this.symbols, symbol);
         if(!handle)
             return false;
         console.assert(handle.dataLength == 0);
         for(let i = 0; i < 6; ++i)
             console.assert(SymbolMap.isEmpty(handle.subIndices[i]));
-        SymbolMapES6Map.remove(this.symbols, symbol);
+        ES6MapSymbolMap.remove(this.symbols, symbol);
         const handleIdentity = SymbolInternals.identityOfSymbol(symbol),
               namespaceIdentity = SymbolInternals.namespaceOfSymbol(symbol);
         console.assert(IdentityPool.insert(this.identityPools.get(namespaceIdentity), handleIdentity));
@@ -278,12 +279,12 @@ export default class JavaScriptBackend extends BasicBackend {
     }
 
     getLength(symbol) {
-        const handle = SymbolMapES6Map.get(this.symbols, symbol);
+        const handle = ES6MapSymbolMap.get(this.symbols, symbol);
         return (handle) ? handle.dataLength : 0;
     }
 
     creaseLength(symbol, offset, length) {
-        const handle = SymbolMapES6Map.get(this.symbols, symbol);
+        const handle = ES6MapSymbolMap.get(this.symbols, symbol);
         if(!handle || offset+Math.max(0, -length) > handle.dataLength)
             return false;
         const newDataBytes = new Uint8Array(Math.ceil((handle.dataLength+length)/32)*4);
@@ -306,7 +307,7 @@ export default class JavaScriptBackend extends BasicBackend {
     }
 
     readData(symbol, offset, length) {
-        const handle = SymbolMapES6Map.get(this.symbols, symbol);
+        const handle = ES6MapSymbolMap.get(this.symbols, symbol);
         if(!handle || length < 0 || offset+length > handle.dataLength)
             return;
         console.assert(handle.dataBytes.length%4 == 0);
@@ -318,7 +319,7 @@ export default class JavaScriptBackend extends BasicBackend {
     }
 
     writeData(symbol, offset, length, dataBytes) {
-        const handle = SymbolMapES6Map.get(this.symbols, symbol);
+        const handle = ES6MapSymbolMap.get(this.symbols, symbol);
         if(!handle || length < 0 || offset+length > handle.dataLength || !dataBytes)
             return false;
         if(offset%8 == 0 && length%8 == 0)
@@ -336,8 +337,8 @@ export default class JavaScriptBackend extends BasicBackend {
     }
 
     replaceData(dstSymbol, dstOffset, srcSymbol, srcOffset, length) {
-        const dstHandle = SymbolMapES6Map.get(this.symbols, dstSymbol),
-              srcHandle = SymbolMapES6Map.get(this.symbols, srcSymbol);
+        const dstHandle = ES6MapSymbolMap.get(this.symbols, dstSymbol),
+              srcHandle = ES6MapSymbolMap.get(this.symbols, srcSymbol);
         if(!dstHandle || !srcHandle || dstOffset+length > dstHandle.dataLength || srcOffset+length > srcHandle.dataLength)
             return false;
         console.assert(dstHandle.dataBytes.length%4 == 0 && srcHandle.dataBytes.length%4 == 0);
@@ -349,7 +350,7 @@ export default class JavaScriptBackend extends BasicBackend {
     }
 
     setTriple(triple, linked) {
-        const handles = triple.map(symbol => SymbolMapES6Map.get(this.symbols, symbol));
+        const handles = triple.map(symbol => ES6MapSymbolMap.get(this.symbols, symbol));
         if(!handles[0] || !handles[1] || !handles[2])
             return false;
         let result = false;
@@ -390,11 +391,11 @@ export default class JavaScriptBackend extends BasicBackend {
                           invertedBetaCollection = handle.subIndices[remapSubindexInverse[i]],
                           betaIndex = remapSubindexKey[i];
                     for(const [beta, gammaCollection] of SymbolMap.entries(betaCollection)) {
-                        if(!SymbolMap.get(SymbolMapES6Map.get(this.symbols, beta).subIndices[betaIndex], symbol))
+                        if(!SymbolMap.get(ES6MapSymbolMap.get(this.symbols, beta).subIndices[betaIndex], symbol))
                             return false;
                         if(SymbolMap.isEmpty(gammaCollection))
                             return false;
-                        for(const gamma of SymbolMap.symbols(gammaCollection)) {
+                        for(const gamma of SymbolMap.keys(gammaCollection)) {
                             const invertedGammaCollection = SymbolMap.get(invertedBetaCollection, gamma);
                             if(!invertedGammaCollection || !SymbolMap.get(invertedGammaCollection, beta))
                                 return false;
