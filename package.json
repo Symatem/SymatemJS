@@ -23,7 +23,7 @@
     },
     "dependencies": {},
     "devDependencies": {
-        "documentation": "^12.3.0"
+        "documentation": "^13.0.2"
     },
     "engines": {
         "node": ">=14.0.0"
