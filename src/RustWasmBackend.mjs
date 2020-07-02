@@ -1,7 +1,7 @@
 import {SymbolInternals} from '../SymatemJS.mjs';
 import BasicBackend from './BasicBackend.mjs';
 
-const filepath = import.meta.url.replace(/src\/\w*\.mjs$/, 'dist/backend.wasm'),
+const filepath = new URL('../dist/backend.wasm',import.meta.url),
       file = ((typeof process === 'undefined')
 ? fetch(filepath).then(response => response.arrayBuffer())
 : new Promise((resolve, reject) => {
