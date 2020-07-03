@@ -2,3 +2,5 @@ tests
 docs
 .gitignore
 .travis.yml
+*.wasm
+
