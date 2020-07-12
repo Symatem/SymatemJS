@@ -1,7 +1,7 @@
 import {SymbolInternals} from '../SymatemJS.mjs';
 import BasicBackend from './BasicBackend.mjs';
 
-const filepath = new URL('backend.wasm',import.meta.url),
+const filepath = new URL('backend.wasm', import.meta.url),
       file = ((typeof process === 'undefined')
 ? fetch(filepath).then(response => response.arrayBuffer())
 : new Promise((resolve, reject) => {
@@ -12,7 +12,9 @@ const filepath = new URL('backend.wasm',import.meta.url),
     }).catch(err => reject(err));
 }));
 
-const imports = {};
+
+
+const cachedTextDecoder = new TextDecoder('utf-8');
 
 /** Integrates a backend written in Rust using WebAssembly */
 export default class RustWasmBackend extends BasicBackend {
@@ -21,6 +23,7 @@ export default class RustWasmBackend extends BasicBackend {
       */
     constructor() {
         super();
+        const imports = {};
         return file
             .then(arrayBuffer => WebAssembly.instantiate(arrayBuffer, imports))
             .then(result => {
@@ -41,6 +44,34 @@ export default class RustWasmBackend extends BasicBackend {
         if(!this.cachedUint32Memory || this.cachedUint32Memory.buffer !== this.wasm.memory.buffer)
             this.cachedUint32Memory = new Uint32Array(this.wasm.memory.buffer);
         return this.cachedUint32Memory;
+    }
+
+    getStringFromWasm(ptr, len) {
+        return cachedTextDecoder.decode(this.getUint8Memory().subarray(ptr, ptr+len));
+    }
+
+    getMemoryUsage() {
+        return this.getUint8Memory().length;
+    }
+
+    *testIdentityPoolRanges() {
+        const slicePtr = 8;
+        this.wasm.testIdentityPoolRanges(slicePtr);
+        this.getUint32Memory();
+        const sliceBegin = this.cachedUint32Memory[slicePtr/4], sliceLength = this.cachedUint32Memory[slicePtr/4+1],
+              slice = this.cachedUint32Memory.subarray(sliceBegin/4, sliceBegin/4+sliceLength);
+        for(let i = 0; i < sliceLength; i += 2)
+            yield {'begin': slice[i], 'length': slice[i+1]};
+        this.wasm.__wbindgen_free(sliceBegin, sliceLength*4);
+        return sliceLength/2;
+    }
+
+    testIdentityPoolRemove(identity) {
+        return this.wasm.testIdentityPoolRemove(identity) !== 0;
+    }
+
+    testIdentityPoolInsert(identity) {
+        return this.wasm.testIdentityPoolInsert(identity) !== 0;
     }
 
     manifestSymbol(symbol) {

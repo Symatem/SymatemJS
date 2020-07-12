@@ -1,4 +1,4 @@
-import {Utils, SymbolInternals, IdentityPool, SymbolMap} from '../SymatemJS.mjs';
+import {Utils, SymbolInternals, SymbolMap} from '../SymatemJS.mjs';
 import BasicBackend from './BasicBackend.mjs';
 import {ES6MapSymbolMap} from './Symbol.mjs';
 
@@ -221,13 +221,81 @@ const searchLookup = [
     searchMII, searchVII, searchIII
 ];
 
+class IdentityPool {
+    static create() {
+        return [{'begin': 0}];
+    }
+
+    static insert(collection, identity) {
+        const rangeIndex = Utils.bisect(collection.length, (index) => (collection[index].begin <= identity)),
+              prevRange = collection[rangeIndex-1],
+              nextRange = collection[rangeIndex];
+        if(prevRange && (rangeIndex == collection.length || identity < prevRange.begin+prevRange.length))
+            return false;
+        const mergePrevRange = (prevRange && prevRange.begin+prevRange.length == identity),
+              mergeNextRange = (nextRange && identity+1 == nextRange.begin);
+        if(mergePrevRange && mergeNextRange) {
+            nextRange.begin = prevRange.begin;
+            if(rangeIndex+1 < collection.length)
+                nextRange.length += 1+prevRange.length;
+            collection.splice(rangeIndex-1, 1);
+        } else if(mergePrevRange) {
+            ++prevRange.length;
+        } else if(mergeNextRange) {
+            --nextRange.begin;
+            if(nextRange.length)
+                ++nextRange.length;
+        } else
+            collection.splice(rangeIndex, 0, {'begin': identity, 'length': 1});
+        return true;
+    }
+
+    static remove(collection, identity) {
+        const rangeIndex = Utils.bisect(collection.length, (index) => (collection[index].begin <= identity)),
+              range = collection[rangeIndex-1];
+        if(!range || identity >= range.begin+range.length)
+            return false;
+        if(identity == range.begin) {
+            ++range.begin;
+            if(rangeIndex < collection.length && --range.length == 0)
+                collection.splice(rangeIndex-1, 1);
+        } else if(rangeIndex < collection.length && identity == range.begin+range.length-1) {
+            --range.length;
+        } else {
+            const count = identity-range.begin;
+            collection.splice(rangeIndex-1, 0, {'begin': range.begin, 'length': count});
+            range.begin = identity+1;
+            if(range.length)
+                range.length -= 1+count;
+        }
+        return true;
+    }
+
+    static get(collection) {
+        return collection[0].begin;
+    }
+};
+
 /** Implements a backend written in JavaScript */
 export default class JavaScriptBackend extends BasicBackend {
     constructor() {
         super();
         this.symbols = ES6MapSymbolMap.create();
+        this.testIdentityPool = IdentityPool.create();
         this.identityPools = new Map();
         this.initPredefinedSymbols();
+    }
+
+    testIdentityPoolRanges() {
+        return this.testIdentityPool;
+    }
+
+    testIdentityPoolRemove(identity) {
+        return IdentityPool.remove(this.testIdentityPool, identity);
+    }
+
+    testIdentityPoolInsert(identity) {
+        return IdentityPool.insert(this.testIdentityPool, identity);
     }
 
     manifestSymbol(symbol) {

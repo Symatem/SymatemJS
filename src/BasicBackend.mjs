@@ -112,7 +112,7 @@ export default class BasicBackend {
                     default:
                         const dataValue = BigInt('0x'+Utils.encodeAsHex(dataBytes).split('').reverse().join(''));
                         return (SymbolInternals.areSymbolsEqual(encoding, this.symbolByName.TwosComplement) && (dataBytes[Math.floor((feedback.length-1)/8)]>>((feedback.length+7)%8))&1 == 1)
-                            ? dataValue-(1n<<BigInt(feedback.length))
+                            ? dataValue-(BigInt(1)<<BigInt(feedback.length))
                             : dataValue;
                 }
             case SymbolInternals.symbolToString(this.symbolByName.UTF8):
@@ -167,9 +167,9 @@ export default class BasicBackend {
         function parseBigInt(value) {
             if(value < 0) {
                 let bits = (-value).toString(2).length;
-                if(-value > 1n<<BigInt(bits-1))
+                if(-value > BigInt(1)<<BigInt(bits-1))
                     ++bits;
-                value = (1n<<BigInt(Math.ceil(bits/8)*8))+value;
+                value = (BigInt(1)<<BigInt(Math.ceil(bits/8)*8))+value;
             }
             return Utils.decodeAsHex(value.toString(16).split('').reverse().join(''));
         }
@@ -715,11 +715,11 @@ export default class BasicBackend {
      */
     decodeJson(json) {
         const entities = new Set();
-        for(const [namespaceIdentity, entries] of Object.entries(JSON.parse(json)))
+        for(const [namespaceIdentity, entries] of Object.entries(JSON.parse(json))) {
+            this.manifestSymbol(this.symbolInNamespace('Namespaces', namespaceIdentity));
             for(const entry of entries) {
                 const entity = SymbolInternals.concatIntoSymbol(namespaceIdentity, entry[0]);
                 entities.add(entity);
-                this.manifestSymbol(this.symbolInNamespace('Namespaces', SymbolInternals.namespaceOfSymbol(entity)));
                 this.manifestSymbol(entity);
                 if(entry[1] > 0)
                     this.setRawData(entity, Utils.decodeAsHex(entry[2]));
@@ -737,6 +737,7 @@ export default class BasicBackend {
                     }
                 }
             }
+        }
         return entities;
     }
 };

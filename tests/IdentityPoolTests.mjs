@@ -1,8 +1,5 @@
-import {IdentityPool} from '../SymatemJS.mjs';
-
 export function getTests(backend, rand) {
-    const identityPool = IdentityPool.create(),
-          identities = {},
+    const identities = {},
           maxIdentity = 10000;
 
     for(let identity = 0; identity < maxIdentity; ++identity)
@@ -12,7 +9,7 @@ export function getTests(backend, rand) {
         'removeIdentity': [100000, () => {
             const identity = rand.range(0, maxIdentity),
                   expected = identities[identity] == true,
-                  result = IdentityPool.remove(identityPool, identity);
+                  result = backend.testIdentityPoolRemove(identity);
             delete identities[identity];
             if(expected != result) {
                 console.warn(identity, expected, result);
@@ -23,7 +20,7 @@ export function getTests(backend, rand) {
         'addIdentity': [100000, () => {
             const identity = rand.range(0, maxIdentity),
                   expected = !(identities[identity] == true),
-                  result = IdentityPool.insert(identityPool, identity);
+                  result = backend.testIdentityPoolInsert(identity);
             identities[identity] = true;
             if(expected != result) {
                 console.warn(identity, expected, result);
