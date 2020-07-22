@@ -1,4 +1,4 @@
-import {SymbolInternals, SymbolMap, Diff} from '../SymatemJS.mjs';
+import {RelocationTable, SymbolInternals, SymbolMap, Diff} from '../SymatemJS.mjs';
 
 /** The repository is a DAG with the versions being vertices and the edges containing the diffs */
 export default class Repository {
@@ -7,7 +7,7 @@ export default class Repository {
      * @param {Identity} namespace
      * @param {RelocationTable} relocationTable
      */
-    constructor(backend, namespace, relocationTable) {
+    constructor(backend, namespace, relocationTable=RelocationTable.create()) {
         this.backend = backend;
         this.namespace = namespace;
         this.relocationTable = relocationTable;
@@ -18,35 +18,31 @@ export default class Repository {
     }
 
     /** Gets the list of versions in this repository
-     * @return {Symbol[]} versions
+     * @yield {Symbol} version
      */
-    getVersions() {
-        const versions = [];
+    *getVersions() {
         for(const triple of this.backend.queryTriples(this.backend.queryMasks.VMM, [this.backend.symbolByName.Void, this.backend.symbolByName.Type, this.backend.symbolByName.Version]))
-            versions.push(triple[0]);
-        return versions;
+            yield triple[0];
     }
 
     /** Gets the list of edges in this repository
-     * @return {Symbol[]} diffss
+     * @yield {Symbol} diff
      */
-    getEdges() {
-        const edges = [];
+    *getEdges() {
         for(const triple of this.backend.queryTriples(this.backend.queryMasks.VMM, [this.backend.symbolByName.Void, this.backend.symbolByName.Type, this.backend.symbolByName.Edge]))
-            edges.push(triple[0]);
-        return edges;
+            yield triple[0];
     }
 
     /** Gets a versions relatives and their diffs
      * @param {Symbol} version The version to query
      * @param {Symbol} kind Parent or Child
-     * @return {SymbolMap} Relatives as keys and diffs as values
+     * @return {SymbolMap} Diffs as keys and versions as values
      */
     getRelatives(version, kind) {
         const result = SymbolMap.create();
         for(const triple of this.backend.queryTriples(this.backend.queryMasks.MMV, [version, kind, this.backend.symbolByName.Void])) {
             const relative = this.backend.getPairOptionally(triple[2], kind);
-            SymbolMap.set(result, relative, triple[2]);
+            SymbolMap.set(result, triple[2], relative);
         }
         return result;
     }
@@ -64,9 +60,9 @@ export default class Repository {
      * @param {Symbol} version The version to remove
      */
     removeVersion(version) {
-        for(const [relative, edge] of SymbolMap.entries(this.getRelatives(version, this.backend.symbolByName.Parent)))
+        for(const edge of SymbolMap.keys(this.getRelatives(version, this.backend.symbolByName.Parent)))
             this.removeEdge(edge);
-        for(const [relative, edge] of SymbolMap.entries(this.getRelatives(version, this.backend.symbolByName.Child)))
+        for(const edge of SymbolMap.keys(this.getRelatives(version, this.backend.symbolByName.Child)))
             this.removeEdge(edge);
         this.dematerializeVersion(version);
         this.backend.unlinkSymbol(version);
@@ -96,7 +92,7 @@ export default class Repository {
      * @return {Symbol} The edge or Void
      */
     getEdge(parentVersion, childVersion) {
-        for(const [relative, edge] of SymbolMap.entries(this.getRelatives(parentVersion, this.backend.symbolByName.Child)))
+        for(const [edge, relative] of SymbolMap.entries(this.getRelatives(parentVersion, this.backend.symbolByName.Child)))
             if(relative == childVersion)
                 return edge;
         return this.backend.symbolByName.Void;
@@ -186,12 +182,12 @@ export default class Repository {
                 }
                 break;
             }
-            for(const [relative, edge] of SymbolMap.entries(this.getRelatives(version, this.backend.symbolByName.Parent)))
+            for(const [edge, relative] of SymbolMap.entries(this.getRelatives(version, this.backend.symbolByName.Parent)))
                 if(!SymbolMap.get(discoveredBy, relative)) {
                     SymbolMap.set(discoveredBy, relative, {'version': version, 'edge': edge, 'direction': false});
                     queue.push(relative);
                 }
-            for(const [relative, edge] of SymbolMap.entries(this.getRelatives(version, this.backend.symbolByName.Child)))
+            for(const [edge, relative] of SymbolMap.entries(this.getRelatives(version, this.backend.symbolByName.Child)))
                 if(!SymbolMap.get(discoveredBy, relative)) {
                     SymbolMap.set(discoveredBy, relative, {'version': version, 'edge': edge, 'direction': true});
                     queue.push(relative);
