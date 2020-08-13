@@ -677,6 +677,14 @@ export default class Diff extends BasicBackend {
     }
 
     /**
+     * Checks if this diff makes no difference.
+     * @return {boolean}
+     */
+    isEmpty() {
+        return [...SymbolMap.keys(this.operationsBySymbol)].length == 0;
+    }
+
+    /**
      * Scan through all internal structures and check their integrity
      * @return {boolean} True on success
      */
@@ -1182,7 +1190,7 @@ export default class Diff extends BasicBackend {
     }
 
     /**
-     * Writes the diff into the repository
+     * Writes the commited diff into the repository
      */
     link() {
         console.assert(!this.symbol);
