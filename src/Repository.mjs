@@ -7,13 +7,14 @@ export default class Repository {
      * @param {Identity} namespace
      * @param {RelocationTable} relocationTable
      */
-    constructor(backend, namespace, relocationTable=RelocationTable.create()) {
+    constructor(backend, namespaceIdentity, relocationTable=RelocationTable.create()) {
         this.backend = backend;
-        this.namespace = namespace;
+        this.namespaceIdentity = namespaceIdentity;
         this.relocationTable = relocationTable;
-        for(const [recordingNamespaceIdentity, modalNamespaceIdentity] of Object.entries(this.relocationTable)) {
-            this.backend.manifestSymbol(this.backend.symbolInNamespace('Namespaces', recordingNamespaceIdentity))
-            this.backend.manifestSymbol(this.backend.symbolInNamespace('Namespaces', modalNamespaceIdentity))
+        this.backend.manifestSymbol(SymbolInternals.concatIntoSymbol(this.backend.metaNamespaceIdentity, this.namespaceIdentity));
+        for(const [recordingNamespaceIdentity, modalNamespaceIdentity] of RelocationTable.entries(this.relocationTable)) {
+            this.backend.manifestSymbol(SymbolInternals.concatIntoSymbol(this.backend.metaNamespaceIdentity, recordingNamespaceIdentity));
+            this.backend.manifestSymbol(SymbolInternals.concatIntoSymbol(this.backend.metaNamespaceIdentity, modalNamespaceIdentity));
         }
     }
 
@@ -51,7 +52,7 @@ export default class Repository {
      * @return {Symbol} version
      */
     createVersion() {
-        const version = this.backend.createSymbol(this.namespace);
+        const version = this.backend.createSymbol(this.namespaceIdentity);
         this.backend.setTriple([version, this.backend.symbolByName.Type, this.backend.symbolByName.Version], true);
         return version;
     }
@@ -75,7 +76,7 @@ export default class Repository {
      * @return {Symbol} The created edge
      */
     addEdge(parentVersion, childVersion, diff) {
-        const edge = this.backend.createSymbol(this.namespace);
+        const edge = this.backend.createSymbol(this.namespaceIdentity);
         this.backend.setTriple([edge, this.backend.symbolByName.Type, this.backend.symbolByName.Edge], true);
         this.backend.setTriple([edge, this.backend.symbolByName.Parent, parentVersion], true);
         this.backend.setTriple([edge, this.backend.symbolByName.Child, childVersion], true);
@@ -104,9 +105,9 @@ export default class Repository {
     removeEdge(edge) {
         const diffSymbol = this.backend.getPairOptionally(edge, this.backend.symbolByName.Diff);
         this.backend.unlinkSymbol(edge);
-        if(diffSymbol == this.backend.symbolByName.Void || this.backend.getTriple([this.backend.symbolByName.Void, this.backend.symbolByName.Diff, diffSymbol], this.backend.queryMask.VMM))
+        if(diffSymbol == this.backend.symbolByName.Void || this.backend.getTriple([this.backend.symbolByName.Void, this.backend.symbolByName.Diff, diffSymbol], this.backend.queryMasks.VMM))
             return;
-        const diff = new Diff(this.backend, this.relocationTable, this.namespace, diffSymbol);
+        const diff = new Diff(this.backend, this.relocationTable, this.namespaceIdentity, diffSymbol);
         diff.unlink();
     }
 
@@ -118,7 +119,7 @@ export default class Repository {
         console.assert(!this.backend.getTriple([version, this.backend.symbolByName.Materialization, this.backend.symbolByName.Void], this.backend.queryMasks.MMI));
         const path = SymbolMap.count(this.getRelatives(version, this.backend.symbolByName.Parent)) > 0 ? this.findPath(version) : undefined,
               materializationRelocation = RelocationTable.create(),
-              dstMaterialization = this.backend.createSymbol(this.namespace);
+              dstMaterialization = this.backend.createSymbol(this.namespaceIdentity);
         this.backend.setTriple([version, this.backend.symbolByName.Materialization, dstMaterialization], true);
         for(const [recordingNamespaceIdentity, modalNamespaceIdentity] of Object.entries(this.relocationTable)) {
             const materializationNamespaceSymbol = this.backend.createSymbol(SymbolInternals.identityOfSymbol(this.backend.symbolByName.Namespaces));
@@ -134,7 +135,7 @@ export default class Repository {
                 RelocationTable.set(cloneRelocation, SymbolInternals.identityOfSymbol(triple[2]), RelocationTable.get(materializationRelocation, SymbolInternals.identityOfSymbol(triple[1])));
             this.backend.cloneNamespaces(cloneRelocation);
             for(let i = 1; i < path.length; ++i) {
-                const diff = new Diff(this.backend, this.relocationTable, this.namespace, this.backend.getPairOptionally(path[i].edge, this.backend.symbolByName.Diff));
+                const diff = new Diff(this.backend, this.relocationTable, this.namespaceIdentity, this.backend.getPairOptionally(path[i].edge, this.backend.symbolByName.Diff));
                 diff.apply(path[i].direction, materializationRelocation);
                 version = path[i].version;
             }
