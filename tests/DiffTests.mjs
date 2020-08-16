@@ -1,5 +1,5 @@
 import PRNG from './PRNG.mjs';
-import {Utils, RelocationTable, SymbolInternals, SymbolMap, Diff} from '../SymatemJS.mjs';
+import {Utils, RelocationTable, SymbolInternals, SymbolMap, Diff, Repository} from '../SymatemJS.mjs';
 
 export const configuration = {
     'minSymbolCount': 10,
@@ -151,9 +151,9 @@ function testDiff(backend, diff, initialState) {
     diff.commit();
     if(!diff.validateIntegrity())
         return false;
-    const decodedDiff = new Diff(backend, configuration.repositoryNamespace, configuration.recordingRelocation, diff.encodeJson());
+    const decodedDiff = new Diff(configuration.repository, diff.encodeJson());
     decodedDiff.link();
-    const loadedDiff = new Diff(backend, configuration.repositoryNamespace, configuration.recordingRelocation, decodedDiff.symbol);
+    const loadedDiff = new Diff(configuration.repository, decodedDiff.symbol);
     if(!loadedDiff.apply(true, configuration.materializationRelocation)) {
         console.warn('Could not apply reverse');
         return false;
@@ -177,23 +177,24 @@ function testDiff(backend, diff, initialState) {
 }
 
 export function getTests(backend, rand) {
-    configuration.repositoryNamespace = SymbolInternals.identityOfSymbol(backend.createSymbol(backend.metaNamespaceIdentity));
+    const repositoryNamespace = SymbolInternals.identityOfSymbol(backend.createSymbol(backend.metaNamespaceIdentity));
     configuration.modalNamespace = SymbolInternals.identityOfSymbol(backend.createSymbol(backend.metaNamespaceIdentity));
     configuration.materializationNamespace = SymbolInternals.identityOfSymbol(backend.createSymbol(backend.metaNamespaceIdentity));
     configuration.comparisonNamespace = SymbolInternals.identityOfSymbol(backend.createSymbol(backend.metaNamespaceIdentity));
-    configuration.recordingRelocation = RelocationTable.create([
+    const recordingRelocation = RelocationTable.create([
         [configuration.materializationNamespace, configuration.modalNamespace],
         [configuration.comparisonNamespace, configuration.modalNamespace]
     ]);
+    configuration.repository = new Repository(backend, repositoryNamespace, recordingRelocation);
     configuration.materializationRelocation = RelocationTable.create([[configuration.modalNamespace, configuration.materializationNamespace]]);
     configuration.comparisonRelocation = RelocationTable.create([[configuration.materializationNamespace, configuration.comparisonNamespace]]);
     configuration.inverseComparisonRelocation = RelocationTable.inverse(configuration.comparisonRelocation);
-    const concatDiff = new Diff(backend, configuration.repositoryNamespace, configuration.recordingRelocation);
+    const concatDiff = new Diff(configuration.repository);
     let concatInitialState;
     return {
         'diffRecording': [100, () => {
             const initialState = backend.encodeJson([configuration.materializationNamespace]),
-                  diff = new Diff(backend, configuration.repositoryNamespace, configuration.recordingRelocation),
+                  diff = new Diff(configuration.repository),
                   symbolPool = [...backend.querySymbols(configuration.materializationNamespace)];
             if(!concatInitialState)
                 concatInitialState = initialState;
@@ -221,7 +222,7 @@ export function getTests(backend, rand) {
             const symbolPool = [...backend.querySymbols(configuration.materializationNamespace)];
             for(const description of generateOperations(backend, rand, symbolPool));
             const resultOfRecording = backend.encodeJson([configuration.materializationNamespace]),
-                  diff = new Diff(backend, configuration.repositoryNamespace, configuration.recordingRelocation);
+                  diff = new Diff(configuration.repository);
             diff.compare(configuration.inverseComparisonRelocation);
             if(!testDiff(backend, diff, initialState))
                 return false;
