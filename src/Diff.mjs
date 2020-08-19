@@ -28,13 +28,9 @@ export default class Diff extends BasicBackend {
             this.isRecordingFromBackend = true;
             this.nextTrackingId = 0;
             // TODO: Combine dataSource and dataRestore into one (dataStore)?
-            this.dataSource = this.repository.backend.createSymbol(this.repository.namespaceIdentity);
-            this.dataRestore = this.repository.backend.createSymbol(this.repository.namespaceIdentity);
+            this.dataSource = this.repository.createSymbol();
+            this.dataRestore = this.repository.createSymbol();
         }
-    }
-
-    get symbolByName() {
-        return this.repository.backend.symbolByName;
     }
 
     static getIntermediateOffset(creaseLengthOperations, intermediateOffset) {
@@ -194,12 +190,12 @@ export default class Diff extends BasicBackend {
                 return;
             const dstOffset = (operationsOfDataRestore && replaceOperationIndex < operationsOfDataRestore.replaceOperations.length)
                              ? operationsOfDataRestore.replaceOperations[replaceOperationIndex].dstOffset
-                             : this.repository.backend.getLength(this.dataRestore);
+                             : this.repository.repositoryDiff.getLength(this.dataRestore);
             let srcOffset = intermediateOffset-decreaseAccumulator;
             if(dataRestoreOperation)
                 srcOffset += dataRestoreOperation.dstOffset-dataRestoreOperation.srcOffset;
-            console.assert(this.repository.backend.creaseLength(this.dataRestore, dstOffset, length));
-            console.assert(this.repository.backend.writeData(this.dataRestore, dstOffset, length, this.repository.backend.readData(srcSymbolRecording, srcOffset, length)));
+            console.assert(this.repository.repositoryDiff.creaseLength(this.dataRestore, dstOffset, length));
+            console.assert(this.repository.repositoryDiff.writeData(this.dataRestore, dstOffset, length, this.repository.backend.readData(srcSymbolRecording, srcOffset, length)));
             const operation = {
                 'trackingId': this.nextTrackingId++,
                 'dstSymbol': this.dataRestore,
@@ -256,6 +252,10 @@ export default class Diff extends BasicBackend {
     }
 
 
+
+    get symbolByName() {
+        return this.repository.backend.symbolByName;
+    }
 
     querySymbols(namespaceIdentity) {
         return this.repository.backend.querySymbols(namespaceIdentity);
@@ -574,9 +574,13 @@ export default class Diff extends BasicBackend {
     }
 
     writeData(dstSymbolRecording, dstOffset, length, dataBytes) {
+        if(SymbolInternals.areSymbolsEqual(dstSymbolRecording, this.dataStore) || SymbolInternals.areSymbolsEqual(dstSymbolRecording, this.dataRestore)) {
+            console.assert(this == this.repository.repositoryDiff);
+            return this.repository.backend.writeData(dstSymbolRecording, dstOffset, length, dataBytes);
+        }
         const srcOffset = this.repository.backend.getLength(this.dataSource);
         console.assert(this.repository.backend.creaseLength(this.dataSource, srcOffset, length));
-        console.assert(this.repository.backend.writeData(this.dataSource, srcOffset, length, dataBytes));
+        console.assert(this.repository.repositoryDiff.writeData(this.dataSource, srcOffset, length, dataBytes));
         return this.replaceData(dstSymbolRecording, dstOffset, this.dataSource, srcOffset, length);
     }
 
@@ -593,9 +597,9 @@ export default class Diff extends BasicBackend {
                 this.setTriple(triple, linked);
             }
         }, context = {
-            'dataSourceOffset': this.repository.backend.getLength(this.dataSource),
+            'dataSourceOffset': this.repository.repositoryDiff.getLength(this.dataSource),
             'dataSourceOperations': getOrCreateEntry(SymbolMap.getOrInsert(this.operationsBySymbol, this.dataSource, {}), 'copyOperations', []),
-            'dataRestoreOffset': this.repository.backend.getLength(this.dataRestore),
+            'dataRestoreOffset': this.repository.repositoryDiff.getLength(this.dataRestore),
             'dataRestoreOperations': getOrCreateEntry(SymbolMap.getOrInsert(this.operationsBySymbol, this.dataRestore, {}), 'replaceOperations', [])
         }, compareData = (context, modalSymbol, dstSymbol, srcSymbol) => {
             const srcLength = this.repository.backend.getLength(srcSymbol),
@@ -635,8 +639,8 @@ export default class Diff extends BasicBackend {
                         operation.dstOffset += Math.max(0, -creaseLength);
                     getOrCreateEntry(operationsOfSymbol, operationsName, []).push(operation);
                     context[dataStoreName+'Operations'].push(operation);
-                    this.repository.backend.creaseLength(this[dataStoreName], context[dataStoreName+'Offset'], length);
-                    this.repository.backend.writeData(this[dataStoreName], context[dataStoreName+'Offset'], length, this.repository.backend.readData(readSymbol, readOffset, length));
+                    this.repository.repositoryDiff.creaseLength(this[dataStoreName], context[dataStoreName+'Offset'], length);
+                    this.repository.repositoryDiff.writeData(this[dataStoreName], context[dataStoreName+'Offset'], length, this.repository.backend.readData(readSymbol, readOffset, length));
                     context[dataStoreName+'Offset'] += length;
                 };
                 addCopyReplaceOperation('dataRestore', 'copyOperations', srcSymbol, entry.offsetA, entry.remove);
@@ -766,13 +770,13 @@ export default class Diff extends BasicBackend {
                   gapLength = operation.srcOffset-lastOffset,
                   nextOffset = operation.srcOffset+operation.length;
             if(gapLength > 0) {
-                console.assert(this.repository.backend.creaseLength(this.dataSource, lastOffset-decreaseAccumulator, -gapLength));
+                console.assert(this.repository.repositoryDiff.creaseLength(this.dataSource, lastOffset-decreaseAccumulator, -gapLength));
                 decreaseAccumulator += gapLength;
             }
             operation.srcOffset -= decreaseAccumulator;
             lastOffset = Math.max(lastOffset, nextOffset);
         }
-        console.assert(this.repository.backend.setLength(this.dataSource, lastOffset-decreaseAccumulator));
+        console.assert(this.repository.repositoryDiff.setLength(this.dataSource, lastOffset-decreaseAccumulator));
         // TODO: Compress redundancy in data source and restore by finding equal slices and map them to the same place
     }
 
@@ -1073,12 +1077,12 @@ export default class Diff extends BasicBackend {
         };
         const importStructure = JSON.parse(json);
         for(const type of ['dataSource', 'dataRestore']) {
-            this[type] = this.repository.backend.createSymbol(this.repository.namespaceIdentity);
+            this[type] = this.repository.createSymbol();
             const importStructureEntry = importStructure[type],
                   operationsOfSymbol = {[(type == 'dataSource') ? 'copyOperations' : 'replaceOperations']: []};
             SymbolMap.set(this.operationsBySymbol, this[type], operationsOfSymbol);
             if(importStructureEntry.data)
-                console.assert(this.repository.backend.setRawData(this[type], Utils.decodeAsHex(importStructureEntry.data)));
+                console.assert(this.repository.repositoryDiff.setRawData(this[type], Utils.decodeAsHex(importStructureEntry.data)));
             operationsOfSymbol.replaceOperations = importCopyReplaceOperations(undefined, importStructureEntry.replaceOperations, this[type]);
             continue;
         }
@@ -1134,48 +1138,48 @@ export default class Diff extends BasicBackend {
      */
     load(symbol) {
         this.symbol = symbol;
-        this.dataSource = this.repository.backend.getPairOptionally(this.symbol, this.repository.backend.symbolByName.DataSource);
-        if(SymbolInternals.areSymbolsEqual(this.dataSource, this.repository.backend.symbolByName.Void))
+        this.dataSource = this.repository.repositoryDiff.getPairOptionally(this.symbol, this.repository.repositoryDiff.symbolByName.DataSource);
+        if(SymbolInternals.areSymbolsEqual(this.dataSource, this.repository.repositoryDiff.symbolByName.Void))
             delete this.dataSource;
-        this.dataRestore = this.repository.backend.getPairOptionally(this.symbol, this.repository.backend.symbolByName.DataRestore);
-        if(SymbolInternals.areSymbolsEqual(this.dataRestore, this.repository.backend.symbolByName.Void))
+        this.dataRestore = this.repository.repositoryDiff.getPairOptionally(this.symbol, this.repository.repositoryDiff.symbolByName.DataRestore);
+        if(SymbolInternals.areSymbolsEqual(this.dataRestore, this.repository.repositoryDiff.symbolByName.Void))
             delete this.dataRestore;
         for(const [manifestOrRelease, attributeName] of [['manifest', 'ManifestSymbol'], ['release', 'ReleaseSymbol']])
-            for(const triple of this.repository.backend.queryTriples(this.repository.backend.queryMasks.MMV, [this.symbol, this.repository.backend.symbolByName[attributeName], this.repository.backend.symbolByName.Void]))
+            for(const triple of this.repository.repositoryDiff.queryTriples(this.repository.repositoryDiff.queryMasks.MMV, [this.symbol, this.repository.repositoryDiff.symbolByName[attributeName], this.repository.repositoryDiff.symbolByName.Void]))
                 SymbolMap.getOrInsert(this.operationsBySymbol, triple[2], {}).manifestOrRelease = manifestOrRelease;
         for(const [link, attributeName] of [[true, 'LinkTriple'], [false, 'UnlinkTriple']])
-            for(const triple of this.repository.backend.queryTriples(this.repository.backend.queryMasks.MMV, [this.symbol, this.repository.backend.symbolByName[attributeName], this.repository.backend.symbolByName.Void])) {
-                const operationsOfSymbol = SymbolMap.getOrInsert(this.operationsBySymbol, this.repository.backend.getPairOptionally(triple[2], this.repository.backend.symbolByName.Entity), {}),
+            for(const triple of this.repository.repositoryDiff.queryTriples(this.repository.repositoryDiff.queryMasks.MMV, [this.symbol, this.repository.repositoryDiff.symbolByName[attributeName], this.repository.repositoryDiff.symbolByName.Void])) {
+                const operationsOfSymbol = SymbolMap.getOrInsert(this.operationsBySymbol, this.repository.repositoryDiff.getPairOptionally(triple[2], this.repository.repositoryDiff.symbolByName.Entity), {}),
                       tripleOperations = getOrCreateEntry(operationsOfSymbol, 'tripleOperations', SymbolMap.create()),
-                      betaCollection = SymbolMap.getOrInsert(tripleOperations, this.repository.backend.getPairOptionally(triple[2], this.repository.backend.symbolByName.Attribute), SymbolMap.create());
-                SymbolMap.set(betaCollection, this.repository.backend.getPairOptionally(triple[2], this.repository.backend.symbolByName.Value), link);
+                      betaCollection = SymbolMap.getOrInsert(tripleOperations, this.repository.repositoryDiff.getPairOptionally(triple[2], this.repository.repositoryDiff.symbolByName.Attribute), SymbolMap.create());
+                SymbolMap.set(betaCollection, this.repository.repositoryDiff.getPairOptionally(triple[2], this.repository.repositoryDiff.symbolByName.Value), link);
             }
         for(const [sign, attributeName] of [[1, 'IncreaseLength'], [-1, 'DecreaseLength']])
-            for(const triple of this.repository.backend.queryTriples(this.repository.backend.queryMasks.MMV, [this.symbol, this.repository.backend.symbolByName[attributeName], this.repository.backend.symbolByName.Void])) {
-                const dstSymbol = this.repository.backend.getPairOptionally(triple[2], this.repository.backend.symbolByName.Destination),
+            for(const triple of this.repository.repositoryDiff.queryTriples(this.repository.repositoryDiff.queryMasks.MMV, [this.symbol, this.repository.repositoryDiff.symbolByName[attributeName], this.repository.repositoryDiff.symbolByName.Void])) {
+                const dstSymbol = this.repository.repositoryDiff.getPairOptionally(triple[2], this.repository.repositoryDiff.symbolByName.Destination),
                       operationsOfSymbol = SymbolMap.getOrInsert(this.operationsBySymbol, dstSymbol, {});
                 getOrCreateEntry(operationsOfSymbol, 'creaseLengthOperations', []).push({
                     'dstSymbol': dstSymbol,
-                    'dstOffset': this.repository.backend.getData(this.repository.backend.getPairOptionally(triple[2], this.repository.backend.symbolByName.DestinationOffset)),
-                    'length': this.repository.backend.getData(this.repository.backend.getPairOptionally(triple[2], this.repository.backend.symbolByName.Length))*sign
+                    'dstOffset': this.repository.repositoryDiff.getData(this.repository.repositoryDiff.getPairOptionally(triple[2], this.repository.repositoryDiff.symbolByName.DestinationOffset)),
+                    'length': this.repository.repositoryDiff.getData(this.repository.repositoryDiff.getPairOptionally(triple[2], this.repository.repositoryDiff.symbolByName.Length))*sign
                 });
             }
-        for(const triple of this.repository.backend.queryTriples(this.repository.backend.queryMasks.MMV, [this.symbol, this.repository.backend.symbolByName.ReplaceData, this.repository.backend.symbolByName.Void])) {
+        for(const triple of this.repository.repositoryDiff.queryTriples(this.repository.repositoryDiff.queryMasks.MMV, [this.symbol, this.repository.repositoryDiff.symbolByName.ReplaceData, this.repository.repositoryDiff.symbolByName.Void])) {
             const operation = {
-                'dstSymbol': this.repository.backend.getPairOptionally(triple[2], this.repository.backend.symbolByName.Destination),
-                'dstOffset': this.repository.backend.getData(this.repository.backend.getPairOptionally(triple[2], this.repository.backend.symbolByName.DestinationOffset)),
-                'srcSymbol': this.repository.backend.getPairOptionally(triple[2], this.repository.backend.symbolByName.Source),
-                'srcOffset': this.repository.backend.getData(this.repository.backend.getPairOptionally(triple[2], this.repository.backend.symbolByName.SourceOffset)),
-                'length': this.repository.backend.getData(this.repository.backend.getPairOptionally(triple[2], this.repository.backend.symbolByName.Length))
+                'dstSymbol': this.repository.repositoryDiff.getPairOptionally(triple[2], this.repository.repositoryDiff.symbolByName.Destination),
+                'dstOffset': this.repository.repositoryDiff.getData(this.repository.repositoryDiff.getPairOptionally(triple[2], this.repository.repositoryDiff.symbolByName.DestinationOffset)),
+                'srcSymbol': this.repository.repositoryDiff.getPairOptionally(triple[2], this.repository.repositoryDiff.symbolByName.Source),
+                'srcOffset': this.repository.repositoryDiff.getData(this.repository.repositoryDiff.getPairOptionally(triple[2], this.repository.repositoryDiff.symbolByName.SourceOffset)),
+                'length': this.repository.repositoryDiff.getData(this.repository.repositoryDiff.getPairOptionally(triple[2], this.repository.repositoryDiff.symbolByName.Length))
             };
             getOrCreateEntry(SymbolMap.getOrInsert(this.operationsBySymbol, operation.dstSymbol, {}), 'replaceOperations', []).push(operation);
             getOrCreateEntry(SymbolMap.getOrInsert(this.operationsBySymbol, operation.srcSymbol, {}), 'copyOperations', []).push(operation);
         }
-        for(const triple of this.repository.backend.queryTriples(this.repository.backend.queryMasks.MMV, [this.symbol, this.repository.backend.symbolByName.MinimumLength, this.repository.backend.symbolByName.Void])) {
-            const srcSymbol = this.repository.backend.getPairOptionally(triple[2], this.repository.backend.symbolByName.Source),
+        for(const triple of this.repository.repositoryDiff.queryTriples(this.repository.repositoryDiff.queryMasks.MMV, [this.symbol, this.repository.repositoryDiff.symbolByName.MinimumLength, this.repository.repositoryDiff.symbolByName.Void])) {
+            const srcSymbol = this.repository.repositoryDiff.getPairOptionally(triple[2], this.repository.repositoryDiff.symbolByName.Source),
                   operationsOfSymbol = SymbolMap.getOrInsert(this.operationsBySymbol, srcSymbol, {});
-            operationsOfSymbol.forwardLength = this.repository.backend.getData(this.repository.backend.getPairOptionally(triple[2], this.repository.backend.symbolByName.ForwardLength));
-            operationsOfSymbol.reverseLength = this.repository.backend.getData(this.repository.backend.getPairOptionally(triple[2], this.repository.backend.symbolByName.ReverseLength));
+            operationsOfSymbol.forwardLength = this.repository.repositoryDiff.getData(this.repository.repositoryDiff.getPairOptionally(triple[2], this.repository.repositoryDiff.symbolByName.ForwardLength));
+            operationsOfSymbol.reverseLength = this.repository.repositoryDiff.getData(this.repository.repositoryDiff.getPairOptionally(triple[2], this.repository.repositoryDiff.symbolByName.ReverseLength));
         }
         for(const symbol of SymbolMap.keys(this.operationsBySymbol)) {
             const operationsOfSymbol = SymbolMap.get(this.operationsBySymbol, symbol);
@@ -1193,65 +1197,65 @@ export default class Diff extends BasicBackend {
      */
     link() {
         console.assert(!this.symbol);
-        this.symbol = this.repository.backend.createSymbol(this.repository.namespaceIdentity);
+        this.symbol = this.repository.createSymbol();
         if(this.dataSource)
-            console.assert(this.repository.backend.setTriple([this.symbol, this.repository.backend.symbolByName.DataSource, this.dataSource], true));
+            console.assert(this.repository.repositoryDiff.setTriple([this.symbol, this.repository.repositoryDiff.symbolByName.DataSource, this.dataSource], true));
         if(this.dataRestore)
-            console.assert(this.repository.backend.setTriple([this.symbol, this.repository.backend.symbolByName.DataRestore, this.dataRestore], true));
+            console.assert(this.repository.repositoryDiff.setTriple([this.symbol, this.repository.repositoryDiff.symbolByName.DataRestore, this.dataRestore], true));
         for(const [symbol, operationsOfSymbol] of SymbolMap.entries(this.operationsBySymbol)) {
-            this.repository.backend.manifestSymbol(symbol);
+            this.repository.repositoryDiff.manifestSymbol(symbol);
             {
-                const operationSymbol = this.repository.backend.createSymbol(this.repository.namespaceIdentity),
-                      forwardLengthSymbol = this.repository.backend.createSymbol(this.repository.namespaceIdentity),
-                      reverseLengthSymbol = this.repository.backend.createSymbol(this.repository.namespaceIdentity);
-                console.assert(this.repository.backend.setTriple([this.symbol, this.repository.backend.symbolByName.MinimumLength, operationSymbol], true));
-                console.assert(this.repository.backend.setTriple([operationSymbol, this.repository.backend.symbolByName.Source, symbol], true));
-                console.assert(this.repository.backend.setTriple([operationSymbol, this.repository.backend.symbolByName.ForwardLength, forwardLengthSymbol], true));
-                console.assert(this.repository.backend.setTriple([operationSymbol, this.repository.backend.symbolByName.ReverseLength, reverseLengthSymbol], true));
-                console.assert(this.repository.backend.setData(forwardLengthSymbol, operationsOfSymbol.forwardLength));
-                console.assert(this.repository.backend.setData(reverseLengthSymbol, operationsOfSymbol.reverseLength));
+                const operationSymbol = this.repository.createSymbol(),
+                      forwardLengthSymbol = this.repository.createSymbol(),
+                      reverseLengthSymbol = this.repository.createSymbol();
+                console.assert(this.repository.repositoryDiff.setTriple([this.symbol, this.repository.repositoryDiff.symbolByName.MinimumLength, operationSymbol], true));
+                console.assert(this.repository.repositoryDiff.setTriple([operationSymbol, this.repository.repositoryDiff.symbolByName.Source, symbol], true));
+                console.assert(this.repository.repositoryDiff.setTriple([operationSymbol, this.repository.repositoryDiff.symbolByName.ForwardLength, forwardLengthSymbol], true));
+                console.assert(this.repository.repositoryDiff.setTriple([operationSymbol, this.repository.repositoryDiff.symbolByName.ReverseLength, reverseLengthSymbol], true));
+                console.assert(this.repository.repositoryDiff.setData(forwardLengthSymbol, operationsOfSymbol.forwardLength));
+                console.assert(this.repository.repositoryDiff.setData(reverseLengthSymbol, operationsOfSymbol.reverseLength));
             }
             if(operationsOfSymbol.manifestOrRelease)
-                console.assert(this.repository.backend.setTriple([this.symbol, this.repository.backend.symbolByName[(operationsOfSymbol.manifestOrRelease == 'manifest') ? 'ManifestSymbol' : 'ReleaseSymbol'], symbol], true));
+                console.assert(this.repository.repositoryDiff.setTriple([this.symbol, this.repository.repositoryDiff.symbolByName[(operationsOfSymbol.manifestOrRelease == 'manifest') ? 'ManifestSymbol' : 'ReleaseSymbol'], symbol], true));
             if(operationsOfSymbol.tripleOperations)
                 for(const [beta, gammaCollection] of SymbolMap.entries(operationsOfSymbol.tripleOperations))
                     for(const [gamma, link] of SymbolMap.entries(gammaCollection)) {
-                        this.repository.backend.manifestSymbol(beta);
-                        this.repository.backend.manifestSymbol(gamma);
-                        const operationSymbol = this.repository.backend.createSymbol(this.repository.namespaceIdentity);
-                        console.assert(this.repository.backend.setTriple([this.symbol, this.repository.backend.symbolByName[link ? 'LinkTriple' : 'UnlinkTriple'], operationSymbol], true));
-                        console.assert(this.repository.backend.setTriple([operationSymbol, this.repository.backend.symbolByName.Entity, symbol], true));
-                        console.assert(this.repository.backend.setTriple([operationSymbol, this.repository.backend.symbolByName.Attribute, beta], true));
-                        console.assert(this.repository.backend.setTriple([operationSymbol, this.repository.backend.symbolByName.Value, gamma], true));
+                        this.repository.repositoryDiff.manifestSymbol(beta);
+                        this.repository.repositoryDiff.manifestSymbol(gamma);
+                        const operationSymbol = this.repository.createSymbol();
+                        console.assert(this.repository.repositoryDiff.setTriple([this.symbol, this.repository.repositoryDiff.symbolByName[link ? 'LinkTriple' : 'UnlinkTriple'], operationSymbol], true));
+                        console.assert(this.repository.repositoryDiff.setTriple([operationSymbol, this.repository.repositoryDiff.symbolByName.Entity, symbol], true));
+                        console.assert(this.repository.repositoryDiff.setTriple([operationSymbol, this.repository.repositoryDiff.symbolByName.Attribute, beta], true));
+                        console.assert(this.repository.repositoryDiff.setTriple([operationSymbol, this.repository.repositoryDiff.symbolByName.Value, gamma], true));
                     }
             if(operationsOfSymbol.creaseLengthOperations)
                 for(const operation of operationsOfSymbol.creaseLengthOperations) {
-                    const operationSymbol = this.repository.backend.createSymbol(this.repository.namespaceIdentity),
-                          dstOffsetSymbol = this.repository.backend.createSymbol(this.repository.namespaceIdentity),
-                          lengthSymbol = this.repository.backend.createSymbol(this.repository.namespaceIdentity);
-                    console.assert(this.repository.backend.setTriple([this.symbol, this.repository.backend.symbolByName[(operation.length > 0) ? 'IncreaseLength' : 'DecreaseLength'], operationSymbol], true));
-                    console.assert(this.repository.backend.setTriple([operationSymbol, this.repository.backend.symbolByName.Destination, operation.dstSymbol], true));
-                    console.assert(this.repository.backend.setTriple([operationSymbol, this.repository.backend.symbolByName.DestinationOffset, dstOffsetSymbol], true));
-                    console.assert(this.repository.backend.setTriple([operationSymbol, this.repository.backend.symbolByName.Length, lengthSymbol], true));
-                    console.assert(this.repository.backend.setData(dstOffsetSymbol, operation.dstOffset));
-                    console.assert(this.repository.backend.setData(lengthSymbol, Math.abs(operation.length)));
+                    const operationSymbol = this.repository.createSymbol(),
+                          dstOffsetSymbol = this.repository.createSymbol(),
+                          lengthSymbol = this.repository.createSymbol();
+                    console.assert(this.repository.repositoryDiff.setTriple([this.symbol, this.repository.repositoryDiff.symbolByName[(operation.length > 0) ? 'IncreaseLength' : 'DecreaseLength'], operationSymbol], true));
+                    console.assert(this.repository.repositoryDiff.setTriple([operationSymbol, this.repository.repositoryDiff.symbolByName.Destination, operation.dstSymbol], true));
+                    console.assert(this.repository.repositoryDiff.setTriple([operationSymbol, this.repository.repositoryDiff.symbolByName.DestinationOffset, dstOffsetSymbol], true));
+                    console.assert(this.repository.repositoryDiff.setTriple([operationSymbol, this.repository.repositoryDiff.symbolByName.Length, lengthSymbol], true));
+                    console.assert(this.repository.repositoryDiff.setData(dstOffsetSymbol, operation.dstOffset));
+                    console.assert(this.repository.repositoryDiff.setData(lengthSymbol, Math.abs(operation.length)));
                 }
             if(operationsOfSymbol.replaceOperations)
                 for(const operation of operationsOfSymbol.replaceOperations) {
-                    this.repository.backend.manifestSymbol(operation.srcSymbol);
-                    const operationSymbol = this.repository.backend.createSymbol(this.repository.namespaceIdentity),
-                          dstOffsetSymbol = this.repository.backend.createSymbol(this.repository.namespaceIdentity),
-                          srcOffsetSymbol = this.repository.backend.createSymbol(this.repository.namespaceIdentity),
-                          lengthSymbol = this.repository.backend.createSymbol(this.repository.namespaceIdentity);
-                    console.assert(this.repository.backend.setTriple([this.symbol, this.repository.backend.symbolByName.ReplaceData, operationSymbol], true));
-                    console.assert(this.repository.backend.setTriple([operationSymbol, this.repository.backend.symbolByName.Destination, operation.dstSymbol], true));
-                    console.assert(this.repository.backend.setTriple([operationSymbol, this.repository.backend.symbolByName.DestinationOffset, dstOffsetSymbol], true));
-                    console.assert(this.repository.backend.setTriple([operationSymbol, this.repository.backend.symbolByName.Source, operation.srcSymbol], true));
-                    console.assert(this.repository.backend.setTriple([operationSymbol, this.repository.backend.symbolByName.SourceOffset, srcOffsetSymbol], true));
-                    console.assert(this.repository.backend.setTriple([operationSymbol, this.repository.backend.symbolByName.Length, lengthSymbol], true));
-                    console.assert(this.repository.backend.setData(dstOffsetSymbol, operation.dstOffset));
-                    console.assert(this.repository.backend.setData(srcOffsetSymbol, operation.srcOffset));
-                    console.assert(this.repository.backend.setData(lengthSymbol, operation.length));
+                    this.repository.repositoryDiff.manifestSymbol(operation.srcSymbol);
+                    const operationSymbol = this.repository.createSymbol(),
+                          dstOffsetSymbol = this.repository.createSymbol(),
+                          srcOffsetSymbol = this.repository.createSymbol(),
+                          lengthSymbol = this.repository.createSymbol();
+                    console.assert(this.repository.repositoryDiff.setTriple([this.symbol, this.repository.repositoryDiff.symbolByName.ReplaceData, operationSymbol], true));
+                    console.assert(this.repository.repositoryDiff.setTriple([operationSymbol, this.repository.repositoryDiff.symbolByName.Destination, operation.dstSymbol], true));
+                    console.assert(this.repository.repositoryDiff.setTriple([operationSymbol, this.repository.repositoryDiff.symbolByName.DestinationOffset, dstOffsetSymbol], true));
+                    console.assert(this.repository.repositoryDiff.setTriple([operationSymbol, this.repository.repositoryDiff.symbolByName.Source, operation.srcSymbol], true));
+                    console.assert(this.repository.repositoryDiff.setTriple([operationSymbol, this.repository.repositoryDiff.symbolByName.SourceOffset, srcOffsetSymbol], true));
+                    console.assert(this.repository.repositoryDiff.setTriple([operationSymbol, this.repository.repositoryDiff.symbolByName.Length, lengthSymbol], true));
+                    console.assert(this.repository.repositoryDiff.setData(dstOffsetSymbol, operation.dstOffset));
+                    console.assert(this.repository.repositoryDiff.setData(srcOffsetSymbol, operation.srcOffset));
+                    console.assert(this.repository.repositoryDiff.setData(lengthSymbol, operation.length));
                 }
         }
     }
@@ -1261,32 +1265,32 @@ export default class Diff extends BasicBackend {
      */
     unlink() {
         if(this.dataSource)
-            console.assert(this.repository.backend.unlinkSymbol(this.dataSource));
+            console.assert(this.repository.repositoryDiff.unlinkSymbol(this.dataSource));
         if(this.dataRestore)
-            console.assert(this.repository.backend.unlinkSymbol(this.dataRestore));
+            console.assert(this.repository.repositoryDiff.unlinkSymbol(this.dataRestore));
         if(!this.symbol)
             return;
         for(const attributeName of ['LinkTriple', 'UnlinkTriple'])
-            for(const triple of this.repository.backend.queryTriples(this.repository.backend.queryMasks.MMV, [this.symbol, this.repository.backend.symbolByName[attributeName], this.repository.backend.symbolByName.Void]))
-                console.assert(this.repository.backend.unlinkSymbol(triple[2]));
+            for(const triple of this.repository.repositoryDiff.queryTriples(this.repository.repositoryDiff.queryMasks.MMV, [this.symbol, this.repository.repositoryDiff.symbolByName[attributeName], this.repository.repositoryDiff.symbolByName.Void]))
+                console.assert(this.repository.repositoryDiff.unlinkSymbol(triple[2]));
         for(const attributeName of ['IncreaseLength', 'DecreaseLength'])
-            for(const triple of this.repository.backend.queryTriples(this.repository.backend.queryMasks.MMV, [this.symbol, this.repository.backend.symbolByName[attributeName], this.repository.backend.symbolByName.Void])) {
-                console.assert(this.repository.backend.unlinkSymbol(this.repository.backend.getPairOptionally(triple[2], this.repository.backend.symbolByName.DestinationOffset)));
-                console.assert(this.repository.backend.unlinkSymbol(this.repository.backend.getPairOptionally(triple[2], this.repository.backend.symbolByName.Length)));
-                console.assert(this.repository.backend.unlinkSymbol(triple[2]));
+            for(const triple of this.repository.repositoryDiff.queryTriples(this.repository.repositoryDiff.queryMasks.MMV, [this.symbol, this.repository.repositoryDiff.symbolByName[attributeName], this.repository.repositoryDiff.symbolByName.Void])) {
+                console.assert(this.repository.repositoryDiff.unlinkSymbol(this.repository.repositoryDiff.getPairOptionally(triple[2], this.repository.repositoryDiff.symbolByName.DestinationOffset)));
+                console.assert(this.repository.repositoryDiff.unlinkSymbol(this.repository.repositoryDiff.getPairOptionally(triple[2], this.repository.repositoryDiff.symbolByName.Length)));
+                console.assert(this.repository.repositoryDiff.unlinkSymbol(triple[2]));
             }
-        for(const triple of this.repository.backend.queryTriples(this.repository.backend.queryMasks.MMV, [this.symbol, this.repository.backend.symbolByName.ReplaceData, this.repository.backend.symbolByName.Void])) {
-            console.assert(this.repository.backend.unlinkSymbol(this.repository.backend.getPairOptionally(triple[2], this.repository.backend.symbolByName.DestinationOffset)));
-            console.assert(this.repository.backend.unlinkSymbol(this.repository.backend.getPairOptionally(triple[2], this.repository.backend.symbolByName.SourceOffset)));
-            console.assert(this.repository.backend.unlinkSymbol(this.repository.backend.getPairOptionally(triple[2], this.repository.backend.symbolByName.Length)));
-            console.assert(this.repository.backend.unlinkSymbol(triple[2]));
+        for(const triple of this.repository.repositoryDiff.queryTriples(this.repository.repositoryDiff.queryMasks.MMV, [this.symbol, this.repository.repositoryDiff.symbolByName.ReplaceData, this.repository.repositoryDiff.symbolByName.Void])) {
+            console.assert(this.repository.repositoryDiff.unlinkSymbol(this.repository.repositoryDiff.getPairOptionally(triple[2], this.repository.repositoryDiff.symbolByName.DestinationOffset)));
+            console.assert(this.repository.repositoryDiff.unlinkSymbol(this.repository.repositoryDiff.getPairOptionally(triple[2], this.repository.repositoryDiff.symbolByName.SourceOffset)));
+            console.assert(this.repository.repositoryDiff.unlinkSymbol(this.repository.repositoryDiff.getPairOptionally(triple[2], this.repository.repositoryDiff.symbolByName.Length)));
+            console.assert(this.repository.repositoryDiff.unlinkSymbol(triple[2]));
         }
-        for(const triple of this.repository.backend.queryTriples(this.repository.backend.queryMasks.MMV, [this.symbol, this.repository.backend.symbolByName.MinimumLength, this.repository.backend.symbolByName.Void])) {
-            console.assert(this.repository.backend.unlinkSymbol(this.repository.backend.getPairOptionally(triple[2], this.repository.backend.symbolByName.ForwardLength)));
-            console.assert(this.repository.backend.unlinkSymbol(this.repository.backend.getPairOptionally(triple[2], this.repository.backend.symbolByName.ReverseLength)));
-            console.assert(this.repository.backend.unlinkSymbol(triple[2]));
+        for(const triple of this.repository.repositoryDiff.queryTriples(this.repository.repositoryDiff.queryMasks.MMV, [this.symbol, this.repository.repositoryDiff.symbolByName.MinimumLength, this.repository.repositoryDiff.symbolByName.Void])) {
+            console.assert(this.repository.repositoryDiff.unlinkSymbol(this.repository.repositoryDiff.getPairOptionally(triple[2], this.repository.repositoryDiff.symbolByName.ForwardLength)));
+            console.assert(this.repository.repositoryDiff.unlinkSymbol(this.repository.repositoryDiff.getPairOptionally(triple[2], this.repository.repositoryDiff.symbolByName.ReverseLength)));
+            console.assert(this.repository.repositoryDiff.unlinkSymbol(triple[2]));
         }
-        console.assert(this.repository.backend.unlinkSymbol(this.symbol));
+        console.assert(this.repository.repositoryDiff.unlinkSymbol(this.symbol));
         delete this.symbol;
     }
 }

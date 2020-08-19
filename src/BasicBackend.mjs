@@ -43,6 +43,7 @@ const PredefinedSymbols = {
         'MinimumLength',
         'ForwardLength',
         'ReverseLength',
+        'Repository',
         'Version',
         'Materialization',
         'Edge',

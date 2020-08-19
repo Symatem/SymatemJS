@@ -185,7 +185,7 @@ export function getTests(backend, rand) {
         [configuration.materializationNamespace, configuration.modalNamespace],
         [configuration.comparisonNamespace, configuration.modalNamespace]
     ]);
-    configuration.repository = new Repository(backend, repositoryNamespace, recordingRelocation);
+    configuration.repository = new Repository(backend, backend.createSymbol(repositoryNamespace), recordingRelocation);
     configuration.materializationRelocation = RelocationTable.create([[configuration.modalNamespace, configuration.materializationNamespace]]);
     configuration.comparisonRelocation = RelocationTable.create([[configuration.materializationNamespace, configuration.comparisonNamespace]]);
     configuration.inverseComparisonRelocation = RelocationTable.inverse(configuration.comparisonRelocation);

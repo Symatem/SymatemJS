@@ -4,14 +4,17 @@ import {RelocationTable, SymbolInternals, SymbolMap, Diff} from '../SymatemJS.mj
 export default class Repository {
     /**
      * @param {BasicBackend} backend
-     * @param {Identity} namespaceIdentity The namespace identity of the repository
+     * @param {Symbol} symbol The repository
      * @param {RelocationTable} relocationTable Relocate recording namespaces to become modal namespaces
      */
-    constructor(backend, namespaceIdentity, relocationTable=RelocationTable.create()) {
+    constructor(backend, symbol, relocationTable=RelocationTable.create()) {
         this.backend = backend;
-        this.namespaceIdentity = namespaceIdentity;
-        this.relocationTable = relocationTable;
+        this.symbol = symbol;
+        this.namespaceIdentity = SymbolInternals.namespaceOfSymbol(this.symbol);
+        this.repositoryDiff = backend;
+        this.repositoryDiff.setTriple([this.symbol, this.repositoryDiff.symbolByName.Type, this.repositoryDiff.symbolByName.Repository], true);
         this.backend.manifestSymbol(SymbolInternals.concatIntoSymbol(this.backend.metaNamespaceIdentity, this.namespaceIdentity));
+        this.relocationTable = relocationTable;
         for(const [recordingNamespaceIdentity, modalNamespaceIdentity] of RelocationTable.entries(this.relocationTable)) {
             this.backend.manifestSymbol(SymbolInternals.concatIntoSymbol(this.backend.metaNamespaceIdentity, recordingNamespaceIdentity));
             this.backend.manifestSymbol(SymbolInternals.concatIntoSymbol(this.backend.metaNamespaceIdentity, modalNamespaceIdentity));
@@ -22,16 +25,16 @@ export default class Repository {
      * @yield {Symbol} version
      */
     *getVersions() {
-        for(const triple of this.backend.queryTriples(this.backend.queryMasks.VMM, [this.backend.symbolByName.Void, this.backend.symbolByName.Type, this.backend.symbolByName.Version]))
-            yield triple[0];
+        for(const triple of this.backend.queryTriples(this.backend.queryMasks.MMV, [this.symbol, this.backend.symbolByName.Version, this.backend.symbolByName.Void]))
+            yield triple[2];
     }
 
     /** Gets the list of edges in this repository
      * @yield {Symbol} diff
      */
     *getEdges() {
-        for(const triple of this.backend.queryTriples(this.backend.queryMasks.VMM, [this.backend.symbolByName.Void, this.backend.symbolByName.Type, this.backend.symbolByName.Edge]))
-            yield triple[0];
+        for(const triple of this.backend.queryTriples(this.backend.queryMasks.VMM, [this.symbol, this.backend.symbolByName.Edge, this.backend.symbolByName.Void]))
+            yield triple[2];
     }
 
     /** Gets a versions relatives and their diffs
@@ -102,12 +105,20 @@ export default class Repository {
         return path;
     }
 
+    /** Helper to create symbols in the same namespace as this repository
+     * @return {Symbol} symbol
+     */
+    createSymbol() {
+        return this.repositoryDiff.createSymbol(SymbolInternals.namespaceOfSymbol(this.symbol));
+    }
+
     /** Adds a vertex to the DAG and returns it
      * @return {Symbol} version
      */
     createVersion() {
-        const version = this.backend.createSymbol(this.namespaceIdentity);
-        this.backend.setTriple([version, this.backend.symbolByName.Type, this.backend.symbolByName.Version], true);
+        const version = this.createSymbol();
+        this.repositoryDiff.setTriple([this.symbol, this.repositoryDiff.symbolByName.Version, version], true);
+        this.repositoryDiff.setTriple([version, this.repositoryDiff.symbolByName.Type, this.repositoryDiff.symbolByName.Version], true);
         return version;
     }
 
@@ -115,12 +126,12 @@ export default class Repository {
      * @param {Symbol} version The version to remove
      */
     removeVersion(version) {
-        for(const edge of SymbolMap.keys(this.getRelatives(version, this.backend.symbolByName.Parent)))
+        for(const edge of SymbolMap.keys(this.getRelatives(version, this.repositoryDiff.symbolByName.Parent)))
             this.removeEdge(edge);
-        for(const edge of SymbolMap.keys(this.getRelatives(version, this.backend.symbolByName.Child)))
+        for(const edge of SymbolMap.keys(this.getRelatives(version, this.repositoryDiff.symbolByName.Child)))
             this.removeEdge(edge);
         this.dematerializeVersion(version);
-        this.backend.unlinkSymbol(version);
+        this.repositoryDiff.unlinkSymbol(version);
     }
 
     /** Adds an edge to the DAG
@@ -130,14 +141,15 @@ export default class Repository {
      * @return {Symbol} The created edge
      */
     addEdge(parentVersion, childVersion, diff) {
-        const edge = this.backend.createSymbol(this.namespaceIdentity);
-        this.backend.setTriple([edge, this.backend.symbolByName.Type, this.backend.symbolByName.Edge], true);
-        this.backend.setTriple([edge, this.backend.symbolByName.Parent, parentVersion], true);
-        this.backend.setTriple([edge, this.backend.symbolByName.Child, childVersion], true);
+        const edge = this.createSymbol();
+        this.repositoryDiff.setTriple([this.symbol, this.repositoryDiff.symbolByName.Edge, edge], true);
+        this.repositoryDiff.setTriple([edge, this.repositoryDiff.symbolByName.Type, this.repositoryDiff.symbolByName.Edge], true);
+        this.repositoryDiff.setTriple([edge, this.repositoryDiff.symbolByName.Parent, parentVersion], true);
+        this.repositoryDiff.setTriple([edge, this.repositoryDiff.symbolByName.Child, childVersion], true);
         if(diff)
-            this.backend.setTriple([edge, this.backend.symbolByName.Diff, diff.symbol], true);
-        this.backend.setTriple([childVersion, this.backend.symbolByName.Parent, edge], true);
-        this.backend.setTriple([parentVersion, this.backend.symbolByName.Child, edge], true);
+            this.repositoryDiff.setTriple([edge, this.repositoryDiff.symbolByName.Diff, diff.symbol], true);
+        this.repositoryDiff.setTriple([childVersion, this.repositoryDiff.symbolByName.Parent, edge], true);
+        this.repositoryDiff.setTriple([parentVersion, this.repositoryDiff.symbolByName.Child, edge], true);
         return edge;
     }
 
@@ -145,9 +157,9 @@ export default class Repository {
      * @param {Symbol} edge The edge
      */
     removeEdge(edge) {
-        const diffSymbol = this.backend.getPairOptionally(edge, this.backend.symbolByName.Diff);
-        this.backend.unlinkSymbol(edge);
-        if(diffSymbol == this.backend.symbolByName.Void || this.backend.getTriple([this.backend.symbolByName.Void, this.backend.symbolByName.Diff, diffSymbol], this.backend.queryMasks.VMM))
+        const diffSymbol = this.repositoryDiff.getPairOptionally(edge, this.repositoryDiff.symbolByName.Diff);
+        this.repositoryDiff.unlinkSymbol(edge);
+        if(diffSymbol == this.repositoryDiff.symbolByName.Void || this.repositoryDiff.getTriple([this.repositoryDiff.symbolByName.Void, this.repositoryDiff.symbolByName.Diff, diffSymbol], this.repositoryDiff.queryMasks.VMM))
             return;
         const diff = new Diff(this, diffSymbol);
         diff.unlink();
@@ -158,26 +170,26 @@ export default class Repository {
      * @return {RelocationTable} Relocates modal namespaces to become namespaces of the materialized version
      */
     materializeVersion(version) {
-        console.assert(!this.backend.getTriple([version, this.backend.symbolByName.Materialization, this.backend.symbolByName.Void], this.backend.queryMasks.MMI));
-        const path = SymbolMap.count(this.getRelatives(version, this.backend.symbolByName.Parent)) > 0 ? this.findPath(version) : undefined,
+        console.assert(!this.repositoryDiff.getTriple([version, this.repositoryDiff.symbolByName.Materialization, this.repositoryDiff.symbolByName.Void], this.repositoryDiff.queryMasks.MMI));
+        const path = SymbolMap.count(this.getRelatives(version, this.repositoryDiff.symbolByName.Parent)) > 0 ? this.findPath(version) : undefined,
               materializationRelocation = RelocationTable.create(),
-              dstMaterialization = this.backend.createSymbol(this.namespaceIdentity);
-        this.backend.setTriple([version, this.backend.symbolByName.Materialization, dstMaterialization], true);
+              dstMaterialization = this.createSymbol();
+        this.repositoryDiff.setTriple([version, this.repositoryDiff.symbolByName.Materialization, dstMaterialization], true);
         for(const [recordingNamespaceIdentity, modalNamespaceIdentity] of Object.entries(this.relocationTable)) {
-            const materializationNamespaceSymbol = this.backend.createSymbol(SymbolInternals.identityOfSymbol(this.backend.symbolByName.Namespaces));
+            const materializationNamespaceSymbol = this.repositoryDiff.createSymbol(SymbolInternals.identityOfSymbol(this.repositoryDiff.symbolByName.Namespaces));
             RelocationTable.set(materializationRelocation, modalNamespaceIdentity, SymbolInternals.identityOfSymbol(materializationNamespaceSymbol));
-            this.backend.setTriple([dstMaterialization, this.backend.symbolInNamespace('Namespaces', modalNamespaceIdentity), materializationNamespaceSymbol], true);
+            this.repositoryDiff.setTriple([dstMaterialization, SymbolInternals.concatIntoSymbol(this.backend.metaNamespaceIdentity, modalNamespaceIdentity), materializationNamespaceSymbol], true);
         }
         if(path) {
             console.assert(path.length > 1);
             version = path[0].version;
-            const srcMaterialization = this.backend.getPairOptionally(version, this.backend.symbolByName.Materialization),
+            const srcMaterialization = this.repositoryDiff.getPairOptionally(version, this.repositoryDiff.symbolByName.Materialization),
                   cloneRelocation = RelocationTable.create();
-            for(const triple of this.backend.queryTriples(this.backend.queryMasks.MVV, [srcMaterialization, this.backend.symbolByName.Void, this.backend.symbolByName.Void]))
+            for(const triple of this.repositoryDiff.queryTriples(this.repositoryDiff.queryMasks.MVV, [srcMaterialization, this.repositoryDiff.symbolByName.Void, this.repositoryDiff.symbolByName.Void]))
                 RelocationTable.set(cloneRelocation, SymbolInternals.identityOfSymbol(triple[2]), RelocationTable.get(materializationRelocation, SymbolInternals.identityOfSymbol(triple[1])));
-            this.backend.cloneNamespaces(cloneRelocation);
+            this.repositoryDiff.cloneNamespaces(cloneRelocation);
             for(let i = 1; i < path.length; ++i) {
-                const diff = new Diff(this, this.backend.getPairOptionally(path[i].edge, this.backend.symbolByName.Diff));
+                const diff = new Diff(this, this.repositoryDiff.getPairOptionally(path[i].edge, this.repositoryDiff.symbolByName.Diff));
                 diff.apply(path[i].direction, materializationRelocation);
                 version = path[i].version;
             }
@@ -189,11 +201,11 @@ export default class Repository {
      * @param {Symbol} version The version to dematerialize
      */
     dematerializeVersion(version) {
-        const materialization = this.backend.getPairOptionally(version, this.backend.symbolByName.Materialization);
-        if(materialization == this.backend.symbolByName.Void)
+        const materialization = this.repositoryDiff.getPairOptionally(version, this.repositoryDiff.symbolByName.Materialization);
+        if(materialization == this.repositoryDiff.symbolByName.Void)
             return;
-        for(const triple of this.backend.queryTriples(this.backend.queryMasks.MIV, [materialization, this.backend.symbolByName.Void, this.backend.symbolByName.Void]))
-            this.backend.unlinkSymbol(triple[2]);
-        this.backend.unlinkSymbol(materialization);
+        for(const triple of this.repositoryDiff.queryTriples(this.repositoryDiff.queryMasks.MIV, [materialization, this.repositoryDiff.symbolByName.Void, this.repositoryDiff.symbolByName.Void]))
+            this.repositoryDiff.unlinkSymbol(triple[2]);
+        this.repositoryDiff.unlinkSymbol(materialization);
     }
 }
