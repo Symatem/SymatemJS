@@ -19,30 +19,20 @@ export class Utils {
     }
 
     /**
-     * Converts Uint8Array to binary string of '0's and '1's
+     * Calculates the hash value of an Uint8Array
      * @param {Uint8Array} buffer
-     * @return {number} hash value
-     */
-    static djb2Hash(buffer) {
-        let result = 5381;
-        for(let i = 0; i < buffer.byteLength; ++i)
-            result = ((result<<5)+result+buffer[i])>>>0;
-        return result; // ('0000000'+result.toString(16).toUpperCase()).substr(-8);
-    }
-
-    /**
-     * Calculates the SHA-256 hash value of an Uint8Array
-     * @param {Uint8Array} buffer
+     * @param {string} algorithm One of: 1, 256, 384, 512
      * @return {Promise<Uint8Array>} hash value
      */
-    static sha256(buffer) {
-        return (typeof process === 'undefined')
-            ? crypto.subtle.digest('SHA-256', buffer).then(arrayBuffer => new Uint8Array(arrayBuffer))
-            : import('crypto').then((crypto) => {
-                const hash = crypto.createHash('sha256');
-                hash.update(buffer);
-                return hash.digest();
-            });
+    static sha(buffer, algorithm) {
+        if(typeof process === 'undefined')
+            return crypto.subtle.digest(`SHA-${algorithm}`, buffer).then(arrayBuffer => new Uint8Array(arrayBuffer));
+        buffer = buffer.slice(0);
+        return import('crypto').then((crypto) => {
+            const hash = crypto.createHash(`sha${algorithm}`);
+            hash.update(buffer);
+            return new Uint8Array(hash.digest());
+        });
     }
 
     /**
@@ -174,6 +164,35 @@ export class Utils {
         for(let i = 0; i < buffer.byteLength; ++i)
             buffer[i] = parseInt(text[i*2], 16)|(parseInt(text[i*2+1], 16)<<4);
         return buffer;
+    }
+
+    /**
+     * Converts a buffer to a BigInt
+     * @param {Uint8Array} buffer
+     * @param {boolean} enableTwosComplement allow negative numbers with MSB sign
+     * @param {number} length total length in bits
+     * @return {BigInt} value
+     */
+    static encodeBigInt(buffer, enableTwosComplement, length) {
+        const value = BigInt('0x'+Utils.encodeAsHex(buffer).split('').reverse().join(''));
+        return (enableTwosComplement && (buffer[Math.floor((length-1)/8)]>>((length+7)%8))&1 == 1)
+            ? value-(BigInt(1)<<BigInt(length))
+            : value;
+    }
+
+    /**
+     * Converts a BigInt to a buffer
+     * @param {BigInt} value
+     * @return {Uint8Array} buffer
+     */
+    static decodeBigInt(value) {
+        if(value < 0) {
+            let bits = (-value).toString(2).length;
+            if(-value > BigInt(1)<<BigInt(bits-1))
+                ++bits;
+            value = (BigInt(1)<<BigInt(Math.ceil(bits/8)*8))+value;
+        }
+        return Utils.decodeAsHex(value.toString(16).split('').reverse().join(''));
     }
 
     /**

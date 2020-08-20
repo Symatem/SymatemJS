@@ -111,13 +111,10 @@ export default class BasicBackend {
                                ? dataView.getUint32(0, true)
                                : dataView.getInt32(0, true);
                     default:
-                        const dataValue = BigInt('0x'+Utils.encodeAsHex(dataBytes).split('').reverse().join(''));
-                        return (SymbolInternals.areSymbolsEqual(encoding, this.symbolByName.TwosComplement) && (dataBytes[Math.floor((feedback.length-1)/8)]>>((feedback.length+7)%8))&1 == 1)
-                            ? dataValue-(BigInt(1)<<BigInt(feedback.length))
-                            : dataValue;
+                        return Utils.encodeBigInt(dataBytes, SymbolInternals.areSymbolsEqual(encoding, this.symbolByName.TwosComplement), feedback.length);
                 }
             case SymbolInternals.symbolToString(this.symbolByName.UTF8):
-                return Utils.encodeAsUTF8(dataBytes.slice(0, feedback.length/8));
+                return Utils.encodeAsUTF8(dataBytes.subarray(0, feedback.length/8));
         }
         if(!this.getTriple([encoding, this.symbolByName.Type, this.symbolByName.Composite]))
             return dataBytes;
@@ -139,10 +136,10 @@ export default class BasicBackend {
             const childFeedback = {'length': (SymbolInternals.areSymbolsEqual(slotSize, this.symbolByName.Dynamic)) ? dataView.getUint32((offset+i)*4, true) : slotSize};
             let childDataBytes;
             if(SymbolInternals.areSymbolsEqual(childFeedback.length, this.symbolByName.Void)) {
-                childDataBytes = dataBytes.slice(feedback.length/8);
+                childDataBytes = dataBytes.subarray(feedback.length/8);
                 childFeedback.length = childDataBytes.length*8;
             } else if(feedback.length < dataBytes.length*8)
-                childDataBytes = dataBytes.slice(feedback.length/8, (feedback.length+childFeedback.length)/8);
+                childDataBytes = dataBytes.subarray(feedback.length/8, (feedback.length+childFeedback.length)/8);
             else
                 throw new Error('Expected more children but dataBytes is too short');
             const childDataValue = this.decodeBinary(childEncoding, childDataBytes, childFeedback);
@@ -165,31 +162,22 @@ export default class BasicBackend {
             dataView[methodName](0, dataValue, true);
             return dataBytes;
         }
-        function parseBigInt(value) {
-            if(value < 0) {
-                let bits = (-value).toString(2).length;
-                if(-value > BigInt(1)<<BigInt(bits-1))
-                    ++bits;
-                value = (BigInt(1)<<BigInt(Math.ceil(bits/8)*8))+value;
-            }
-            return Utils.decodeAsHex(value.toString(16).split('').reverse().join(''));
-        }
         switch(SymbolInternals.symbolToString(encoding)) {
             case SymbolInternals.symbolToString(this.symbolByName.Void):
                 return dataValue;
             case SymbolInternals.symbolToString(this.symbolByName.BinaryNumber):
                 return (typeof dataValue == 'boolean') ? new Uint8Array([(dataValue) ? 1 : 0]) :
-                       (typeof dataValue == 'bigint') ? parseBigInt(dataValue) :
+                       (typeof dataValue == 'bigint') ? Utils.decodeBigInt(dataValue) :
                        (dataValue < 0x100) ? writeNumber(1, 'setUint8') :
                        (dataValue < 0x10000) ? writeNumber(2, 'setUint16') :
                        (dataValue < 0x100000000) ? writeNumber(4, 'setUint32') :
-                       parseBigInt(BigInt(dataValue));
+                       Utils.decodeBigInt(BigInt(dataValue));
             case SymbolInternals.symbolToString(this.symbolByName.TwosComplement):
-                return (typeof dataValue == 'bigint') ? parseBigInt(dataValue) :
+                return (typeof dataValue == 'bigint') ? Utils.decodeBigInt(dataValue) :
                        (dataValue >= -0x80 && dataValue < 0x80) ? writeNumber(1, 'setInt8') :
                        (dataValue >= -0x8000 && dataValue < 0x8000) ? writeNumber(2, 'setInt16') :
                        (dataValue >= -0x80000000 && dataValue < 0x80000000) ? writeNumber(4, 'setInt32') :
-                       parseBigInt(BigInt(dataValue));
+                       Utils.decodeBigInt(BigInt(dataValue));
             case SymbolInternals.symbolToString(this.symbolByName.IEEE754):
                 return writeNumber(8, 'setFloat64');
             case SymbolInternals.symbolToString(this.symbolByName.UTF8):
@@ -740,5 +728,46 @@ export default class BasicBackend {
             }
         }
         return entities;
+    }
+
+    /**
+     * Hashes the specified namespaces
+     * @param {Identity[]} namespaceIdentities The namespaces to hash
+     * @return {Promise<Object>} namespace identity and hash values for each namespace
+     */
+    hashNamespaces(namespaceIdentities) {
+        const buffer = new Uint32Array(6),
+              promisePerNamespace = [];
+        for(const namespaceIdentity of namespaceIdentities) {
+            const promises = [];
+            for(const symbol of this.querySymbols(namespaceIdentity)) {
+                const dataLength = this.getLength(symbol),
+                      dataPayload = this.readData(symbol, 0, dataLength).subarray(0, Math.ceil(dataLength/8));
+                buffer[0] = SymbolInternals.namespaceOfSymbol(symbol);
+                buffer[1] = SymbolInternals.identityOfSymbol(symbol);
+                buffer[2] = dataLength;
+                const dataHeader = new Uint8Array(buffer.buffer).subarray(0, 12),
+                      dataCombined = new Uint8Array(12+dataPayload.length);
+                dataCombined.set(dataHeader, 0);
+                dataCombined.set(dataPayload, 12);
+                promises.push(Utils.sha(dataCombined, 1));
+                for(let triple of this.queryTriples(queryMasks.MVV, [symbol, this.symbolByName.Void, this.symbolByName.Void])) {
+                    buffer[2] = SymbolInternals.namespaceOfSymbol(triple[1]);
+                    buffer[3] = SymbolInternals.identityOfSymbol(triple[1]);
+                    buffer[4] = SymbolInternals.namespaceOfSymbol(triple[2]);
+                    buffer[5] = SymbolInternals.identityOfSymbol(triple[2]);
+                    promises.push(Utils.sha(new Uint8Array(buffer.buffer), 1));
+                }
+            }
+            promisePerNamespace.push(Promise.all(promises).then((values) => {
+                const variableLengthHash = values.reduce((accumulator, entry) => accumulator+Utils.encodeBigInt(entry, false), BigInt(0));
+                return Utils.sha(Utils.decodeBigInt(variableLengthHash), 256).then((fixedLengthHash) => ({
+                    'namespaceIdentity': namespaceIdentity,
+                    'variableLengthHash': variableLengthHash,
+                    'fixedLengthHash': fixedLengthHash
+                }));
+            }));
+        }
+        return Promise.all(promisePerNamespace);
     }
 };
