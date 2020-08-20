@@ -3,14 +3,12 @@ import {configuration, fillMaterialization} from './DiffTests.mjs';
 
 export function getTests(backend, rand) {
     return {
-        'clearNamespace': [10, () => {
+        'clearNamespace': [10, () => new Promise((resolve, reject) => {
             fillMaterialization(backend, rand);
             backend.clearNamespace(configuration.materializationNamespace);
             const symbolsResult = [...backend.querySymbols(configuration.materializationNamespace)];
-            if(!symbolsResult.length == 0) {
-                console.warn('clearNamespace', 'querySymbols', symbolsResult.sort().join(' '));
-                return false;
-            }
+            if(symbolsResult.length != 0)
+                throw new Error('clearNamespace', 'querySymbols', symbolsResult.sort().join(' '));
             // TODO: Namespace mask in queryTriples
             const triplesResult = [...backend.queryTriples(backend.queryMasks.VVV, [backend.symbolByName.Void, backend.symbolByName.Void, backend.symbolByName.Void])].filter((triple) => {
                 for(const symbol of triple)
@@ -18,13 +16,11 @@ export function getTests(backend, rand) {
                         return false;
                 return true;
             });
-            if(!triplesResult.length == 0) {
-                console.warn('clearNamespace', 'queryTriples', triplesResult.sort().join(' '));
-                return false;
-            }
-            return true;
-        }],
-        'cloneNamespace': [10, () => {
+            if(triplesResult.length != 0)
+                throw new Error('clearNamespace', 'queryTriples', triplesResult.sort().join(' '));
+            resolve();
+        })],
+        'cloneNamespace': [10, () => new Promise((resolve, reject) => {
             fillMaterialization(backend, rand);
             const original = backend.encodeJson([configuration.materializationNamespace]);
             backend.cloneNamespaces(configuration.comparisonRelocation);
@@ -33,11 +29,9 @@ export function getTests(backend, rand) {
             backend.clearNamespace(configuration.comparisonNamespace);
             const clone = backend.encodeJson([configuration.materializationNamespace]);
             backend.clearNamespace(configuration.materializationNamespace);
-            if(clone != original) {
-                console.warn('cloneNamespace', original, clone);
-                return false;
-            }
-            return true;
-        }]
+            if(clone != original)
+                throw new Error('cloneNamespace', original, clone);
+            resolve();
+        })]
     };
 }

@@ -10,28 +10,26 @@ export function getTests(backend, rand) {
         symbolPool.push(backend.createSymbol(namespaceIdentity));
 
     return {
-        'setTriple': [5000, () => {
+        'setTriple': [5000, () => new Promise((resolve, reject) => {
             const triple = [rand.selectUniformly(symbolPool), rand.selectUniformly(symbolPool), rand.selectUniformly(symbolPool)],
                   tripleExists = TripleMap.get(triplePool, triple) != undefined,
                   linked = rand.selectUniformly([false, true]),
                   expected = (tripleExists != linked),
                   result = backend.setTriple(triple, linked);
-            if(expected != result) {
-                console.warn('setTriple',
+            if(expected != result)
+                throw new Error('setTriple',
                     triple, '|',
                     [...TripleMap.keys(triplePool)].sort().join(' '), '|',
                     [...backend.queryTriples(backend.queryMasks.VVV, [backend.symbolByName.Void, backend.symbolByName.Void, backend.symbolByName.Void])].sort().join(' '), '|',
                     tripleExists, linked, result, expected
                 );
-                return false;
-            }
             if(linked)
                 TripleMap.set(triplePool, triple, true);
             else
                 TripleMap.remove(triplePool, triple);
-            return true;
-        }],
-        'queryTriples': [100, () => {
+            resolve();
+        })],
+        'queryTriples': [100, () => new Promise((resolve, reject) => {
             const queryTriple = [rand.selectUniformly(symbolPool), rand.selectUniformly(symbolPool), rand.selectUniformly(symbolPool)],
                   maskIndex = rand.range(0, 27),
                   mask = maskByIndex[maskIndex],
@@ -70,14 +68,14 @@ export function getTests(backend, rand) {
                     noErrorsOccured = false;
             }
             if(!noErrorsOccured)
-                console.warn('queryTriples',
+                throw new Error('queryTriples',
                     mask, queryTriple, '|',
                     [...TripleMap.keys(triplePool)].sort().join(' '), '|',
                     [...backend.queryTriples(backend.queryMasks.VVV, [backend.symbolByName.Void, backend.symbolByName.Void, backend.symbolByName.Void])].sort().join(' '), '|',
                     [...result].sort().join(' '), '|',
                     [...expected].sort().join(' ')
                 );
-            return noErrorsOccured;
-        }]
+            resolve();
+        })]
     };
 }

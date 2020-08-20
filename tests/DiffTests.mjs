@@ -145,35 +145,40 @@ export function *generateOperations(backend, rand, symbolPool) {
     }
 }
 
-function testDiff(backend, diff, initialState) {
-    const resultOfRecording = backend.encodeJson([configuration.materializationNamespace]);
+function recordState(backend, namespaces) {
+    const json = backend.encodeJson(namespaces);
+    return new Promise((resolve, reject) => {
+        resolve({'json': json});
+    });
+}
+
+function compareStates(stateA, stateB) {
+    return stateA.json == stateB.json;
+}
+
+async function testDiff(backend, diff, initialState) {
+    const resultOfRecording = recordState(backend, [configuration.materializationNamespace]);
     diff.compressData();
     diff.commit();
     if(!diff.validateIntegrity())
-        return false;
+        throw new Error('Diff validation failed');
     const decodedDiff = new Diff(configuration.repository, diff.encodeJson());
     decodedDiff.link();
     const loadedDiff = new Diff(configuration.repository, decodedDiff.symbol);
-    if(!loadedDiff.apply(true, configuration.materializationRelocation)) {
-        console.warn('Could not apply reverse');
-        return false;
-    }
-    const resultOfReverse = backend.encodeJson([configuration.materializationNamespace]);
-    if(!loadedDiff.apply(false, configuration.materializationRelocation)) {
-        console.warn('Could not apply forward');
-        return false;
-    }
-    const resultOfForward = backend.encodeJson([configuration.materializationNamespace]);
+    if(!loadedDiff.apply(true, configuration.materializationRelocation))
+        throw new Error('Could not apply reverse');
+    const resultOfReverse = recordState(backend, [configuration.materializationNamespace]);
+    if(!loadedDiff.apply(false, configuration.materializationRelocation))
+        throw new Error('Could not apply forward');
+    const resultOfForward = recordState(backend, [configuration.materializationNamespace]);
     loadedDiff.unlink();
-    if(initialState != resultOfReverse) {
-        console.warn('Reverse failed', initialState, resultOfReverse);
-        return false;
-    }
-    if(resultOfRecording != resultOfForward) {
-        console.warn('Forward failed', resultOfRecording, resultOfForward);
-        return false;
-    }
-    return true;
+    return Promise.all([initialState, resultOfReverse, resultOfRecording, resultOfForward]).then((states) => {
+        if(!compareStates(states[0], states[1]))
+            throw new Error('Apply reverse is wrong', states[0], states[1]);
+        if(!compareStates(states[2], states[3]))
+            throw new Error('Apply forward is wrong', states[2], states[3]);
+        return diff;
+    });
 }
 
 export function getTests(backend, rand) {
@@ -192,42 +197,34 @@ export function getTests(backend, rand) {
     const concatDiff = new Diff(configuration.repository);
     let concatInitialState;
     return {
-        'diffRecording': [100, () => {
-            const initialState = backend.encodeJson([configuration.materializationNamespace]),
+        'diffRecording': [100, () => new Promise((resolve, reject) => {
+            const initialState = recordState(backend, [configuration.materializationNamespace]),
                   diff = new Diff(configuration.repository),
                   symbolPool = [...backend.querySymbols(configuration.materializationNamespace)];
             if(!concatInitialState)
                 concatInitialState = initialState;
             for(const description of generateOperations(diff, rand, symbolPool));
-            if(!testDiff(backend, diff, initialState))
-                return false;
-            if(!diff.apply(false, RelocationTable.create(), concatDiff)) {
-                console.warn('Could not concat diffs');
-                return false;
-            }
+            resolve([backend, diff, initialState]);
+        }).then(([backend, diff, initialState]) => testDiff(backend, diff, initialState)).then((diff) => {
+            if(!diff.apply(false, RelocationTable.create(), concatDiff))
+                throw new Error('Could not concat diffs');
             diff.unlink();
-            return true;
-        }],
-        'diffConcatenation': [1, () => {
-            if(!testDiff(backend, concatDiff, concatInitialState))
-                return false;
-            concatDiff.unlink();
-            return true;
-        }],
+        })],
+        'diffConcatenation': [1, () => testDiff(backend, concatDiff, concatInitialState).then((diff) => {
+            diff.unlink();
+        })],
         'diffComparison': [10, () => {
             fillMaterialization(backend, rand);
-            const initialState = backend.encodeJson([configuration.materializationNamespace]);
+            const initialState = recordState(backend, [configuration.materializationNamespace]);
             backend.clearNamespace(configuration.comparisonNamespace);
             backend.cloneNamespaces(configuration.comparisonRelocation);
             const symbolPool = [...backend.querySymbols(configuration.materializationNamespace)];
             for(const description of generateOperations(backend, rand, symbolPool));
-            const resultOfRecording = backend.encodeJson([configuration.materializationNamespace]),
+            const resultOfRecording = recordState(backend, [configuration.materializationNamespace]),
                   diff = new Diff(configuration.repository);
             diff.compare(configuration.inverseComparisonRelocation);
-            if(!testDiff(backend, diff, initialState))
-                return false;
             // TODO: Test multiple namespaces
-            return true;
+            return testDiff(backend, diff, initialState);
         }]
     };
 }

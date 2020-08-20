@@ -6,27 +6,23 @@ export function getTests(backend, rand) {
         identities[identity] = true;
 
     return {
-        'removeIdentity': [100000, () => {
+        'removeIdentity': [100000, () => new Promise((resolve, reject) => {
             const identity = rand.range(0, maxIdentity),
                   expected = identities[identity] == true,
                   result = backend.testIdentityPoolRemove(identity);
             delete identities[identity];
-            if(expected != result) {
-                console.warn(identity, expected, result);
-                return false;
-            }
-            return true;
-        }],
-        'addIdentity': [100000, () => {
+            if(expected != result)
+                throw new Error('removeIdentity', identity, expected, result);
+            resolve();
+        })],
+        'addIdentity': [100000, () => new Promise((resolve, reject) => {
             const identity = rand.range(0, maxIdentity),
                   expected = !(identities[identity] == true),
                   result = backend.testIdentityPoolInsert(identity);
             identities[identity] = true;
-            if(expected != result) {
-                console.warn(identity, expected, result);
-                return false;
-            }
-            return true;
-        }]
+            if(expected != result)
+                throw new Error('addIdentity', identity, expected, result);
+            resolve();
+        })]
     };
 }

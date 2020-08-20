@@ -27,8 +27,7 @@ async function runAll(seed) {
         for(const testName in tests) {
             console.time(testName);
             for(let i = 0; i < tests[testName][0]; ++i)
-                if(!tests[testName][1]())
-                    throw new Error('Test case failed');
+                await tests[testName][1]();
             console.timeEnd(testName);
         }
     }
