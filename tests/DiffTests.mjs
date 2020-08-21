@@ -147,12 +147,15 @@ export function *generateOperations(backend, rand, symbolPool) {
 
 function recordState(backend, namespaces) {
     const json = backend.encodeJson(namespaces);
-    return new Promise((resolve, reject) => {
-        resolve({'json': json});
-    });
+    return backend.hashNamespaces(namespaces).then((hashes) => ({'hashes': hashes, 'json': json}));
 }
 
 function compareStates(stateA, stateB) {
+    if(stateA.hashes.length != stateB.hashes.length)
+        return false;
+    for(let i = 0; i < stateA.hashes.length; ++i)
+        if(stateA.hashes[i].variableLengthHash != stateB.hashes[i].variableLengthHash)
+            return false;
     return stateA.json == stateB.json;
 }
 
