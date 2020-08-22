@@ -274,6 +274,10 @@ class IdentityPool {
     static get(collection) {
         return collection[0].begin;
     }
+
+    static isFull(collection) {
+        return collection.length == 1 && collection[0].begin == 0;
+    }
 };
 
 /** Implements a backend written in JavaScript */
@@ -332,14 +336,16 @@ export default class JavaScriptBackend extends BasicBackend {
 
     releaseSymbol(symbol) {
         const handle = ES6MapSymbolMap.get(this.symbols, symbol);
-        if(!handle)
+        if(!handle || handle.dataLength > 0)
             return false;
-        console.assert(handle.dataLength == 0);
         for(let i = 0; i < 6; ++i)
-            console.assert(SymbolMap.isEmpty(handle.subIndices[i]));
-        ES6MapSymbolMap.remove(this.symbols, symbol);
+            if(!SymbolMap.isEmpty(handle.subIndices[i]))
+                return false;
         const handleIdentity = SymbolInternals.identityOfSymbol(symbol),
               namespaceIdentity = SymbolInternals.namespaceOfSymbol(symbol);
+        if(namespaceIdentity == this.metaNamespaceIdentity && !IdentityPool.isFull(this.identityPools.get(handleIdentity)))
+            return false;
+        ES6MapSymbolMap.remove(this.symbols, symbol);
         console.assert(IdentityPool.insert(this.identityPools.get(namespaceIdentity), handleIdentity));
         if(namespaceIdentity == this.metaNamespaceIdentity)
             this.identityPools.delete(handleIdentity);

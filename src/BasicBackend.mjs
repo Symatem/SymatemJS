@@ -302,7 +302,7 @@ export default class BasicBackend {
     /**
      * Deletes a symbol
      * @param {Symbol} symbol
-     * @return {boolean} False if it did not exist
+     * @return {boolean} False if it did not exist, still had a data length > 0, linked triples or symbols in it if it is a namespace
      */
     releaseSymbol(symbol) {
         throw new Error('Abstract, not implemented');
