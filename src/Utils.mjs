@@ -19,7 +19,110 @@ export class Utils {
     }
 
     /**
-     * Calculates the hash value of an Uint8Array
+     * Load a file via fetch or fs
+     * @param {string} path
+     * @return {Promise<Uint8Array>} file content
+     */
+    static loadFile(path) {
+        path = new URL(path, import.meta.url);
+        return ((typeof process === 'undefined')
+        ? fetch(path).then(response => response.arrayBuffer())
+        : new Promise((resolve, reject) => {
+            Promise.all([import('url'), import('fs')]).then(([url, fs]) => {
+                fs.readFile(url.fileURLToPath(path), undefined, (err, data) => {
+                    err ? reject(err) : resolve(data);
+                });
+            }).catch(err => reject(err));
+        }));
+    }
+
+    /**
+     * Create a new wasm instance
+     * @param {Promise<Uint8Array>} input
+     * @return {WebAssembly.Instance} wasm
+     */
+    static createWasmInstance(input) {
+        const imports = {};
+        return input
+            .then(arrayBuffer => WebAssembly.instantiate(arrayBuffer, imports))
+            .then(result => {
+                result.instance.cachedMemory = {};
+                return result.instance;
+            }).catch((err) => console.error(err));
+    }
+
+    /**
+     * Used to cache typed arrays of a wasm instances memory
+     * @param {WebAssembly.Instance} wasm
+     * @param {number} bits One of: 8, 16, 32
+     * @return {Uint8Array|Uint16Array|Uint32Array} cached memory
+     */
+    static getCachedMemoryOfWasm(wasm, bits) {
+        if(!wasm.cachedMemory[bits] || wasm.cachedMemory[bits].buffer !== wasm.exports.memory.buffer) {
+            const constuctor = (bits == 8) ? Uint8Array :
+                               (bits == 16) ? Uint16Array :
+                               (bits == 32) ? Uint32Array : undefined;
+            wasm.cachedMemory[bits] = new constuctor(wasm.exports.memory.buffer);
+        }
+        return wasm.cachedMemory[bits];
+    }
+
+    /**
+     * Allocates and writes a buffer into a wasm instances memory
+     * @param {WebAssembly.Instance} wasm
+     * @param {Uint8Array} buffer
+     * @return {number} pointer
+     */
+    static sendBufferToWasm(wasm, buffer) {
+        const pointer = wasm.exports.__wbindgen_malloc(buffer.length);
+        Utils.getCachedMemoryOfWasm(wasm, 8).set(buffer, pointer);
+        return pointer;
+    }
+
+    /**
+     * Reads and deallocates a buffer from a wasm instances memory
+     * @param {WebAssembly.Instance} wasm
+     * @param {number} slicePtr Pointer to the slice structure
+     * @param {number} bits One of: 8, 16, 32
+     * @param {boolean} copy Copy the buffer if true else yield it before deallocation
+     * @return {Uint8Array} buffer
+     */
+    static *receiveBufferFromWasm(wasm, slicePtr, bits, copy) {
+        slicePtr /= 4;
+        const bytes = Math.ceil(bits/8),
+              sliceStructure = Utils.getCachedMemoryOfWasm(wasm, 32),
+              sliceBegin = sliceStructure[slicePtr], elementCount = sliceStructure[slicePtr+1];
+        let slice = Utils.getCachedMemoryOfWasm(wasm, bits).subarray(sliceBegin/bytes, sliceBegin/bytes+elementCount);
+        if(copy)
+            slice = slice.slice();
+        else
+            yield slice;
+        wasm.exports.__wbindgen_free(sliceBegin, elementCount*bytes);
+        return slice;
+    }
+
+    /**
+     * Reads a string from a wasm instances memory
+     * @param {WebAssembly.Instance} wasm
+     * @param {number} pointer Begin address in bytes
+     * @param {number} length String length in bytes
+     * @return {string} string
+     */
+    static getStringFromWasm(wasm, pointer, length) {
+        return textDecoder.decode(RustWasmBackend.getCachedMemoryOfWasm(wasm, 8).subarray(pointer, pointer+length));
+    }
+
+    /**
+     * Returns the memory usage wasm instance
+     * @param {WebAssembly.Instance} wasm
+     * @return {number} bytes
+     */
+    static getMemoryUsageOfWasm(wasm) {
+        return RustWasmBackend.getCachedMemoryOfWasm(wasm, 8).length;
+    }
+
+    /**
+     * Calculates the SHA hash value of an Uint8Array
      * @param {Uint8Array} buffer
      * @param {string} algorithm One of: 1, 256, 384, 512
      * @return {Promise<Uint8Array>} hash value
@@ -283,3 +386,5 @@ export class Utils {
         return low;
     }
 };
+
+const textDecoder = new TextDecoder('utf-8');
