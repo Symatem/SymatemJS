@@ -58,21 +58,17 @@ export default class RustWasmBackend extends BasicBackend {
     }
 
     readData(symbol, offset, length) {
-        const elementCount = Math.ceil(length/32);
-        const dataBytes = new Uint8Array(elementCount*4);
-        const ptr = this.wasm.exports.__wbindgen_malloc(elementCount*4);
-        const result = this.wasm.exports.readData(SymbolInternals.namespaceOfSymbol(symbol), SymbolInternals.identityOfSymbol(symbol), offset, length, ptr, elementCount) !== 0;
-        if(result)
-            dataBytes.set(Utils.getCachedMemoryOfWasm(this.wasm, 8).subarray(ptr, ptr+elementCount*4));
-        this.wasm.exports.__wbindgen_free(ptr, elementCount*4);
-        return (result) ? dataBytes : undefined;
+        const generator = Utils.receiveBufferFromWasm(this.wasm, (slicePtr) => {
+            this.wasm.exports.readData(slicePtr, SymbolInternals.namespaceOfSymbol(symbol), SymbolInternals.identityOfSymbol(symbol), offset, length);
+        }, 8, true),
+              dataBytes = generator.next().value;
+        generator.next();
+        return dataBytes;
     }
 
     writeData(symbol, offset, length, dataBytes) {
-        const elementCount = Math.ceil(length/32);
-        const ptr = this.wasm.exports.__wbindgen_malloc(elementCount*4);
-        Utils.getCachedMemoryOfWasm(this.wasm, 8).set(dataBytes, ptr);
-        return this.wasm.exports.writeData(SymbolInternals.namespaceOfSymbol(symbol), SymbolInternals.identityOfSymbol(symbol), offset, length, ptr, elementCount) !== 0;
+        const ptr = Utils.sendBufferToWasm(this.wasm, dataBytes, 32);
+        return this.wasm.exports.writeData(SymbolInternals.namespaceOfSymbol(symbol), SymbolInternals.identityOfSymbol(symbol), offset, length, ptr, Math.ceil(length/32)) !== 0;
     }
 
     replaceData(dstSymbol, dstOffset, srcSymbol, srcOffset, length) {
@@ -93,9 +89,9 @@ export default class RustWasmBackend extends BasicBackend {
     }
 
     *querySymbols(namespaceIdentity) {
-        const slicePtr = 8;
-        this.wasm.exports.querySymbols(slicePtr, namespaceIdentity);
-        const generator = Utils.receiveBufferFromWasm(this.wasm, slicePtr, 32, true),
+        const generator = Utils.receiveBufferFromWasm(this.wasm, (slicePtr) => {
+            this.wasm.exports.querySymbols(slicePtr, namespaceIdentity);
+        }, 32, true),
               buffer = generator.next().value;
         for(let i = 0; i < buffer.length; ++i)
             yield SymbolInternals.concatIntoSymbol(namespaceIdentity, buffer[i]);
@@ -103,13 +99,13 @@ export default class RustWasmBackend extends BasicBackend {
     }
 
     *queryTriples(mask, triple) {
-        const slicePtr = 8;
-        this.wasm.exports.queryTriples(slicePtr, mask,
-            SymbolInternals.namespaceOfSymbol(triple[0]), SymbolInternals.identityOfSymbol(triple[0]),
-            SymbolInternals.namespaceOfSymbol(triple[1]), SymbolInternals.identityOfSymbol(triple[1]),
-            SymbolInternals.namespaceOfSymbol(triple[2]), SymbolInternals.identityOfSymbol(triple[2])
-        );
-        const generator = Utils.receiveBufferFromWasm(this.wasm, slicePtr, 32, true),
+        const generator = Utils.receiveBufferFromWasm(this.wasm, (slicePtr) => {
+            this.wasm.exports.queryTriples(slicePtr, mask,
+                SymbolInternals.namespaceOfSymbol(triple[0]), SymbolInternals.identityOfSymbol(triple[0]),
+                SymbolInternals.namespaceOfSymbol(triple[1]), SymbolInternals.identityOfSymbol(triple[1]),
+                SymbolInternals.namespaceOfSymbol(triple[2]), SymbolInternals.identityOfSymbol(triple[2])
+            );
+        }, 32, true),
               buffer = generator.next().value;
         for(let i = 0; i < buffer.length; i += 6)
             yield [SymbolInternals.concatIntoSymbol(buffer[i  ], buffer[i+1]),

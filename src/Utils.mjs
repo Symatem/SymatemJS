@@ -70,11 +70,13 @@ export class Utils {
     /**
      * Allocates and writes a buffer into a wasm instances memory
      * @param {WebAssembly.Instance} wasm
-     * @param {Uint8Array} buffer
+     * @param {Uint8Array} buffer The buffer to send
+     * @param {number} bitAlignment One of: 8, 16, 32
      * @return {number} pointer
      */
-    static sendBufferToWasm(wasm, buffer) {
-        const pointer = wasm.exports.__wbindgen_malloc(buffer.length);
+    static sendBufferToWasm(wasm, buffer, bitAlignment) {
+        const byteAlignment = bitAlignment/8;
+        const pointer = wasm.exports.__wbindgen_malloc(Math.ceil(buffer.length/byteAlignment)*byteAlignment);
         Utils.getCachedMemoryOfWasm(wasm, 8).set(buffer, pointer);
         return pointer;
     }
@@ -83,21 +85,28 @@ export class Utils {
      * Reads and deallocates a buffer from a wasm instances memory
      * @param {WebAssembly.Instance} wasm
      * @param {number} slicePtr Pointer to the slice structure
-     * @param {number} bits One of: 8, 16, 32
+     * @param {number} bitAlignment One of: 8, 16, 32
      * @param {boolean} copy Copy the buffer if true else yield it before deallocation
      * @return {Uint8Array} buffer
      */
-    static *receiveBufferFromWasm(wasm, slicePtr, bits, copy) {
-        slicePtr /= 4;
-        const bytes = Math.ceil(bits/8),
+    static *receiveBufferFromWasm(wasm, callback, bitAlignment, copy) {
+        const stackRestore = wasm.exports.__wbindgen_export_0.value,
+              slicePtr = wasm.exports.__wbindgen_export_0.value = stackRestore-16;
+        callback(slicePtr);
+        const byteAlignment = Math.ceil(bitAlignment/8),
               sliceStructure = Utils.getCachedMemoryOfWasm(wasm, 32),
-              sliceBegin = sliceStructure[slicePtr], elementCount = sliceStructure[slicePtr+1];
-        let slice = Utils.getCachedMemoryOfWasm(wasm, bits).subarray(sliceBegin/bytes, sliceBegin/bytes+elementCount);
-        if(copy)
-            slice = slice.slice();
-        else
-            yield slice;
-        wasm.exports.__wbindgen_free(sliceBegin, elementCount*bytes);
+              sliceBegin = sliceStructure[slicePtr/4],
+              elementCount = sliceStructure[slicePtr/4+1];
+        let slice;
+        if(sliceBegin > 0) {
+            slice = Utils.getCachedMemoryOfWasm(wasm, bitAlignment).subarray(sliceBegin/byteAlignment, sliceBegin/byteAlignment+elementCount);
+            if(copy)
+                slice = slice.slice();
+            else
+                yield slice;
+            wasm.exports.__wbindgen_free(sliceBegin, elementCount*byteAlignment);
+        }
+        wasm.exports.__wbindgen_export_0.value = stackRestore;
         return slice;
     }
 
@@ -109,7 +118,7 @@ export class Utils {
      * @return {string} string
      */
     static getStringFromWasm(wasm, pointer, length) {
-        return textDecoder.decode(RustWasmBackend.getCachedMemoryOfWasm(wasm, 8).subarray(pointer, pointer+length));
+        return textDecoder.decode(Utils.getCachedMemoryOfWasm(wasm, 8).subarray(pointer, pointer+length));
     }
 
     /**
@@ -118,7 +127,7 @@ export class Utils {
      * @return {number} bytes
      */
     static getMemoryUsageOfWasm(wasm) {
-        return RustWasmBackend.getCachedMemoryOfWasm(wasm, 8).length;
+        return Utils.getCachedMemoryOfWasm(wasm, 8).length;
     }
 
     /**
