@@ -148,6 +148,21 @@ export class Utils {
     }
 
     /**
+     * Calculates the blake2s hash value of an Uint8Array
+     * @param {number} outputBytes
+     * @param {Uint8Array} input
+     * @param {Uint8Array} [key]
+     * @return {Uint8Array} hash value
+     */
+    static blake2s(outputBytes, input, key) {
+        const keyPtr = (key) ? Utils.sendBufferToWasm(blake2, key) : 0,
+              inputPtr = Utils.sendBufferToWasm(blake2, input);
+        return Utils.receiveBufferFromWasm(blake2, (slicePtr) => {
+            blake2.exports.blake2s(slicePtr, outputBytes, keyPtr, (key) ? key.length : 0, inputPtr, input.length);
+        }, 8, true).next().value;
+    }
+
+    /**
      * Converts Uint8Array to binary string of '0's and '1's
      * @param {Uint8Array} buffer
      * @return {string} binary
@@ -397,3 +412,7 @@ export class Utils {
 };
 
 const textDecoder = new TextDecoder('utf-8');
+let blake2;
+export const loaded = Utils.createWasmInstance(Utils.loadFile('blake2.wasm')).then((wasm) => {
+    blake2 = wasm;
+});

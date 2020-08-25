@@ -11,13 +11,14 @@ const testBundles = [
     DiffTests
 ];
 
-import {JavaScriptBackend, RustWasmBackend} from '../SymatemJS.mjs';
+import {JavaScriptBackend, RustWasmBackend, loaded} from '../SymatemJS.mjs';
 import PRNG from './PRNG.mjs';
 const rand = new PRNG();
 async function runAll(seed) {
     if(!seed)
         seed = rand.buffer[0];
     console.log(`Seed: ${seed}`);
+    await loaded;
     for(const backend of [await new RustWasmBackend(), new JavaScriptBackend()]) {
         rand.setSeed(seed);
         const tests = {};

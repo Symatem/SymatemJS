@@ -9,7 +9,7 @@
     "main": "SymatemJS.mjs",
     "type": "module",
     "scripts": {
-        "preinstall": "curl --create-dirs -o src/backend.wasm -GL https://github.com/Symatem/SymatemRust/releases/latest/download/symatem.wasm",
+        "preinstall": "./install.sh",
         "test": "node --unhandled-rejections=strict tests/Tests.mjs",
         "docs": "documentation build SymatemJS.mjs -f html -o docs"
     },
