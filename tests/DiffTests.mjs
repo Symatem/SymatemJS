@@ -145,89 +145,95 @@ export function *generateOperations(backend, rand, symbolPool) {
     }
 }
 
-function recordState(backend, namespaces) {
-    const json = backend.encodeJson(namespaces);
-    return backend.hashNamespaces(namespaces).then((hashes) => ({'hashes': hashes, 'json': json}));
+function recordState(backend, relocationTable) {
+    return {
+        'hashPerNamespace': backend.hashNamespaces(relocationTable),
+        'json': backend.encodeJson([...RelocationTable.entries(relocationTable)].map(([materializationNamespace, modalNamespace]) => materializationNamespace))
+    };
 }
 
 function compareStates(stateA, stateB) {
-    if(stateA.hashes.length != stateB.hashes.length)
+    if(stateA.hashPerNamespace.size != stateB.hashPerNamespace.size)
         return false;
-    for(let i = 0; i < stateA.hashes.length; ++i)
-        if(stateA.hashes[i].variableLengthHash != stateB.hashes[i].variableLengthHash)
+    for(const [namespaceIdentity, hash] in stateA.hashPerNamespace)
+        if(hash != stateB.hashPerNamespace.get(namespaceIdentity))
             return false;
     return stateA.json == stateB.json;
 }
 
-async function testDiff(backend, diff, initialState) {
-    const resultOfRecording = recordState(backend, [configuration.materializationNamespace]);
+function testDiff(backend, diff, initialState) {
+    const resultOfRecording = recordState(backend, configuration.repository.relocationTable);
     diff.compressData();
     diff.commit();
     if(!diff.validateIntegrity())
         throw new Error('Diff validation failed');
+    if(diff.hashSumByNamespace && diff.hashSumByNamespace.get(configuration.modalNamespace) != resultOfRecording.hashPerNamespace.get(configuration.modalNamespace))
+        throw new Error('Incremental hashing of recording is wrong', diff.hashSumByNamespace.get(configuration.modalNamespace), resultOfRecording.hashPerNamespace.get(configuration.modalNamespace));
     const decodedDiff = new Diff(configuration.repository, diff.encodeJson());
     decodedDiff.link();
-    const loadedDiff = new Diff(configuration.repository, decodedDiff.symbol);
-    if(!loadedDiff.apply(true, configuration.materializationRelocation))
+    const loadedDiff = new Diff(configuration.repository, decodedDiff.symbol),
+          materializationRelocation = RelocationTable.create([[configuration.modalNamespace, configuration.materializationNamespace]]);
+    if(!loadedDiff.apply(true, materializationRelocation))
         throw new Error('Could not apply reverse');
-    const resultOfReverse = recordState(backend, [configuration.materializationNamespace]);
-    if(!loadedDiff.apply(false, configuration.materializationRelocation))
+    const resultOfReverse = recordState(backend, configuration.repository.relocationTable);
+    if(!loadedDiff.apply(false, materializationRelocation))
         throw new Error('Could not apply forward');
-    const resultOfForward = recordState(backend, [configuration.materializationNamespace]);
+    const resultOfForward = recordState(backend, configuration.repository.relocationTable);
     loadedDiff.unlink();
-    return Promise.all([initialState, resultOfReverse, resultOfRecording, resultOfForward]).then((states) => {
-        if(!compareStates(states[0], states[1]))
-            throw new Error('Apply reverse is wrong', states[0], states[1]);
-        if(!compareStates(states[2], states[3]))
-            throw new Error('Apply forward is wrong', states[2], states[3]);
-        return diff;
-    });
+    if(!compareStates(initialState, resultOfReverse))
+        throw new Error('Apply reverse is wrong', initialState, resultOfReverse);
+    if(!compareStates(resultOfRecording, resultOfForward))
+        throw new Error('Apply forward is wrong', resultOfRecording, resultOfForward);
+    return diff;
 }
 
 export function getTests(backend, rand) {
+    // TODO: Test with multiple namespaces
     const repositoryNamespace = SymbolInternals.identityOfSymbol(backend.createSymbol(backend.metaNamespaceIdentity));
-    configuration.modalNamespace = SymbolInternals.identityOfSymbol(backend.createSymbol(backend.metaNamespaceIdentity));
     configuration.materializationNamespace = SymbolInternals.identityOfSymbol(backend.createSymbol(backend.metaNamespaceIdentity));
     configuration.comparisonNamespace = SymbolInternals.identityOfSymbol(backend.createSymbol(backend.metaNamespaceIdentity));
-    const recordingRelocation = RelocationTable.create([
-        [configuration.materializationNamespace, configuration.modalNamespace],
-        [configuration.comparisonNamespace, configuration.modalNamespace]
-    ]);
-    configuration.repository = new Repository(backend, backend.createSymbol(repositoryNamespace), recordingRelocation);
-    configuration.materializationRelocation = RelocationTable.create([[configuration.modalNamespace, configuration.materializationNamespace]]);
+    configuration.modalNamespace = 10; // TODO
     configuration.comparisonRelocation = RelocationTable.create([[configuration.materializationNamespace, configuration.comparisonNamespace]]);
     configuration.inverseComparisonRelocation = RelocationTable.inverse(configuration.comparisonRelocation);
+    configuration.repository = new Repository(backend, backend.createSymbol(repositoryNamespace));
     const concatDiff = new Diff(configuration.repository);
     let concatInitialState;
     return {
         'diffRecording': [100, () => new Promise((resolve, reject) => {
-            const initialState = recordState(backend, [configuration.materializationNamespace]),
-                  diff = new Diff(configuration.repository),
+            RelocationTable.set(configuration.repository.relocationTable, configuration.materializationNamespace, configuration.modalNamespace);
+            const initialState = recordState(backend, configuration.repository.relocationTable),
+                  diff = new Diff(configuration.repository, new Map([[configuration.modalNamespace, initialState.hashPerNamespace.get(configuration.modalNamespace)]])),
                   symbolPool = [...backend.querySymbols(configuration.materializationNamespace)];
             if(!concatInitialState)
                 concatInitialState = initialState;
             for(const description of generateOperations(diff, rand, symbolPool));
-            resolve([backend, diff, initialState]);
-        }).then(([backend, diff, initialState]) => testDiff(backend, diff, initialState)).then((diff) => {
+            testDiff(backend, diff, initialState);
             if(!diff.apply(false, RelocationTable.create(), concatDiff))
                 throw new Error('Could not concat diffs');
             diff.unlink();
+            resolve();
         })],
-        'diffConcatenation': [1, () => testDiff(backend, concatDiff, concatInitialState).then((diff) => {
-            diff.unlink();
+        'diffConcatenation': [1, () => new Promise((resolve, reject) => {
+            RelocationTable.set(configuration.repository.relocationTable, configuration.materializationNamespace, configuration.modalNamespace);
+            testDiff(backend, concatDiff, concatInitialState);
+            concatDiff.unlink();
+            resolve();
         })],
-        'diffComparison': [10, () => {
+        'diffComparison': [10, () => new Promise((resolve, reject) => {
             fillMaterialization(backend, rand);
-            const initialState = recordState(backend, [configuration.materializationNamespace]);
+            RelocationTable.set(configuration.repository.relocationTable, configuration.materializationNamespace, configuration.modalNamespace);
+            const initialState = recordState(backend, configuration.repository.relocationTable);
             backend.clearNamespace(configuration.comparisonNamespace);
             backend.cloneNamespaces(configuration.comparisonRelocation);
             const symbolPool = [...backend.querySymbols(configuration.materializationNamespace)];
             for(const description of generateOperations(backend, rand, symbolPool));
-            const resultOfRecording = recordState(backend, [configuration.materializationNamespace]),
+            const resultOfRecording = recordState(backend, configuration.repository.relocationTable),
                   diff = new Diff(configuration.repository);
+            RelocationTable.set(configuration.repository.relocationTable, configuration.comparisonNamespace, configuration.modalNamespace);
             diff.compare(configuration.inverseComparisonRelocation);
-            // TODO: Test multiple namespaces
-            return testDiff(backend, diff, initialState);
-        }]
+            RelocationTable.removeSource(configuration.repository.relocationTable, configuration.comparisonNamespace);
+            testDiff(backend, diff, initialState);
+            resolve();
+        })]
     };
 }

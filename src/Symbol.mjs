@@ -26,12 +26,34 @@ export class RelocationTable {
     }
 
     /**
+     * Removes the entry with the specifed source from the relocation table
+     * @param {RelocationTable} relocationTable relocation table
+     * @param {Identity} source namespace identity
+     * @return {boolean} True if the key did exist in the collection
+     */
+    static removeSource(relocationTable, source) {
+        relocationTable.delete(source);
+    }
+
+    /**
+     * Removes all entries with the specifed destination from the relocation table
+     * @param {RelocationTable} relocationTable relocation table
+     * @param {Identity} destination namespace identity
+     * @return {boolean} True if the key did exist in the collection
+     */
+    static removeDestination(relocationTable, destination) {
+        for(const [srcNamespaceIdentity, dstNamespaceIdentity] of RelocationTable.entries(relocationTable))
+            if(dstNamespaceIdentity == destination)
+                RelocationTable.removeSource(relocationTable, srcNamespaceIdentity);
+    }
+
+    /**
      * Retrieve a mapping of a source namespace
      * @param {RelocationTable} relocationTable relocation table
      * @param {Identity} source namespace identity
      * @return {Identity} destination namespace identity
      */
-    static get(relocationTable, source, destination) {
+    static get(relocationTable, source) {
         return relocationTable.get(source);
     }
 

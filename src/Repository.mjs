@@ -7,18 +7,48 @@ export default class Repository {
      * @param {Symbol} symbol The repository
      * @param {RelocationTable} relocationTable Relocate recording namespaces to become modal namespaces
      */
-    constructor(backend, symbol, relocationTable=RelocationTable.create()) {
+    constructor(backend, symbol) {
         this.backend = backend;
         this.symbol = symbol;
         this.namespaceIdentity = SymbolInternals.namespaceOfSymbol(this.symbol);
         this.repositoryDiff = backend;
         this.repositoryDiff.setTriple([this.symbol, this.repositoryDiff.symbolByName.Type, this.repositoryDiff.symbolByName.Repository], true);
-        this.backend.manifestSymbol(SymbolInternals.concatIntoSymbol(this.backend.metaNamespaceIdentity, this.namespaceIdentity));
-        this.relocationTable = relocationTable;
-        for(const [recordingNamespaceIdentity, modalNamespaceIdentity] of RelocationTable.entries(this.relocationTable)) {
-            this.backend.manifestSymbol(SymbolInternals.concatIntoSymbol(this.backend.metaNamespaceIdentity, recordingNamespaceIdentity));
-            this.backend.manifestSymbol(SymbolInternals.concatIntoSymbol(this.backend.metaNamespaceIdentity, modalNamespaceIdentity));
+        this.relocationTable = RelocationTable.create();
+        this.relocationTableSymbol = this.repositoryDiff.getPairOptionally(this.symbol, this.repositoryDiff.symbolByName.RelocationTable);
+        if(SymbolInternals.areSymbolsEqual(this.relocationTableSymbol, this.repositoryDiff.symbolByName.Void)) {
+            this.relocationTableSymbol = this.repositoryDiff.createSymbol(this.namespaceIdentity);
+            this.repositoryDiff.setTriple([this.symbol, this.repositoryDiff.symbolByName.RelocationTable, this.relocationTableSymbol], true);
+        } else
+            for(const triple of this.repositoryDiff.queryTriples(this.repositoryDiff.queryMasks.MVV, [this.relocationTableSymbol, this.repositoryDiff.symbolByName.Void, this.repositoryDiff.symbolByName.Void]))
+                RelocationTable.set(this.relocationTable, SymbolInternals.identityOfSymbol(triple[1]), SymbolInternals.identityOfSymbol(triple[2]));
+    }
+
+    /** Used in diff recording to map to and automatically create modal namespaces
+     * @param {Symbol} symbol
+     * @return {Symbol} relocated
+     */
+    relocateSymbol(diff, symbol) {
+        if(diff == this.repositoryDiff)
+            return symbol;
+        if(diff.isRecordingFromBackend && !RelocationTable.get(this.relocationTable, SymbolInternals.namespaceOfSymbol(symbol))) {
+            const modalNamespace = this.repositoryDiff.createSymbol(this.backend.metaNamespaceIdentity),
+                  materializationNamespaceIdentity = SymbolInternals.namespaceOfSymbol(symbol);
+            RelocationTable.set(this.relocationTable, materializationNamespaceIdentity, SymbolInternals.identityOfSymbol(modalNamespace));
+            this.repositoryDiff.setTriple([this.relocationTableSymbol, SymbolInternals.concatIntoSymbol(this.repositoryDiff.metaNamespaceIdentity, materializationNamespaceIdentity), modalNamespace], true); // TODO
         }
+        return RelocationTable.relocateSymbol(this.relocationTable, symbol);
+    }
+
+    /** Releases a modal namespace if it is empty
+     * @param {Identity} modalNamespace
+     * @return {boolean} success
+     */
+    releaseModalNamespace(modalNamespace) {
+        if([...this.repositoryDiff.querySymbols(SymbolInternals.identityOfSymbol(modalNamespace))].length > 0)
+            return false;
+        this.repositoryDiff.unlinkSymbol(modalNamespace);
+        RelocationTable.removeDestination(this.relocationTable, SymbolInternals.identityOfSymbol(modalNamespace));
+        return true;
     }
 
     /** Gets the list of versions in this repository

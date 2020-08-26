@@ -1,6 +1,7 @@
 import {Utils, RelocationTable, SymbolInternals, SymbolMap, TripleMap} from '../SymatemJS.mjs';
 
-const queryMode = ['M', 'V', 'I'],
+const hashBuffer = new Uint32Array(6),
+      queryMode = ['M', 'V', 'I'],
       queryMasks = {};
 for(let i = 0; i < 27; ++i)
     queryMasks[queryMode[i % 3] + queryMode[Math.floor(i / 3) % 3] + queryMode[Math.floor(i / 9) % 3]] = i;
@@ -45,6 +46,8 @@ const PredefinedSymbols = {
         'ReverseLength',
         'Repository',
         'Version',
+        'ModalNamespace',
+        'RelocationTable',
         'Materialization',
         'Edge',
         'Diff',
@@ -730,44 +733,44 @@ export default class BasicBackend {
         return entities;
     }
 
+    hashSymbolData(materialSymbol, modalSymbol) {
+        const hashBuffer = new Uint32Array(6);
+        const dataLength = this.getLength(materialSymbol),
+              dataLengthInBytes = Math.ceil(dataLength/8),
+              dataCombined = new Uint8Array(12+dataLengthInBytes);
+        hashBuffer[0] = SymbolInternals.namespaceOfSymbol(modalSymbol);
+        hashBuffer[1] = SymbolInternals.identityOfSymbol(modalSymbol);
+        hashBuffer[2] = dataLength;
+        dataCombined.set(new Uint8Array(hashBuffer.buffer).subarray(0, 12), 0);
+        if(dataLength > 0)
+            dataCombined.set(this.readData(materialSymbol, 0, dataLength).subarray(0, dataLengthInBytes), 12);
+        return Utils.encodeBigInt(Utils.blake2s(8, dataCombined), false);
+    }
+
+    hashTriple(triple) {
+        for(let i = 0; i < 3; ++i) {
+            hashBuffer[i*2  ] = SymbolInternals.namespaceOfSymbol(triple[i]);
+            hashBuffer[i*2+1] = SymbolInternals.identityOfSymbol(triple[i]);
+        }
+        return Utils.encodeBigInt(Utils.blake2s(8, hashBuffer), false);
+    }
+
     /**
      * Hashes the specified namespaces
-     * @param {Identity[]} namespaceIdentities The namespaces to hash
-     * @return {Promise<Object>} namespace identity and hash values for each namespace
+     * @param {RelocationTable} relocationTable The namespaces to hash
+     * @return {Map} Namespace identity as keys and hash values for each namespace
      */
-    hashNamespaces(namespaceIdentities) {
-        const buffer = new Uint32Array(6),
-              promisePerNamespace = [];
-        for(const namespaceIdentity of namespaceIdentities) {
-            const promises = [];
-            for(const symbol of this.querySymbols(namespaceIdentity)) {
-                const dataLength = this.getLength(symbol),
-                      dataPayload = this.readData(symbol, 0, dataLength).subarray(0, Math.ceil(dataLength/8));
-                buffer[0] = SymbolInternals.namespaceOfSymbol(symbol);
-                buffer[1] = SymbolInternals.identityOfSymbol(symbol);
-                buffer[2] = dataLength;
-                const dataHeader = new Uint8Array(buffer.buffer).subarray(0, 12),
-                      dataCombined = new Uint8Array(12+dataPayload.length);
-                dataCombined.set(dataHeader, 0);
-                dataCombined.set(dataPayload, 12);
-                promises.push(Utils.sha(dataCombined, 1));
-                for(let triple of this.queryTriples(queryMasks.MVV, [symbol, this.symbolByName.Void, this.symbolByName.Void])) {
-                    buffer[2] = SymbolInternals.namespaceOfSymbol(triple[1]);
-                    buffer[3] = SymbolInternals.identityOfSymbol(triple[1]);
-                    buffer[4] = SymbolInternals.namespaceOfSymbol(triple[2]);
-                    buffer[5] = SymbolInternals.identityOfSymbol(triple[2]);
-                    promises.push(Utils.sha(new Uint8Array(buffer.buffer), 1));
-                }
+    hashNamespaces(relocationTable) {
+        const result = new Map();
+        for(const [materialedNamespace, modalNamespace] of RelocationTable.entries(relocationTable)) {
+            const hashes = [];
+            for(const symbol of this.querySymbols(materialedNamespace)) {
+                hashes.push(this.hashSymbolData(symbol, RelocationTable.relocateSymbol(relocationTable, symbol)));
+                for(let triple of this.queryTriples(queryMasks.MVV, [symbol, this.symbolByName.Void, this.symbolByName.Void]))
+                    hashes.push(this.hashTriple(triple.map((symbol) => RelocationTable.relocateSymbol(relocationTable, symbol))));
             }
-            promisePerNamespace.push(Promise.all(promises).then((values) => {
-                const variableLengthHash = values.reduce((accumulator, entry) => accumulator+Utils.encodeBigInt(entry, false), BigInt(0));
-                return Utils.sha(Utils.decodeBigInt(variableLengthHash), 256).then((fixedLengthHash) => ({
-                    'namespaceIdentity': namespaceIdentity,
-                    'variableLengthHash': variableLengthHash,
-                    'fixedLengthHash': fixedLengthHash
-                }));
-            }));
+            result.set(modalNamespace, hashes.reduce((accumulator, entry) => accumulator+entry, BigInt(0)));
         }
-        return Promise.all(promisePerNamespace);
+        return result;
     }
 };

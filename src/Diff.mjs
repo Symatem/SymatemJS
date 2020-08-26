@@ -13,24 +13,28 @@ function getOrCreateEntry(dict, key, value) {
 export default class Diff extends BasicBackend {
     /**
      * @param {Repository} repository
-     * @param {string|Symbol} [source] Optionally a JSON string or symbol to load the diff from. If none is provided the diff will be setup for recording instead
+     * @param {bigint|string|Symbol} [source] Optionally a JSON string or symbol to load the diff from. If nothing or a bigint is provided the diff will be setup for recording instead.
      */
     constructor(repository, source) {
         super();
         this.repository = repository;
         this.operationsBySymbol = SymbolMap.create();
         if(source) {
-            if(SymbolInternals.validateSymbol(source))
-                this.load(source);
-            else
-                this.decodeJson(source);
-        } else {
-            this.isRecordingFromBackend = true;
-            this.nextTrackingId = 0;
-            // TODO: Combine dataSource and dataRestore into one (dataStore)?
-            this.dataSource = this.repository.createSymbol();
-            this.dataRestore = this.repository.createSymbol();
+            if(typeof source == 'object')
+                this.hashSumByNamespace = source;
+            else {
+                if(SymbolInternals.validateSymbol(source))
+                    this.load(source);
+                else
+                    this.decodeJson(source);
+                return;
+            }
         }
+        this.isRecordingFromBackend = true;
+        this.nextTrackingId = 0;
+        // TODO: Combine dataSource and dataRestore into one (dataStore)?
+        this.dataSource = this.repository.createSymbol();
+        this.dataRestore = this.repository.createSymbol();
     }
 
     static getIntermediateOffset(creaseLengthOperations, intermediateOffset) {
@@ -174,6 +178,13 @@ export default class Diff extends BasicBackend {
                 creaseLengthOperations[i].dstOffset += shift;
     }
 
+    saveOriginalHash(symbolRecording, symbolModal, operationsOfSymbol) {
+        if(this.hashSumByNamespace && this.isRecordingFromBackend && operationsOfSymbol.originalHash === undefined && operationsOfSymbol.manifestOrRelease != 'manifest') {
+            operationsOfSymbol.symbolRecording = symbolRecording;
+            operationsOfSymbol.originalHash = this.repository.backend.hashSymbolData(symbolRecording, symbolModal);
+        }
+    }
+
     saveDataToRestore(srcSymbolRecording, srcSymbolModal, srcOffset, length, dataRestoreOperation) {
         if(this.isRecordingFromBackend)
             console.assert(srcOffset+length <= this.repository.backend.getLength(srcSymbolRecording));
@@ -214,6 +225,7 @@ export default class Diff extends BasicBackend {
             mergeCopyReplaceOperations.add(operation.dstOffset+operation.length);
             for(let i = replaceOperationIndex; i < operationsOfDataRestore.replaceOperations.length; ++i)
                 operationsOfDataRestore.replaceOperations[i].dstOffset += length;
+            this.saveOriginalHash(srcSymbolRecording, srcSymbolModal, operationsOfSymbol);
         };
         let replaceOperationIndex = 0;
         const avoidRestoreOperations = (length) => {
@@ -273,14 +285,15 @@ export default class Diff extends BasicBackend {
         return this.repository.backend.readData(symbol, offset, length);
     }
 
-    manifestSymbol(symbol, created) {
-        if(this.isRecordingFromBackend && !created && !this.repository.backend.manifestSymbol(symbol))
+    manifestSymbol(symbolRecording, created) {
+        if(this.isRecordingFromBackend && !created && !this.repository.backend.manifestSymbol(symbolRecording))
             return false;
-        symbol = RelocationTable.relocateSymbol(this.repository.relocationTable, symbol);
-        const operationsOfSymbol = SymbolMap.getOrInsert(this.operationsBySymbol, symbol, {});
+        const symbolModal = this.repository.relocateSymbol(this, symbolRecording),
+              operationsOfSymbol = SymbolMap.getOrInsert(this.operationsBySymbol, symbolModal, {});
+        operationsOfSymbol.symbolRecording = symbolRecording;
         if(operationsOfSymbol.manifestOrRelease == 'release') {
             delete operationsOfSymbol.manifestOrRelease;
-            this.removeEmptyOperationsOfSymbol(symbol, operationsOfSymbol);
+            this.removeEmptyOperationsOfSymbol(symbolModal, operationsOfSymbol);
         } else
             operationsOfSymbol.manifestOrRelease = 'manifest';
         return true;
@@ -293,23 +306,25 @@ export default class Diff extends BasicBackend {
         return symbol;
     }
 
-    releaseSymbol(symbol) {
-        if(this.isRecordingFromBackend && !this.repository.backend.releaseSymbol(symbol))
+    releaseSymbol(symbolRecording) {
+        if(this.isRecordingFromBackend && !this.repository.backend.releaseSymbol(symbolRecording))
             return false;
-        symbol = RelocationTable.relocateSymbol(this.repository.relocationTable, symbol);
-        const operationsOfSymbol = SymbolMap.getOrInsert(this.operationsBySymbol, symbol, {});
+        const symbolModal = this.repository.relocateSymbol(this, symbolRecording),
+              operationsOfSymbol = SymbolMap.getOrInsert(this.operationsBySymbol, symbolModal, {});
         if(operationsOfSymbol.manifestOrRelease == 'manifest') {
             delete operationsOfSymbol.manifestOrRelease;
-            this.removeEmptyOperationsOfSymbol(symbol, operationsOfSymbol);
-        } else
+            this.removeEmptyOperationsOfSymbol(symbolModal, operationsOfSymbol);
+        } else {
             operationsOfSymbol.manifestOrRelease = 'release';
+            this.saveOriginalHash(symbolRecording, symbolModal, operationsOfSymbol);
+        }
         return true;
     }
 
     setTriple(triple, link) {
         if(this.isRecordingFromBackend && !this.repository.backend.setTriple(triple, link))
             return false;
-        triple = triple.map(symbol => RelocationTable.relocateSymbol(this.repository.relocationTable, symbol));
+        triple = triple.map(symbol => this.repository.relocateSymbol(this, symbol));
         const operationsOfSymbol = SymbolMap.getOrInsert(this.operationsBySymbol, triple[0], {}),
               betaCollection = getOrCreateEntry(operationsOfSymbol, 'tripleOperations', SymbolMap.create()),
               gammaCollection = SymbolMap.getOrInsert(betaCollection, triple[1], SymbolMap.create()),
@@ -343,10 +358,12 @@ export default class Diff extends BasicBackend {
                 return false;
         }
         const originalLength = length,
-              dstSymbolModal = RelocationTable.relocateSymbol(this.repository.relocationTable, dstSymbolRecording),
+              dstSymbolModal = this.repository.relocateSymbol(this, dstSymbolRecording),
               operationsOfSymbol = SymbolMap.getOrInsert(this.operationsBySymbol, dstSymbolModal, {}),
               creaseLengthOperations = getOrCreateEntry(operationsOfSymbol, 'creaseLengthOperations', []),
               dirtySymbols = new Set();
+        if(length > 0)
+            this.saveOriginalHash(dstSymbolRecording, dstSymbolModal, operationsOfSymbol);
         let trackingId,
             operationAtIntermediateOffset,
             [intermediateOffset, operationIndex] = this.constructor.getIntermediateOffset(creaseLengthOperations, dstOffset);
@@ -548,7 +565,7 @@ export default class Diff extends BasicBackend {
             if(operation.length <= 0 || (SymbolInternals.areSymbolsEqual(operation.dstSymbol, operation.srcSymbol) && operation.dstOffset == operation.srcOffset))
                 continue;
             for(const mode of ['dst', 'src']) {
-                context[mode+'Symbol'] = RelocationTable.relocateSymbol(this.repository.relocationTable, operation[mode+'Symbol']);
+                context[mode+'Symbol'] = SymbolInternals.areSymbolsEqual((mode == 'src') ? this.dataSource : this.dataRestore, operation[mode+'Symbol']) ? operation[mode+'Symbol'] : this.repository.relocateSymbol(this, operation[mode+'Symbol']);
                 context[mode+'OperationsOfSymbol'] = SymbolMap.getOrInsert(this.operationsBySymbol, context[mode+'Symbol'], {});
                 context[mode+'CreaseLengthOperations'] = context[mode+'OperationsOfSymbol'].creaseLengthOperations || [];
                 [context[mode+'IntermediateOffset'], context[mode+'OperationIndex']] = this.constructor.getIntermediateOffset(context[mode+'CreaseLengthOperations'], operation[mode+'Offset']);
@@ -593,7 +610,7 @@ export default class Diff extends BasicBackend {
         this.isRecordingFromBackend = false;
         const setTriples = (symbol, linked) => {
             for(let triple of this.repository.backend.queryTriples(this.repository.backend.queryMasks.MVV, [symbol, this.repository.backend.symbolByName.Void, this.repository.backend.symbolByName.Void])) {
-                triple = triple.map(symbol => RelocationTable.relocateSymbol(this.repository.relocationTable, symbol));
+                triple = triple.map(symbol => this.repository.relocateSymbol(this, symbol));
                 this.setTriple(triple, linked);
             }
         }, context = {
@@ -601,7 +618,7 @@ export default class Diff extends BasicBackend {
             'dataSourceOperations': getOrCreateEntry(SymbolMap.getOrInsert(this.operationsBySymbol, this.dataSource, {}), 'copyOperations', []),
             'dataRestoreOffset': this.repository.repositoryDiff.getLength(this.dataRestore),
             'dataRestoreOperations': getOrCreateEntry(SymbolMap.getOrInsert(this.operationsBySymbol, this.dataRestore, {}), 'replaceOperations', [])
-        }, compareData = (context, modalSymbol, dstSymbol, srcSymbol) => {
+        }, compareData = (context, symbolModal, dstSymbol, srcSymbol) => {
             const srcLength = this.repository.backend.getLength(srcSymbol),
                   dstLength = this.repository.backend.getLength(dstSymbol),
                   srcData = this.repository.backend.readData(srcSymbol, 0, srcLength),
@@ -609,14 +626,14 @@ export default class Diff extends BasicBackend {
             if(srcLength == dstLength && Utils.equals(srcData, dstData))
                 return;
             let intermediateOffset = 0;
-            const operationsOfSymbol = SymbolMap.getOrInsert(this.operationsBySymbol, modalSymbol, {}),
+            const operationsOfSymbol = SymbolMap.getOrInsert(this.operationsBySymbol, symbolModal, {}),
                   equal = (x, y) => (this.repository.backend.readData(srcSymbol, x, 1)[0] == this.repository.backend.readData(dstSymbol, y, 1)[0]);
             for(const entry of diffOfSequences(equal, srcLength, dstLength)) {
                 const creaseLength = entry.insert-entry.remove;
                 if(creaseLength != 0)
                     getOrCreateEntry(operationsOfSymbol, 'creaseLengthOperations', []).push({
                         'trackingId': this.nextTrackingId++,
-                        'dstSymbol': modalSymbol,
+                        'dstSymbol': symbolModal,
                         'dstOffset': intermediateOffset,
                         'length': creaseLength
                     });
@@ -625,7 +642,7 @@ export default class Diff extends BasicBackend {
                         return;
                     const operation = {
                         'trackingId': this.nextTrackingId++,
-                        'dstSymbol': modalSymbol,
+                        'dstSymbol': symbolModal,
                         'srcSymbol': this[dataStoreName],
                         'length': length,
                         'dstOffset': intermediateOffset,
@@ -660,7 +677,7 @@ export default class Diff extends BasicBackend {
                 SymbolMap.set(srcSymbols, srcSymbol, true);
                 const dstSymbol = RelocationTable.relocateSymbol(forwardRelocation, srcSymbol);
                 if(SymbolMap.get(dstSymbols, dstSymbol)) {
-                    compareData(context, RelocationTable.relocateSymbol(this.repository.relocationTable, dstSymbol), dstSymbol, srcSymbol);
+                    compareData(context, this.repository.relocateSymbol(this, dstSymbol), dstSymbol, srcSymbol);
                     setTriples(srcSymbol, false);
                 } else
                     srcSymbolsToUnlink.push(srcSymbol);
@@ -677,6 +694,7 @@ export default class Diff extends BasicBackend {
                 setTriples(dstSymbol, true);
             }
         }
+        this.isRecordingFromBackend = true;
     }
 
     /**
@@ -784,7 +802,21 @@ export default class Diff extends BasicBackend {
      * After recording this method must be called before the Diff can be applied.
      */
     commit() {
+        const hashSum = (symbolModal, hash, subtract) => {
+            const modalNamespace = SymbolInternals.namespaceOfSymbol(symbolModal);
+            let value = this.hashSumByNamespace.get(modalNamespace);
+            if(value === undefined)
+                value = BigInt(0);
+            if(subtract)
+                value -= hash;
+            else
+                value += hash;
+            this.hashSumByNamespace.set(modalNamespace, value);
+        };
+        this.modalNamespaces = SymbolMap.create();
         for(const [symbol, operationsOfSymbol] of SymbolMap.entries(this.operationsBySymbol)) {
+            if(SymbolInternals.areSymbolsEqual(this.dataSource, symbol) || SymbolInternals.areSymbolsEqual(this.dataRestore, symbol))
+                continue;
             let minimumLengths = [0, 0], creaseAccumulators = [0, 0];
             function maximizeMinimumLength(operation, key, slot) {
                 if(operation instanceof Array)
@@ -808,6 +840,22 @@ export default class Diff extends BasicBackend {
                 [operationsOfSymbol.forwardLength, operationsOfSymbol.reverseLength] = [minimumLengths[1], minimumLengths[0]];
             else
                 [operationsOfSymbol.forwardLength, operationsOfSymbol.reverseLength] = [minimumLengths[0], minimumLengths[1]];
+            SymbolMap.set(this.modalNamespaces, SymbolInternals.concatIntoSymbol(this.repository.backend.metaNamespaceIdentity, SymbolInternals.namespaceOfSymbol(symbol)), true);
+            if(operationsOfSymbol.tripleOperations)
+                for(const [beta, gammaCollection] of SymbolMap.entries(operationsOfSymbol.tripleOperations)) {
+                    SymbolMap.set(this.modalNamespaces, SymbolInternals.concatIntoSymbol(this.repository.backend.metaNamespaceIdentity, SymbolInternals.namespaceOfSymbol(symbol)), true);
+                    for(const [gamma, link] of SymbolMap.entries(gammaCollection)) {
+                        SymbolMap.set(this.modalNamespaces, SymbolInternals.concatIntoSymbol(this.repository.backend.metaNamespaceIdentity, SymbolInternals.namespaceOfSymbol(symbol)), true);
+                        if(this.hashSumByNamespace)
+                            hashSum(symbol, this.repository.backend.hashTriple([symbol, beta, gamma]), !link);
+                    }
+                }
+            if(this.hashSumByNamespace && (operationsOfSymbol.creaseLengthOperations || operationsOfSymbol.replaceOperations || operationsOfSymbol.manifestOrRelease)) {
+                if(operationsOfSymbol.manifestOrRelease != 'manifest')
+                    hashSum(symbol, operationsOfSymbol.originalHash, true);
+                if(operationsOfSymbol.manifestOrRelease != 'release')
+                    hashSum(symbol, this.repository.backend.hashSymbolData(operationsOfSymbol.symbolRecording, symbol), false);
+            }
         }
     }
 
@@ -864,6 +912,13 @@ export default class Diff extends BasicBackend {
                 }
             }
         }
+        const materializationNamespaces = SymbolMap.create();
+        if(!(dst instanceof this.constructor))
+            for(const modalNamespace of SymbolMap.keys(this.modalNamespaces)) {
+                const materializationNamespace = SymbolInternals.concatIntoSymbol(this.repository.backend.metaNamespaceIdentity, RelocationTable.get(materializationRelocation, SymbolInternals.identityOfSymbol(modalNamespace)));
+                this.repository.backend.manifestSymbol(materializationNamespace);
+                SymbolMap.set(materializationNamespaces, materializationNamespace, true);
+            }
         for(const [symbol, operationsOfSymbol] of SymbolMap.entries(this.operationsBySymbol)) {
             const materialSymbol = RelocationTable.relocateSymbol(materializationRelocation, symbol);
             if(operationsOfSymbol.manifestOrRelease == (reverse ? 'release' : 'manifest'))
@@ -935,6 +990,8 @@ export default class Diff extends BasicBackend {
             if(operationsOfSymbol.manifestOrRelease == (reverse ? 'manifest' : 'release'))
                 console.assert(dst.releaseSymbol(materialSymbol));
         }
+        for(const materializationNamespace of SymbolMap.keys(materializationNamespaces))
+            this.repository.backend.releaseSymbol(materializationNamespace);
         if(dst instanceof this.constructor)
             dst.isRecordingFromBackend = true;
         return true;
@@ -1138,6 +1195,9 @@ export default class Diff extends BasicBackend {
      */
     load(symbol) {
         this.symbol = symbol;
+        this.modalNamespaces = SymbolMap.create();
+        for(const triple of this.repository.repositoryDiff.queryTriples(this.repository.repositoryDiff.queryMasks.MMV, [this.symbol, this.repository.repositoryDiff.symbolByName.ModalNamespace, this.repository.repositoryDiff.symbolByName.Void]))
+            SymbolMap.set(this.modalNamespaces, triple[2], true);
         this.dataSource = this.repository.repositoryDiff.getPairOptionally(this.symbol, this.repository.repositoryDiff.symbolByName.DataSource);
         if(SymbolInternals.areSymbolsEqual(this.dataSource, this.repository.repositoryDiff.symbolByName.Void))
             delete this.dataSource;
@@ -1198,13 +1258,17 @@ export default class Diff extends BasicBackend {
     link() {
         console.assert(!this.symbol);
         this.symbol = this.repository.createSymbol();
+        for(const modalNamespace of SymbolMap.keys(this.modalNamespaces)) {
+            this.repository.repositoryDiff.manifestSymbol(modalNamespace);
+            console.assert(this.repository.repositoryDiff.setTriple([this.symbol, this.repository.repositoryDiff.symbolByName.ModalNamespace, modalNamespace], true));
+        }
         if(this.dataSource)
             console.assert(this.repository.repositoryDiff.setTriple([this.symbol, this.repository.repositoryDiff.symbolByName.DataSource, this.dataSource], true));
         if(this.dataRestore)
             console.assert(this.repository.repositoryDiff.setTriple([this.symbol, this.repository.repositoryDiff.symbolByName.DataRestore, this.dataRestore], true));
         for(const [symbol, operationsOfSymbol] of SymbolMap.entries(this.operationsBySymbol)) {
             this.repository.repositoryDiff.manifestSymbol(symbol);
-            {
+            if(!SymbolInternals.areSymbolsEqual(this.dataSource, symbol) && !SymbolInternals.areSymbolsEqual(this.dataRestore, symbol)) {
                 const operationSymbol = this.repository.createSymbol(),
                       forwardLengthSymbol = this.repository.createSymbol(),
                       reverseLengthSymbol = this.repository.createSymbol();
@@ -1270,9 +1334,13 @@ export default class Diff extends BasicBackend {
             console.assert(this.repository.repositoryDiff.unlinkSymbol(this.dataRestore));
         if(!this.symbol)
             return;
+        const symbolsModal = SymbolMap.create();
         for(const attributeName of ['LinkTriple', 'UnlinkTriple'])
-            for(const triple of this.repository.repositoryDiff.queryTriples(this.repository.repositoryDiff.queryMasks.MMV, [this.symbol, this.repository.repositoryDiff.symbolByName[attributeName], this.repository.repositoryDiff.symbolByName.Void]))
+            for(const triple of this.repository.repositoryDiff.queryTriples(this.repository.repositoryDiff.queryMasks.MMV, [this.symbol, this.repository.repositoryDiff.symbolByName[attributeName], this.repository.repositoryDiff.symbolByName.Void])) {
+                for(const attribute of [this.repository.repositoryDiff.symbolByName.Entity, this.repository.repositoryDiff.symbolByName.Attribute, this.repository.repositoryDiff.symbolByName.Value])
+                    SymbolMap.set(symbolsModal, this.repository.repositoryDiff.getPairOptionally(triple[2], attribute), true);
                 console.assert(this.repository.repositoryDiff.unlinkSymbol(triple[2]));
+            }
         for(const attributeName of ['IncreaseLength', 'DecreaseLength'])
             for(const triple of this.repository.repositoryDiff.queryTriples(this.repository.repositoryDiff.queryMasks.MMV, [this.symbol, this.repository.repositoryDiff.symbolByName[attributeName], this.repository.repositoryDiff.symbolByName.Void])) {
                 console.assert(this.repository.repositoryDiff.unlinkSymbol(this.repository.repositoryDiff.getPairOptionally(triple[2], this.repository.repositoryDiff.symbolByName.DestinationOffset)));
@@ -1286,11 +1354,16 @@ export default class Diff extends BasicBackend {
             console.assert(this.repository.repositoryDiff.unlinkSymbol(triple[2]));
         }
         for(const triple of this.repository.repositoryDiff.queryTriples(this.repository.repositoryDiff.queryMasks.MMV, [this.symbol, this.repository.repositoryDiff.symbolByName.MinimumLength, this.repository.repositoryDiff.symbolByName.Void])) {
+            SymbolMap.set(symbolsModal, this.repository.repositoryDiff.getPairOptionally(triple[2], this.repository.repositoryDiff.symbolByName.Source), true);
             console.assert(this.repository.repositoryDiff.unlinkSymbol(this.repository.repositoryDiff.getPairOptionally(triple[2], this.repository.repositoryDiff.symbolByName.ForwardLength)));
             console.assert(this.repository.repositoryDiff.unlinkSymbol(this.repository.repositoryDiff.getPairOptionally(triple[2], this.repository.repositoryDiff.symbolByName.ReverseLength)));
             console.assert(this.repository.repositoryDiff.unlinkSymbol(triple[2]));
         }
         console.assert(this.repository.repositoryDiff.unlinkSymbol(this.symbol));
         delete this.symbol;
+        for(const symbolModal of SymbolMap.keys(symbolsModal))
+            this.repository.repositoryDiff.releaseSymbol(symbolModal);
+        for(const modalNamespace of SymbolMap.keys(this.modalNamespaces))
+            this.repository.releaseModalNamespace(modalNamespace);
     }
 }
