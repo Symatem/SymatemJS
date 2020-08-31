@@ -192,7 +192,7 @@ export function getTests(backend, rand) {
     const repositoryNamespace = SymbolInternals.identityOfSymbol(backend.createSymbol(backend.metaNamespaceIdentity));
     configuration.materializationNamespace = SymbolInternals.identityOfSymbol(backend.createSymbol(backend.metaNamespaceIdentity));
     configuration.comparisonNamespace = SymbolInternals.identityOfSymbol(backend.createSymbol(backend.metaNamespaceIdentity));
-    configuration.modalNamespace = 10; // TODO
+    configuration.modalNamespace = SymbolInternals.identityOfSymbol(backend.createSymbol(backend.metaNamespaceIdentity));
     configuration.comparisonRelocation = RelocationTable.create([[configuration.materializationNamespace, configuration.comparisonNamespace]]);
     configuration.inverseComparisonRelocation = RelocationTable.inverse(configuration.comparisonRelocation);
     configuration.repository = new Repository(backend, backend.createSymbol(repositoryNamespace));
