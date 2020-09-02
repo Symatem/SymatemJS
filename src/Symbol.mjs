@@ -69,6 +69,18 @@ export class RelocationTable {
     }
 
     /**
+     * Relocates a namespace to another namespace according to the relocation table
+     * @param {BasicBackend} backend For metaNamespaceIdentity
+     * @param {RelocationTable} relocationTable relocation table
+     * @param {Symbol} namespaceSymbol namespace
+     * @return {Symbol} relocated namespace
+     */
+    static relocateNamespace(backend, relocationTable, namespaceSymbol) {
+        const namespaceId = relocationTable.get(SymbolInternals.identityOfSymbol(namespaceSymbol));
+        return (namespaceId) ? SymbolInternals.concatIntoSymbol(backend.metaNamespaceIdentity, namespaceId) : namespaceSymbol;
+    }
+
+    /**
      * Iterates over all mappings of the relocation table
      * @param {RelocationTable} relocationTable relocation table
      * @yield {[Identity, Identity]} [source, destination]

@@ -147,17 +147,19 @@ export function *generateOperations(backend, rand, symbolPool) {
 
 function recordState(backend, relocationTable) {
     return {
-        'hashPerNamespace': backend.hashNamespaces(relocationTable),
+        'hashSumByNamespace': backend.hashNamespaces(relocationTable),
         'json': backend.encodeJson([...RelocationTable.entries(relocationTable)].map(([materializationNamespace, modalNamespace]) => materializationNamespace))
     };
 }
 
 function compareStates(stateA, stateB) {
-    if(stateA.hashPerNamespace.size != stateB.hashPerNamespace.size)
-        return false;
-    for(const [namespaceIdentity, hash] in stateA.hashPerNamespace)
-        if(hash != stateB.hashPerNamespace.get(namespaceIdentity))
+    if(stateA.hashSumByNamespace) {
+        if(stateA.hashSumByNamespace.size != stateB.hashSumByNamespace.size)
             return false;
+        for(const [namespaceIdentity, hash] in stateA.hashSumByNamespace)
+            if(hash != stateB.hashSumByNamespace.get(namespaceIdentity))
+                return false;
+    }
     return stateA.json == stateB.json;
 }
 
@@ -167,23 +169,28 @@ function testDiff(backend, diff, initialState) {
     diff.commit();
     if(!diff.validateIntegrity())
         throw new Error('Diff validation failed');
-    if(diff.hashSumByNamespace && diff.hashSumByNamespace.get(configuration.modalNamespace) != resultOfRecording.hashPerNamespace.get(configuration.modalNamespace))
-        throw new Error('Incremental hashing of recording is wrong', diff.hashSumByNamespace.get(configuration.modalNamespace), resultOfRecording.hashPerNamespace.get(configuration.modalNamespace));
+    if(compareStates(diff, resultOfRecording))
+        throw new Error('Incremental hashing of recording is wrong', diff.hashSumByNamespace, resultOfRecording.hashSumByNamespace);
     const decodedDiff = new Diff(configuration.repository, diff.encodeJson());
     decodedDiff.link();
     const loadedDiff = new Diff(configuration.repository, decodedDiff.symbol),
           materializationRelocation = RelocationTable.create([[configuration.modalNamespace, configuration.materializationNamespace]]);
+    loadedDiff.hashSumByNamespace = diff.hashSumByNamespace;
     if(!loadedDiff.apply(true, materializationRelocation))
         throw new Error('Could not apply reverse');
     const resultOfReverse = recordState(backend, configuration.repository.relocationTable);
+    if(!compareStates(initialState, resultOfReverse))
+        throw new Error('Apply reverse is wrong', initialState, resultOfReverse);
+    if(compareStates(loadedDiff, resultOfReverse))
+        throw new Error('Incremental hashing of apply reverse is wrong', loadedDiff.hashSumByNamespace, resultOfReverse.hashSumByNamespace);
     if(!loadedDiff.apply(false, materializationRelocation))
         throw new Error('Could not apply forward');
     const resultOfForward = recordState(backend, configuration.repository.relocationTable);
-    loadedDiff.unlink();
-    if(!compareStates(initialState, resultOfReverse))
-        throw new Error('Apply reverse is wrong', initialState, resultOfReverse);
     if(!compareStates(resultOfRecording, resultOfForward))
         throw new Error('Apply forward is wrong', resultOfRecording, resultOfForward);
+    if(compareStates(loadedDiff, resultOfForward))
+        throw new Error('Incremental hashing of apply forward is wrong', loadedDiff.hashSumByNamespace, resultOfForward.hashSumByNamespace);
+    loadedDiff.unlink();
     return diff;
 }
 
@@ -202,8 +209,9 @@ export function getTests(backend, rand) {
         'diffRecording': [100, () => new Promise((resolve, reject) => {
             RelocationTable.set(configuration.repository.relocationTable, configuration.materializationNamespace, configuration.modalNamespace);
             const initialState = recordState(backend, configuration.repository.relocationTable),
-                  diff = new Diff(configuration.repository, new Map([[configuration.modalNamespace, initialState.hashPerNamespace.get(configuration.modalNamespace)]])),
+                  diff = new Diff(configuration.repository),
                   symbolPool = [...backend.querySymbols(configuration.materializationNamespace)];
+            diff.hashSumByNamespace = new Map([[configuration.modalNamespace, initialState.hashSumByNamespace.get(configuration.modalNamespace)]]);
             if(!concatInitialState)
                 concatInitialState = initialState;
             for(const description of generateOperations(diff, rand, symbolPool));

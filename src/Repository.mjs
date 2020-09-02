@@ -5,7 +5,6 @@ export default class Repository {
     /**
      * @param {BasicBackend} backend
      * @param {Symbol} symbol The repository
-     * @param {RelocationTable} relocationTable Relocate recording namespaces to become modal namespaces
      */
     constructor(backend, symbol) {
         this.backend = backend;

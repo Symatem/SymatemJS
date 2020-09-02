@@ -13,22 +13,18 @@ function getOrCreateEntry(dict, key, value) {
 export default class Diff extends BasicBackend {
     /**
      * @param {Repository} repository
-     * @param {bigint|string|Symbol} [source] Optionally a JSON string or symbol to load the diff from. If nothing or a bigint is provided the diff will be setup for recording instead.
+     * @param {string|Symbol} [source] Optionally a JSON string or symbol to load the diff from. If nothing is provided the diff will be setup for recording instead.
      */
     constructor(repository, source) {
         super();
         this.repository = repository;
         this.operationsBySymbol = SymbolMap.create();
         if(source) {
-            if(typeof source == 'object')
-                this.hashSumByNamespace = source;
-            else {
-                if(SymbolInternals.validateSymbol(source))
-                    this.load(source);
-                else
-                    this.decodeJson(source);
-                return;
-            }
+            if(SymbolInternals.validateSymbol(source))
+                this.load(source);
+            else
+                this.decodeJson(source);
+            return;
         }
         this.isRecordingFromBackend = true;
         this.nextTrackingId = 0;
@@ -176,6 +172,18 @@ export default class Diff extends BasicBackend {
         if(shift != 0)
             for(let i = operationIndex; i < creaseLengthOperations.length; ++i)
                 creaseLengthOperations[i].dstOffset += shift;
+    }
+
+    hashSum(symbolModal, hash, subtract) {
+        const modalNamespace = SymbolInternals.namespaceOfSymbol(symbolModal);
+        let value = this.hashSumByNamespace.get(modalNamespace);
+        if(value === undefined)
+            value = BigInt(0);
+        if(subtract)
+            value -= hash;
+        else
+            value += hash;
+        this.hashSumByNamespace.set(modalNamespace, value);
     }
 
     saveOriginalHash(symbolRecording, symbolModal, operationsOfSymbol) {
@@ -802,17 +810,6 @@ export default class Diff extends BasicBackend {
      * After recording this method must be called before the Diff can be applied.
      */
     commit() {
-        const hashSum = (symbolModal, hash, subtract) => {
-            const modalNamespace = SymbolInternals.namespaceOfSymbol(symbolModal);
-            let value = this.hashSumByNamespace.get(modalNamespace);
-            if(value === undefined)
-                value = BigInt(0);
-            if(subtract)
-                value -= hash;
-            else
-                value += hash;
-            this.hashSumByNamespace.set(modalNamespace, value);
-        };
         this.modalNamespaces = SymbolMap.create();
         for(const [symbol, operationsOfSymbol] of SymbolMap.entries(this.operationsBySymbol)) {
             if(SymbolInternals.areSymbolsEqual(this.dataSource, symbol) || SymbolInternals.areSymbolsEqual(this.dataRestore, symbol))
@@ -847,14 +844,16 @@ export default class Diff extends BasicBackend {
                     for(const [gamma, link] of SymbolMap.entries(gammaCollection)) {
                         SymbolMap.set(this.modalNamespaces, SymbolInternals.concatIntoSymbol(this.repository.backend.metaNamespaceIdentity, SymbolInternals.namespaceOfSymbol(symbol)), true);
                         if(this.hashSumByNamespace)
-                            hashSum(symbol, this.repository.backend.hashTriple([symbol, beta, gamma]), !link);
+                            this.hashSum(symbol, this.repository.backend.hashTriple([symbol, beta, gamma]), !link);
                     }
                 }
             if(this.hashSumByNamespace && (operationsOfSymbol.creaseLengthOperations || operationsOfSymbol.replaceOperations || operationsOfSymbol.manifestOrRelease)) {
                 if(operationsOfSymbol.manifestOrRelease != 'manifest')
-                    hashSum(symbol, operationsOfSymbol.originalHash, true);
+                    this.hashSum(symbol, operationsOfSymbol.originalHash, true);
                 if(operationsOfSymbol.manifestOrRelease != 'release')
-                    hashSum(symbol, this.repository.backend.hashSymbolData(operationsOfSymbol.symbolRecording, symbol), false);
+                    this.hashSum(symbol, this.repository.backend.hashSymbolData(operationsOfSymbol.symbolRecording, symbol), false);
+                delete operationsOfSymbol.symbolRecording;
+                delete operationsOfSymbol.originalHash;
             }
         }
     }
@@ -867,7 +866,8 @@ export default class Diff extends BasicBackend {
      * @return {boolean} True on success
      */
     apply(reverse, materializationRelocation=RelocationTable.create(), dst=this.repository.backend) {
-        if(dst instanceof this.constructor) {
+        const concatMode = (dst instanceof this.constructor);
+        if(concatMode) {
             console.assert(!reverse);
             dst.isRecordingFromBackend = false;
         } else {
@@ -913,9 +913,9 @@ export default class Diff extends BasicBackend {
             }
         }
         const materializationNamespaces = SymbolMap.create();
-        if(!(dst instanceof this.constructor))
+        if(!concatMode)
             for(const modalNamespace of SymbolMap.keys(this.modalNamespaces)) {
-                const materializationNamespace = SymbolInternals.concatIntoSymbol(this.repository.backend.metaNamespaceIdentity, RelocationTable.get(materializationRelocation, SymbolInternals.identityOfSymbol(modalNamespace)));
+                const materializationNamespace = RelocationTable.relocateNamespace(this.repository.backend, materializationRelocation, modalNamespace);
                 this.repository.backend.manifestSymbol(materializationNamespace);
                 SymbolMap.set(materializationNamespaces, materializationNamespace, true);
             }
@@ -923,13 +923,15 @@ export default class Diff extends BasicBackend {
             const materialSymbol = RelocationTable.relocateSymbol(materializationRelocation, symbol);
             if(operationsOfSymbol.manifestOrRelease == (reverse ? 'release' : 'manifest'))
                 console.assert(dst.manifestSymbol(materialSymbol));
+            else if(!concatMode && this.hashSumByNamespace && (operationsOfSymbol.creaseLengthOperations || operationsOfSymbol.replaceOperations || operationsOfSymbol.manifestOrRelease) && !SymbolInternals.areSymbolsEqual(symbol, this.dataRestore))
+                operationsOfSymbol.originalHash = this.repository.backend.hashSymbolData(materialSymbol, symbol);
             if(operationsOfSymbol.creaseLengthOperations)
                 for(const operation of operationsOfSymbol.creaseLengthOperations)
                     if((operation.length < 0) == reverse)
                         console.assert(dst.creaseLength(materialSymbol, operation.dstOffset, reverse ? -operation.length : operation.length));
         }
         let dataSource = this.dataSource, dataSourceOffset = 0;
-        if(dst instanceof this.constructor) {
+        if(concatMode) {
             dataSource = dst.dataSource;
             dataSourceOffset = this.repository.backend.getLength(dst.dataSource);
             const length = this.repository.backend.getLength(this.dataSource);
@@ -978,6 +980,8 @@ export default class Diff extends BasicBackend {
                 for(const [gamma, link] of SymbolMap.entries(gammaCollection)) {
                     triple[2] = RelocationTable.relocateSymbol(materializationRelocation, gamma);
                     console.assert(dst.setTriple(triple, link != reverse));
+                    if(!concatMode && this.hashSumByNamespace)
+                        this.hashSum(symbol, this.repository.backend.hashTriple([symbol, beta, gamma]), link == reverse);
                 }
             }
         }
@@ -989,10 +993,17 @@ export default class Diff extends BasicBackend {
                         console.assert(dst.creaseLength(materialSymbol, operation.dstOffset, reverse ? -operation.length : operation.length));
             if(operationsOfSymbol.manifestOrRelease == (reverse ? 'manifest' : 'release'))
                 console.assert(dst.releaseSymbol(materialSymbol));
+            if(!concatMode && this.hashSumByNamespace && (operationsOfSymbol.creaseLengthOperations || operationsOfSymbol.replaceOperations || operationsOfSymbol.manifestOrRelease) && !SymbolInternals.areSymbolsEqual(symbol, this.dataRestore)) {
+                if(operationsOfSymbol.manifestOrRelease != (reverse ? 'release' : 'manifest'))
+                    this.hashSum(symbol, operationsOfSymbol.originalHash, true);
+                if(operationsOfSymbol.manifestOrRelease != (reverse ? 'manifest' : 'release'))
+                    this.hashSum(symbol, this.repository.backend.hashSymbolData(materialSymbol, symbol), false);
+                delete operationsOfSymbol.originalHash;
+            }
         }
         for(const materializationNamespace of SymbolMap.keys(materializationNamespaces))
             this.repository.backend.releaseSymbol(materializationNamespace);
-        if(dst instanceof this.constructor)
+        if(concatMode)
             dst.isRecordingFromBackend = true;
         return true;
     }
