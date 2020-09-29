@@ -1,12 +1,12 @@
 {
-    "name": "SymatemJS",
+    "name": "@symatem/core",
     "version": "0.0.0",
     "authors": [
         "Alexander Meißner"
     ],
     "license": "MIT",
     "description": "Symatem JS API",
-    "main": "SymatemJS.mjs",
+    "main": "./SymatemJS.mjs",
     "type": "module",
     "scripts": {
         "preinstall": "./install.sh",
