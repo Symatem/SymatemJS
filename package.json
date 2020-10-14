@@ -1,9 +1,12 @@
 {
     "name": "@symatem/core",
-    "version": "0.0.1",
+    "version": "0.0.2",
     "authors": [
         "Alexander Meißner"
     ],
+    "publishConfig": {
+      "access": "public"
+    },
     "license": "MIT",
     "description": "Symatem JS API",
     "main": "./SymatemJS.mjs",
