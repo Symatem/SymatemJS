@@ -1,6 +1,6 @@
 {
     "name": "@symatem/core",
-    "version": "0.0.4",
+    "version": "0.0.5",
     "authors": [
         "Alexander Meißner"
     ],
@@ -17,7 +17,6 @@
         "./backend.wasm": "./src/backend.wasm"
     },
     "scripts": {
-        "preinstall": "./install.sh",
         "test": "node --unhandled-rejections=strict tests/Tests.mjs",
         "docs": "documentation build SymatemJS.mjs -f html -o docs"
     },

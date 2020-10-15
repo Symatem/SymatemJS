@@ -2,3 +2,4 @@ tests
 docs
 .gitignore
 .travis.yml
+install.sh
