@@ -1,16 +1,21 @@
 {
     "name": "@symatem/core",
-    "version": "0.0.2",
+    "version": "0.0.3",
     "authors": [
         "Alexander Meißner"
     ],
     "publishConfig": {
-      "access": "public"
+        "access": "public"
     },
     "license": "MIT",
     "description": "Symatem JS API",
     "main": "./SymatemJS.mjs",
     "type": "module",
+    "exports": {
+        ".": "./SymatemJS.mjs",
+        "./blake2.wasm": "./src/blake2.wasm",
+        "./backend.wasm": "./src/backend.wasm"
+    },
     "scripts": {
         "preinstall": "./install.sh",
         "test": "node --unhandled-rejections=strict tests/Tests.mjs",
