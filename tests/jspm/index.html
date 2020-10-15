@@ -3,6 +3,16 @@
   <head>
     <meta charset="utf-8" />
     <title>import from jsmp</title>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "backend.wasm": "https://github.com/Symatem/SymatemRust/releases/latest/download/symatem.wasm",
+          "blake2.wasm": "https://github.com/Lichtso/blake2-wasm/releases/latest/download/blake2.wasm"
+        }
+      }
+    </script>
+
     <script type="module">
       import { Repository } from "https://jspm.dev/@symatem/core";
       console.log(Repository);
