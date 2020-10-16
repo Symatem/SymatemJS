@@ -24,16 +24,16 @@ export class Utils {
      * @return {Promise<Uint8Array>} file content
      */
     static loadFile(path) {
-        path = new URL(path, import.meta.url);
+        const url = new URL(path, import.meta.url);
         return ((typeof process === 'undefined')
-        ? fetch(path).then(response => response.arrayBuffer())
-        : new Promise((resolve, reject) => {
-            Promise.all([import('url'), import('fs')]).then(([url, fs]) => {
-                fs.readFile(url.fileURLToPath(path), undefined, (err, data) => {
+        ? fetch(url).then(response => response.arrayBuffer())
+        : new Promise((resolve, reject) =>
+            import('fs').then((fs) =>
+                fs.readFile(url.pathname, undefined, (err, data) => {
                     err ? reject(err) : resolve(data);
-                });
-            }).catch(err => reject(err));
-        }));
+                })
+            ).catch(err => reject(err))
+        ));
     }
 
     /**
