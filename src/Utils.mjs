@@ -413,6 +413,6 @@ export class Utils {
 
 const textDecoder = new TextDecoder('utf-8');
 let blake2;
-export const loaded = Utils.createWasmInstance(Utils.loadFile('blake2.wasm')).then((wasm) => {
+export const loaded = Utils.createWasmInstance(Utils.loadFile('./blake2.wasm')).then((wasm) => {
     blake2 = wasm;
 });

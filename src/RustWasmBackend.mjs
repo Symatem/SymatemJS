@@ -1,7 +1,7 @@
 import {SymbolInternals, Utils} from '../SymatemJS.mjs';
 import BasicBackend from './BasicBackend.mjs';
 
-const binary = Utils.loadFile('backend.wasm');
+const binary = Utils.loadFile('./backend.wasm');
 
 /** Integrates a backend written in Rust using WebAssembly */
 export default class RustWasmBackend extends BasicBackend {
