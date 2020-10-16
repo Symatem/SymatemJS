@@ -1,4 +1,4 @@
-import {Utils, RelocationTable, SymbolInternals, SymbolMap, TripleMap} from '../SymatemJS.mjs';
+import {Utils, RelocationTable, SymbolInternals, SymbolMap, TripleMap} from './SymatemJS.mjs';
 import BasicBackend from './BasicBackend.mjs';
 import {diffOfSequences} from './DiffOfSequences.mjs';
 

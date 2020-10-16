@@ -1,6 +1,6 @@
 {
     "name": "@symatem/core",
-    "version": "0.0.6",
+    "version": "0.0.7",
     "authors": [
         "Alexander Meißner"
     ],
@@ -9,16 +9,16 @@
     },
     "license": "MIT",
     "description": "Symatem JS API",
-    "main": "./SymatemJS.mjs",
+    "main": "./src/SymatemJS.mjs",
     "type": "module",
     "exports": {
-        ".": "./SymatemJS.mjs",
+        ".": "./src/SymatemJS.mjs",
         "./blake2.wasm": "./src/blake2.wasm",
         "./backend.wasm": "./src/backend.wasm"
     },
     "scripts": {
         "test": "node --unhandled-rejections=strict tests/Tests.mjs",
-        "docs": "documentation build SymatemJS.mjs -f html -o docs"
+        "docs": "documentation build ./src/SymatemJS.mjs -f html -o docs"
     },
     "bugs": {
         "url": "https://github.com/Symatem/SymatemJS/issues"

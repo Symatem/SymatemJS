@@ -11,7 +11,7 @@ const testBundles = [
     DiffTests
 ];
 
-import {JavaScriptBackend, RustWasmBackend, loaded} from '../SymatemJS.mjs';
+import {JavaScriptBackend, RustWasmBackend, loaded} from '../src/SymatemJS.mjs';
 import PRNG from './PRNG.mjs';
 const rand = new PRNG();
 async function runAll(seed) {

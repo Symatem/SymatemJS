@@ -1,4 +1,4 @@
-import {SymbolInternals, SymbolMap, Diff} from '../SymatemJS.mjs';
+import {SymbolInternals, SymbolMap} from '../src/SymatemJS.mjs';
 
 export function createElement(tag, parentNode) {
     const svgElement = document.createElementNS('http://www.w3.org/2000/svg', tag);

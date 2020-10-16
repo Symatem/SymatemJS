@@ -1,4 +1,4 @@
-import {RelocationTable, SymbolInternals, SymbolMap} from '../SymatemJS.mjs';
+import { SymbolInternals} from '../src/SymatemJS.mjs';
 import {configuration, fillMaterialization} from './DiffTests.mjs';
 
 export function getTests(backend, rand) {

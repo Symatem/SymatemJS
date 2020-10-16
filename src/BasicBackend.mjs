@@ -1,4 +1,4 @@
-import {Utils, RelocationTable, SymbolInternals, SymbolMap, TripleMap} from '../SymatemJS.mjs';
+import {Utils, RelocationTable, SymbolInternals, SymbolMap, TripleMap} from './SymatemJS.mjs';
 
 const hashBuffer = new Uint32Array(6),
       queryMode = ['M', 'V', 'I'],

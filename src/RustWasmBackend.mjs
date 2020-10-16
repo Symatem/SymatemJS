@@ -1,4 +1,4 @@
-import {SymbolInternals, Utils} from '../SymatemJS.mjs';
+import {SymbolInternals, Utils} from './SymatemJS.mjs';
 import BasicBackend from './BasicBackend.mjs';
 
 const binary = Utils.loadFile('./backend.wasm');

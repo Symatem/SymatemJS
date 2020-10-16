@@ -1,4 +1,4 @@
-import {Utils, SymbolInternals, SymbolMap} from '../SymatemJS.mjs';
+import {Utils, SymbolInternals, SymbolMap} from './SymatemJS.mjs';
 import BasicBackend from './BasicBackend.mjs';
 import {ES6MapSymbolMap} from './Symbol.mjs';
 

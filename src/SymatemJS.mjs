@@ -1,9 +1,9 @@
-import {Utils, loaded} from './src/Utils.mjs';
-import {RelocationTable, SymbolInternals, SymbolMap, TripleMap} from './src/Symbol.mjs';
-import JavaScriptBackend from './src/JavaScriptBackend.mjs';
-import RustWasmBackend from './src/RustWasmBackend.mjs';
-import Diff from './src/Diff.mjs';
-import Repository from './src/Repository.mjs';
+import {Utils, loaded} from './Utils.mjs';
+import {RelocationTable, SymbolInternals, SymbolMap, TripleMap} from './Symbol.mjs';
+import JavaScriptBackend from './JavaScriptBackend.mjs';
+import RustWasmBackend from './RustWasmBackend.mjs';
+import Diff from './Diff.mjs';
+import Repository from './Repository.mjs';
 
 export {Utils, loaded, RelocationTable, SymbolInternals, SymbolMap, TripleMap, JavaScriptBackend, RustWasmBackend, Diff, Repository};
 

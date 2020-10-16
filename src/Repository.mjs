@@ -1,4 +1,4 @@
-import {RelocationTable, SymbolInternals, SymbolMap, Diff} from '../SymatemJS.mjs';
+import {RelocationTable, SymbolInternals, SymbolMap, Diff} from './SymatemJS.mjs';
 
 /** The repository is a DAG with the versions being vertices and the edges containing the diffs */
 export default class Repository {

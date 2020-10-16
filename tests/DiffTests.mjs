@@ -1,5 +1,5 @@
 import PRNG from './PRNG.mjs';
-import {Utils, RelocationTable, SymbolInternals, SymbolMap, Diff, Repository} from '../SymatemJS.mjs';
+import { RelocationTable, SymbolInternals, SymbolMap, Diff, Repository} from '../src/SymatemJS.mjs';
 
 export const configuration = {
     'minSymbolCount': 10,

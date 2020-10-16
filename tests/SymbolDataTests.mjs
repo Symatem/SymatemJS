@@ -1,4 +1,4 @@
-import {Utils, SymbolInternals} from '../SymatemJS.mjs';
+import {Utils, SymbolInternals} from '../src/SymatemJS.mjs';
 
 export function getTests(backend, rand) {
     const namespaceIdentity = SymbolInternals.identityOfSymbol(backend.createSymbol(backend.metaNamespaceIdentity)),
