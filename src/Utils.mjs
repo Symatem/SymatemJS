@@ -25,9 +25,9 @@ export class Utils {
      */
     static loadFile(path) {
         const url = new URL(path, import.meta.url);
-        return (typeof process === 'undefined')
-        ? fetch(url).then(response => response.arrayBuffer())
-        : import('fs/promises').then(fs => fs.readFile(url.pathname));
+        return typeof process === 'object'
+        ? import('fs/promises').then(fs => fs.readFile(url.pathname))
+        : fetch(url).then(response => response.arrayBuffer());
     }
 
     /**
