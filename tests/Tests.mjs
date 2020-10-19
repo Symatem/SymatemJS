@@ -14,23 +14,26 @@ const testBundles = [
 import {JavaScriptBackend, RustWasmBackend, loaded} from '../src/SymatemJS.mjs';
 import PRNG from './PRNG.mjs';
 const rand = new PRNG();
-async function runAll(seed) {
+export async function runAll(reporter=console,seed) {
     if(!seed)
         seed = rand.buffer[0];
-    console.log(`Seed: ${seed}`);
+    reporter.log(`Seed: ${seed}`);
     await loaded;
     for(const backend of [await new RustWasmBackend(), new JavaScriptBackend()]) {
         rand.setSeed(seed);
         const tests = {};
         for(let testBundle of testBundles)
             Object.assign(tests, testBundle(backend, rand));
-        console.log(`--- ${backend.constructor.name} ---`);
+        reporter.log(`--- ${backend.constructor.name} ---`);
         for(const testName in tests) {
-            console.time(testName);
+            reporter.time(testName);
             for(let i = 0; i < tests[testName][0]; ++i)
                 await tests[testName][1]();
-            console.timeEnd(testName);
+            reporter.timeEnd(testName);
         }
     }
 }
-runAll();
+
+if(typeof process === 'object') {
+    runAll();
+}
