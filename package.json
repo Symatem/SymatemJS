@@ -17,6 +17,8 @@
         "./backend.wasm": "./src/backend.wasm"
     },
     "scripts": {
+        "start": "snowpack dev",
+        "build": "snowpack build",
         "test": "node --unhandled-rejections=strict tests/Tests.mjs",
         "docs": "documentation build ./src/SymatemJS.mjs -f html -o docs"
     },
@@ -30,7 +32,8 @@
     },
     "dependencies": {},
     "devDependencies": {
-        "documentation": "^13.0.2"
+        "documentation": "^13.0.2",
+        "snowpack": "^2.14.3"
     },
     "engines": {
         "node": ">=14.14.0"
