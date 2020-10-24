@@ -7,7 +7,12 @@
       // import x from "https://jspm.dev/npm:@symatem/core@0.0.8/src/blake2.wasm";
       // import { Repository } from "https://jspm.dev/npm:@symatem/core";
       // import { Repository } from "@symatem/core";
-      import { Repository, JavaScriptBackend, RustWasmBackend, loaded} from "https://unpkg.com/@symatem/core@0.0.8";
+      import {
+        Repository,
+        JavaScriptBackend,
+        RustWasmBackend,
+        loaded
+      } from "https://unpkg.com/@symatem/core";
 
       async function init() {
         await loaded;
@@ -18,7 +23,6 @@
       }
 
       init();
-      //console.log(Repository);
     </script>
   </head>
   <main id="main"></main>
