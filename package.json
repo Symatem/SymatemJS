@@ -32,7 +32,7 @@
     },
     "dependencies": {},
     "devDependencies": {
-        "documentation": "^13.0.2",
+        "documentation": "^13.1.0",
         "snowpack": "^2.14.3"
     },
     "engines": {
