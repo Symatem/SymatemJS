@@ -33,9 +33,9 @@
     "dependencies": {},
     "devDependencies": {
         "documentation": "^13.1.0",
-        "snowpack": "^2.14.3"
+        "snowpack": "^2.15.1"
     },
     "engines": {
-        "node": ">=14.14.0"
+        "node": ">=14.15.0"
     }
 }
