@@ -1,6 +1,6 @@
 language: node_js
 node_js:
-  14.14.0
+  14.15.0
 script:
   - ./install.sh
   - npm test
