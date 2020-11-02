@@ -1,6 +1,8 @@
 language: node_js
 node_js:
   14.15.0
+addons:
+  chrome: stable
 script:
   - ./install.sh
   - npm test
