@@ -1,6 +1,6 @@
 module.exports = {
   mount: {
-    'tests/jspm': { url: "/" }
+    'tests/cdn': { url: "/" }
   },
   plugins: [
   ],
